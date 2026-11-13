@@ -118,7 +118,7 @@ describe("article image captions", () => {
 describe("linked photo credits", () => {
     const photoUrl = "https://www.pexels.com/photo/aerial-view-of-city-during-sunset-6367377/";
     function render(row, options) {
-        const caption = document.createElement("p");
+        const caption = document.createElement("div");
         document.body.appendChild(caption);
         setRowArticleImageCaption(caption, row, options);
         return caption;
@@ -129,7 +129,7 @@ describe("linked photo credits", () => {
             provider: "unsplash", creator_name: "Creator", creator_profile_url: "https://unsplash.com/@creator",
             source_page_url: "https://unsplash.com/photos/example"
         } } }, { compact: true });
-        expect(caption.textContent).toBe("Creator / Unsplash");
+        expect(caption.textContent).toBe("Kuva, Creator, Unsplash");
         const [creator, platform] = caption.querySelectorAll("a");
         expect(new URL(creator.href).pathname).toBe("/@creator");
         expect(new URL(creator.href).searchParams.get("utm_source")).toBe("filterest");
@@ -141,7 +141,7 @@ describe("linked photo credits", () => {
     test("compact legacy credit preserves the named source and licence and hides an empty credit", () => {
         const description = "Arkistokuva – [Example / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Example.jpg), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)";
         const caption = render({ description }, { compact: true });
-        expect(caption.textContent).toContain("Example / Wikimedia Commons, CC BY-SA 4.0");
+        expect(caption.textContent).toBe("Arkistokuva, Example, Wikimedia Commons, CC BY-SA 4.0");
         expect(caption.querySelectorAll("a")).toHaveLength(2);
         expect(render({}, { compact: true }).hidden).toBe(true);
     });
@@ -155,11 +155,49 @@ describe("linked photo credits", () => {
         const description = "Kuvituskuva – [" + author + "](" + fileUrl + "), " + name + end;
         for (const compact of [false, true]) {
             const caption = render({ description }, { compact });
-            expect(caption.textContent).toBe("Kuvituskuva – " + author + ", " + name + end);
+            const nameOnCard = author.split(" / ")[0];
+            expect(caption.textContent).toBe(compact
+                ? "Kuvituskuva, " + nameOnCard + ", Wikimedia Commons, " + name + end
+                : "Kuvituskuva – " + author + ", " + name + end);
             expect([...caption.querySelectorAll("a")].map(link => [link.textContent, link.href])).toEqual([
-                [author, fileUrl], [name, "https://creativecommons.org/licenses/" + path + "/"],
+                [compact ? nameOnCard : author, fileUrl], [name, "https://creativecommons.org/licenses/" + path + "/"],
             ]);
         }
+    });
+
+    test("renders a compact source in both languages without the editorial caption", async () => {
+        const caption = render({ description: "An unrelated editorial description.", metadata_json: { image_source: {
+            creator_name: "Test Author", provider: "pexels", source_page_url: photoUrl,
+        } } }, { compact: true });
+        expect(caption.textContent).toBe("Kuva, Test Author, Pexels");
+        await refreshLocalizedDatasetValues("en");
+        expect(caption.textContent).toBe("Photo, Test Author, Pexels");
+        expect([...caption.querySelectorAll("a")].map(link => link.href)).toEqual([photoUrl, "https://www.pexels.com/"]);
+        expect(render({ description: "An editorial description without attribution." }, { compact: true }).hidden).toBe(true);
+    });
+
+    test("does not invent an external profile for an own photo or a historical Unsplash photo", () => {
+        const own = render({ description: "Kuva: Fintravel.fi" }, { compact: true });
+        expect(own.textContent).toBe("Kuva, Fintravel.fi");
+        expect(own.querySelector("a")).toBeNull();
+        const caption = render({ description: "Kuvituskuva – [Peter Maxx](https://unsplash.com/photos/verified-photo)" }, { compact: true });
+        expect(caption.textContent).toBe("Kuvituskuva, Peter Maxx, Unsplash");
+        expect([...caption.querySelectorAll("a")].map(link => new URL(link.href).pathname)).toEqual(["/photos/verified-photo", "/"]);
+    });
+
+    test("drops the optional label first and keeps a full long attribution accessible on the card", async () => {
+        const source = "https://commons.wikimedia.org/wiki/File:Example.jpg";
+        const name = "Documentary Photographer with a long attribution";
+        const caption = render({ description: "Arkistokuva – [" + name + " / Wikimedia Commons](" + source + "), CC BY-SA 4.0" }, { compact: true });
+        expect(caption.querySelector("summary").textContent).toBe("Kuvatiedot");
+        expect(caption.querySelector("details a").textContent).toBe(name);
+        expect(caption.querySelectorAll("a")[1].href).toBe("https://creativecommons.org/licenses/by-sa/4.0/");
+        await refreshLocalizedDatasetValues("en");
+        expect(caption.querySelector("summary").textContent).toBe("Image credits");
+        const creator = "x".repeat(38);
+        const shorter = render({ description: "Kuvituskuva – [" + creator + "](https://unsplash.com/photos/test)" }, { compact: true });
+        expect(shorter.textContent).toBe(creator + ", Unsplash");
+        expect(shorter.querySelector("details")).toBeNull();
     });
 
     test("recognizes a Commons file link whose namespace colon is percent-encoded", () => {

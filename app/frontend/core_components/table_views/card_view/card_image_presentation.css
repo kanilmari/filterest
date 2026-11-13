@@ -69,6 +69,12 @@
     align-content: center;
     text-decoration: underline;
 }
+.card_image_credit summary {
+    cursor: pointer;
+    min-block-size: 24px;
+    text-decoration: underline;
+}
+.card_image_credit summary:focus-visible,
 .card_image_credit a:focus-visible {
     outline: 2px solid currentcolor;
     outline-offset: 1px;

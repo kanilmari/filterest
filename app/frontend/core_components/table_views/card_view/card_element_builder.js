@@ -150,7 +150,7 @@ async function addImageOrAvatar(
 
         elem_div.appendChild(blurredImageElement);
         if (image_render_options.imageCredit) {
-            const caption = document.createElement("p");
+            const caption = document.createElement("div");
             caption.className = "card_image_credit";
             setRowArticleImageCaption(caption, image_render_options.imageCredit, { compact: true });
             elem_div.appendChild(caption);

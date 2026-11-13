@@ -19,11 +19,11 @@ function resolveInlinePicture(container) {
 
 const captionInteractionRoots = new WeakSet();
 const CREDIT_LABELS = {
-    fi: { photo: "Kuva", illustration: "Kuvituskuva" },
-    en: { photo: "Photo", illustration: "Illustration" },
-    ch: { photo: "图片", illustration: "示意图" },
-    yue: { photo: "相片", illustration: "示意圖" },
-    traditional: { photo: "圖片", illustration: "示意圖" },
+    fi: { photo: "Kuva", illustration: "Kuvituskuva", archive: "Arkistokuva", details: "Kuvatiedot" },
+    en: { photo: "Photo", illustration: "Illustration", archive: "Archive photo", details: "Image credits" },
+    ch: { photo: "图片", illustration: "示意图", archive: "资料图片", details: "图片来源" },
+    yue: { photo: "相片", illustration: "示意圖", archive: "資料圖片", details: "圖片來源" },
+    traditional: { photo: "圖片", illustration: "示意圖", archive: "資料圖片", details: "圖片來源" },
 };
 const PROVIDERS = { unsplash: "Unsplash", pexels: "Pexels", pixabay: "Pixabay" };
 
@@ -132,6 +132,82 @@ function resolveCreditLabels(language) {
     return CREDIT_LABELS[locale.split("-")[0]] || CREDIT_LABELS.en;
 }
 
+// Extract only attribution from legacy records. Editorial descriptions belong to the article.
+const creditPrefix = /^(Kuvituskuva|Illustration(?: image)?|Arkistokuva|Archive photo|File photo|Kuva|Photo)\s*[:–—-]\s*/i;
+const graphemes = typeof Intl.Segmenter === "function" ? new Intl.Segmenter() : null;
+
+function creditLength(text) {
+    return Array.from(graphemes ? graphemes.segment(text) : text).length;
+}
+
+function compactCreditProvider(url) {
+    if (url?.hostname === "commons.wikimedia.org") return "Wikimedia Commons";
+    if (url?.hostname === "elements.envato.com") return "Envato Elements";
+    return url ? resolveProviderName(url) : "";
+}
+
+function trackedUnsplashUrl(url) {
+    const tracked = new URL(url);
+    if (["unsplash.com", "www.unsplash.com"].includes(tracked.hostname)) {
+        tracked.searchParams.set("utm_source", "filterest");
+        tracked.searchParams.set("utm_medium", "referral");
+    }
+    return tracked;
+}
+
+function appendCompactCredit(host, credit, description, labels) {
+    const prefix = description.match(creditPrefix);
+    if (!credit && !prefix) return;
+    const kind = prefix?.[1] || "";
+    const label = /^(arkisto|archive|file)/i.test(kind) ? labels.archive
+        : /^(kuvitus|illustration)/i.test(kind) ? labels.illustration : labels.photo;
+    const legacy = document.createElement("span");
+    if (prefix) appendCaptionText(legacy, description.slice(prefix[0].length));
+    const firstLink = legacy.firstElementChild;
+    const sourceLink = firstLink instanceof HTMLAnchorElement ? firstLink : null;
+    const url = credit?.url || (sourceLink && new URL(sourceLink.href));
+    const provider = credit?.provider || compactCreditProvider(url);
+    let creator = credit?.creator || sourceLink?.textContent || legacy.textContent.trim();
+    // Older attachment rows often include the platform in the linked label.
+    const separator = creator.lastIndexOf(" / ");
+    if (provider && separator !== -1) {
+        const suffix = creator.slice(separator + 3).toLowerCase();
+        if (suffix === provider.toLowerCase() || (provider === "Wikimedia Commons" && suffix === "wikimedia")
+            || (provider === "Envato Elements" && suffix === "envato")) creator = creator.slice(0, separator);
+    }
+    const identity = document.createDocumentFragment();
+    if (creator) {
+        const creatorUrl = credit?.creatorUrl || url;
+        if (creatorUrl) appendCreditLink(identity, creator, provider === "Unsplash" ? trackedUnsplashUrl(creatorUrl) : creatorUrl);
+        else identity.append(creator);
+    }
+    if (provider) {
+        if (creator) identity.append(", ");
+        if (provider === "Unsplash") appendCreditLink(identity, provider, trackedUnsplashUrl("https://unsplash.com/"));
+        else if (provider === "Pexels") appendCreditLink(identity, provider, new URL("https://www.pexels.com/"));
+        else if (!creator && url) appendCreditLink(identity, provider, url);
+        else identity.append(provider);
+    }
+    if (!identity.textContent.trim()) return;
+    const extra = document.createDocumentFragment();
+    while (sourceLink?.nextSibling) extra.append(sourceLink.nextSibling);
+    const essentialLength = creditLength(identity.textContent);
+    const length = creditLength(identity.textContent + extra.textContent);
+    if (creditLength(label + ", ") + length <= 60) host.append(label + ", ");
+    // Retain visible attribution even when an unusually long name must wrap.
+    const foldIdentity = length > 60 && essentialLength + creditLength(labels.details) > 60
+        && provider !== "Unsplash" && provider !== "Pexels";
+    if (!foldIdentity) host.append(identity);
+    if (foldIdentity || (length > 60 && extra.textContent.trim())) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = labels.details;
+        details.append(summary, identity, extra);
+        host.append(details);
+    } else host.append(extra);
+}
+
+
 function isolateCaptionInteractions(caption) {
     if (captionInteractionRoots.has(caption)) return;
     captionInteractionRoots.add(caption);
@@ -155,34 +231,19 @@ export function setRowArticleImageCaption(captionElement, imageRow, { compact = 
         const description = resolveDatasetDisplayValue(imageRow?.description, null, language).trim();
         const credit = resolveImageCredit(imageRow, description);
         captionElement.replaceChildren();
-        if (credit) {
+        if (compact) {
+            appendCompactCredit(captionElement, credit, description, resolveCreditLabels(language));
+        } else if (credit) {
             if (credit.description) {
                 appendCaptionText(captionElement, credit.description);
                 captionElement.append(document.createTextNode(" — "));
             }
-            if (!compact) {
-                const labels = resolveCreditLabels(language);
-                captionElement.append(document.createTextNode(
-                    (credit.illustration ? labels.illustration : labels.photo) + ": ",
-                ));
-            }
+            const labels = resolveCreditLabels(language);
+            captionElement.append((credit.illustration ? labels.illustration : labels.photo) + ": ");
             const { creator, provider } = credit;
-            if (compact && credit.creatorUrl && creator && provider) {
-                if (provider === "Unsplash" && /^(?:www\.)?unsplash\.com$/i.test(credit.creatorUrl.hostname)) {
-                    credit.creatorUrl.searchParams.set("utm_source", "filterest");
-                    credit.creatorUrl.searchParams.set("utm_medium", "referral");
-                }
-                appendCreditLink(captionElement, creator, credit.creatorUrl);
-                captionElement.append(document.createTextNode(" / "));
-                // API-sourced Unsplash photos credit the photographer and Unsplash separately.
-                const providerUrl = provider === "Unsplash"
-                    ? new URL("https://unsplash.com/?utm_source=filterest&utm_medium=referral") : credit.url;
-                appendCreditLink(captionElement, provider, providerUrl);
-            } else {
-                const label = provider && creator.toLowerCase().endsWith(" / " + provider.toLowerCase())
-                    ? creator : [creator, provider].filter(Boolean).join(" / ");
-                appendCreditLink(captionElement, label, credit.url);
-            }
+            const label = provider && creator.toLowerCase().endsWith(" / " + provider.toLowerCase())
+                ? creator : [creator, provider].filter(Boolean).join(" / ");
+            appendCreditLink(captionElement, label, credit.url);
         } else {
             appendCaptionText(captionElement, description);
         }
