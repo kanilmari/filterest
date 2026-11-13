@@ -91,6 +91,16 @@ The selected photo’s localized caption and photographer link follow the
 dataset’s caption position. Both placements use the displayed photo’s width,
 including when a portrait is narrower than the text column.
 
+CIFAV hyphenates its reading title and description using the field's displayed
+Finnish or English translation, including an English fallback. Plain fields
+without a known language keep ordinary wrapping. Finnish and US English pattern
+modules load from the site as needed. Empty inline markers paint discretionary
+hyphens without changing the authored text used by copy, search or editing.
+Links and addresses are excluded. Changing the interface language refreshes
+the reading content and retains the displayed picture. The [library and pattern
+notices](../../server_tools/licenses/hyphen-1.14.1-patterns-NOTICE.md)
+identify the redistributed components.
+
 Only cifav adds 24 px below the image box; the title retains its 19 px top
 padding (43 px from the image box to the title content). The title has no bottom
 margin, leaving the description's existing 20 px top padding as the single gap

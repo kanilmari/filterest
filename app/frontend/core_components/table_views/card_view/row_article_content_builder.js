@@ -77,7 +77,7 @@ export async function buildRowArticleContent(
     header_first_letter,
     table_has_image_role,
     current_user_id = null,
-    { selectedCard = null, sectionDefaults = {} } = {},
+    { selectedCard = null, sectionDefaults = {}, chosenLanguage, pageReading = false } = {},
 ) {
     const appearanceToken = datasetAppearanceState.capture(table_name);
     const rowArticleContentElement = document.createElement("div");
@@ -94,7 +94,7 @@ export async function buildRowArticleContent(
     let statusBadge = null;
     const rowArticleHeaderElements = [];
     const rowArticleHeaderValues = new Set();
-    const chosenLang = getLanguageWithBrowserFallback();
+    const chosenLang = chosenLanguage ?? getLanguageWithBrowserFallback();
     const timestampDisplayOptions = await resolveRowArticleTimestampDisplayOptions(chosenLang);
     if (!datasetAppearanceState.isCurrent(appearanceToken)) return rowArticleContentElement;
 
@@ -149,6 +149,7 @@ export async function buildRowArticleContent(
             rawValue: storedRawValue,
             displayValue: val,
             isMultilingual: resolvedIsMultilingual,
+            aliasColumn,
         } = resolveCardFieldDisplayValue(
             row_item,
             column,
@@ -268,6 +269,7 @@ export async function buildRowArticleContent(
                 description_entries.push({
                     suffix_number: extractSuffixNumber(r),
                     rawValue: val,
+                    aliasColumn,
                     storedRawValue,
                     label: column_label,
                     hasLangKey,
@@ -441,8 +443,13 @@ export async function buildRowArticleContent(
                     timestampDisplayOptions
                 );
             const value = field.matches('.big_description_value') ? field : field.querySelector('.big_description_value');
-            if (value) value.dataset.articleHeadingLanguage = resolveHeadingLanguage(
-                d.storedRawValue, d.isMultilingual, chosenLang);
+            if (value) {
+                // Heading de-duplication compares authored fields, never a related label with its numeric key.
+                value.dataset.articleHeadingLanguage = resolveHeadingLanguage(d.storedRawValue, d.isMultilingual, chosenLang);
+                if (pageReading && d.aliasColumn && !d.hasLangKey) {
+                    value.dataset.readingLanguage = resolveHeadingLanguage(row_item[d.aliasColumn], d.isMultilingual, chosenLang);
+                }
+            }
             dc.appendChild(field);
         });
         rowArticleContentElement.appendChild(dc);

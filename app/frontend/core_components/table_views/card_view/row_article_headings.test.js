@@ -126,3 +126,19 @@ test('unknown title or content language preserves an otherwise identical heading
         expect(article.querySelector('.big_description_value h2')?.textContent).toBe('Contact');
     }
 });
+
+test.each([false, true])('related description keeps its heading while only Page uses the alias for reading (%s)', async pageReading => {
+    getLanguageWithBrowserFallback.mockReturnValue('fi');
+    const helpers = await vi.importActual('./card_field_formatter_helpers.js');
+    vi.mocked(resolveCardFieldDisplayValue).mockImplementation(helpers.resolveCardFieldDisplayValue);
+    const row = { title: { en: 'Example' }, category_id: 7,
+        category_name: { en: '<h2>Example</h2><p>Internationalization</p>' } };
+    const types = { title: metadata.title, category_id: { card_element: 'description',
+        data_type: 'integer', foreign_table: 'categories' } };
+    const { rowArticleContentElement: article } = await buildRowArticleContent(row, 'e2e_headings', types,
+        Object.keys(types), 'seed', 'E', false, null, { pageReading });
+    const description = article.querySelector('.big_description_value');
+    expect(description.querySelector('h2')?.textContent).toBe('Example');
+    expect(description.dataset.articleHeadingLanguage).toBe('');
+    expect(description.dataset.readingLanguage).toBe(pageReading ? 'en' : undefined);
+});

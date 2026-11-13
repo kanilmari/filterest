@@ -11,6 +11,7 @@
         "fastest-levenshtein": "^1.0.16",
         "glob": "^13.0.6",
         "globals": "^15.15.0",
+        "hyphen": "1.14.1",
         "jsdom": "^29.0.1",
         "lighthouse": "^13.4.1",
         "playwright": "1.60.0",

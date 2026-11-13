@@ -33,6 +33,40 @@
     {
       "documents": [
         {
+          "path": "hyphen-1.14.1-LICENSE.txt",
+          "sha256": "90be1a1205349e8540e0132241ebc58e8d21f5f405171b73cc885b5f9eb3fed4"
+        },
+        {
+          "path": "hyphen-1.14.1-patterns-NOTICE.md",
+          "sha256": "5ad2a205eec74a7eccbb61df15fbdda07605a720cd2f56ee4c89c4a8193be135"
+        }
+      ],
+      "integrity": "sha512-kvL8xYl5QMTh+LwohVN72ciOxC0OEV79IPdJSTwEXok9y9QHebXGdFgrED4sWfiax/ODx++CAMk3hMy4XPJPOw==",
+      "installed_license_path": "LICENSE",
+      "license": "ISC",
+      "markers": [
+        {
+          "minimum_occurrences": 1,
+          "needle": "Yevhen Tiurin"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "Kauko Saarinen"
+        },
+        {
+          "minimum_occurrences": 1,
+          "needle": "Gerard D.C. Kuiken"
+        }
+      ],
+      "name": "hyphen",
+      "package_path": "node_modules/hyphen",
+      "required_by": "",
+      "source": "https://github.com/ytiurin/hyphen",
+      "version": "1.14.1"
+    },
+    {
+      "documents": [
+        {
           "path": "rollup-4.60.4-LICENSE.md",
           "sha256": "fa1bd040c5bdeefe65b3821cebf474f2733ce65df13089bd151dda1778e62fe8"
         }

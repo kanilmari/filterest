@@ -3,6 +3,8 @@
 // Bridges the existing image modal, row content builder, and already-visible result cards.
 // Exists so every real content image can lead into a full-height media view by default.
 
+import { bindPageArticleReading } from "./row_article_page_reading.js";
+import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { buildRowArticlePageImage } from "./row_article_page_image.js";
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
@@ -277,26 +279,23 @@ export async function openImageFirstView({
         return null;
     }
 
-    const [{ rowArticleContentElement }] = await Promise.all([
-        buildRowArticleContent(
-            rowItem,
-            tableName,
-            dataTypes,
-            sortedColumns,
-            buildCreationSeed(rowItem),
-            recordTitle.initial,
-            imageRoleColumns.length > 0,
-            currentUserProfile?.user_id ?? null,
-            { sectionDefaults },
-        ),
-        stage?.whenTransitionMediaReady?.(),
+    const buildContent = async (chosenLanguage) => {
+        const { rowArticleContentElement: content } = await buildRowArticleContent(
+            rowItem, tableName, dataTypes, sortedColumns, buildCreationSeed(rowItem),
+            recordTitle.initial, imageRoleColumns.length > 0, currentUserProfile?.user_id ?? null,
+            pageLayout ? { sectionDefaults, chosenLanguage, pageReading: true } : { sectionDefaults },
+        );
+        if (!content || !datasetAppearanceState.isCurrent(appearanceToken)) return null;
+        content.querySelectorAll(":scope > .big_card_image").forEach(image => image.remove());
+        content.classList.add("image_first_view_article_content");
+        placeRowArticleDetails(content, image_first_view_details_position);
+        return content;
+    };
+    const language = getLanguageWithBrowserFallback();
+    const [rowArticleContentElement] = await Promise.all([
+        buildContent(language), stage?.whenTransitionMediaReady?.(),
     ]);
-    if (!intent.isCurrent()) return null;
-    rowArticleContentElement
-        .querySelectorAll(":scope > .big_card_image")
-        .forEach((imageElement) => imageElement.remove());
-    rowArticleContentElement.classList.add("image_first_view_article_content");
-    placeRowArticleDetails(rowArticleContentElement, image_first_view_details_position);
+    if (!rowArticleContentElement || !intent.isCurrent()) return null;
 
     const shell = document.createElement("div");
     shell.classList.add("image_first_view");
@@ -379,6 +378,9 @@ export async function openImageFirstView({
         topControlElements,
         onClose,
     });
+    if (pageLayout && modalResult) {
+        void bindPageArticleReading(shell, rowArticleContentElement, buildContent, language);
+    }
     attachImageFirstView(historyEntryId, modalResult);
     closeImageFirstView = modalResult?.close || null;
     // The stage builder performs its initial synchronization before returning.

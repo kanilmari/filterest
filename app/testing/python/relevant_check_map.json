@@ -8,6 +8,12 @@
       "none": "WO151 K597 changes application diagnostics only. Go tests capture page-load and actual ordinary/AI/vector/embedding SSE handler errors, shared helper logs, delayed row failures, echoed provider responses and overflowing Google JSON numbers with off/on settings; offline replay and disposable PostgreSQL prove the migration and fresh seed. Cache tests prove warm reads do not wait for another key's load and every reader receives the winning replacement or refreshed value. No browser spec is needed."
     },
     {
+      "area": "Page article reading language and hyphenation",
+      "paths": ["app/frontend/reusable_components/reading_hyphenation", "app/frontend/core_components/table_views/card_view/row_article_page_reading.js", "app/frontend/core_components/table_views/card_view/row_article_page_reading.test.js"],
+      "specs": ["app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts"],
+      "projects": ["desktop-card", "mobile-card"]
+    },
+    {
       "area": "Row article presentation picker",
       "paths": [
         "app/frontend/core_components/table_views/row_presentation",
@@ -549,7 +555,7 @@
         "app/frontend/core_components/lang", "app/backend/core_components/startup/view_selector_lang_keys.go", "app/backend/core_components/lang", "app/backend/core_components/lang_key_naming"
       ],
       "specs": [
-        "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C5_card_language_refresh.spec.ts", "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
+        "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C5_card_language_refresh.spec.ts", "app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts", "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
         "app/testing/e2e/L_auth/L4_forced_login_page.spec.ts", "app/testing/e2e/M_language/M1_language_switch.spec.ts", "app/testing/e2e/M_language/M3_card_language_refresh.spec.ts",
         "app/testing/e2e/M_language/M4_first_draw_language.spec.ts"
       ],

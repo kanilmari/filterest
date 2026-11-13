@@ -36,28 +36,28 @@ export function looksLikeLangValue(rawVal) {
 }
 
 /**
- * Extract a single language value from a raw cell value.
+ * Resolve the shown text and its actual stored language in one selection.
  * @param {*} rawVal           — raw value (may be JSON string or plain text)
  * @param {string} chosenLang  — ISO 639-1 language code, default 'en'
  * @param {boolean|null} isMultilingual — metadata flag from system_column_details;
  *                              true  = always treat as multilingual JSON,
  *                              false = never treat as multilingual,
  *                              null/undefined = fall back to heuristic detection.
- * @returns {string}
+ * @returns {{text: string, language: string}}
  */
-export function extractLangValue(rawVal, chosenLang = 'en', isMultilingual = null) {
-    if (rawVal == null) return '';
+export function resolveLangValue(rawVal, chosenLang = 'en', isMultilingual = null) {
+    if (rawVal == null) return { text: '', language: '' };
     const isObjectValue = typeof rawVal === 'object' && !Array.isArray(rawVal);
     const str = isObjectValue ? JSON.stringify(rawVal) : String(rawVal).trim();
 
     if (!isObjectValue && !(str.startsWith('{') && str.endsWith('}'))) {
-        return str;
+        return { text: str, language: '' };
     }
     if (isMultilingual === false) {
-        return str;
+        return { text: str, language: '' };
     }
     if (isMultilingual !== true && !looksLikeLangValue(rawVal)) {
-        return str;
+        return { text: str, language: '' };
     }
     try {
         const parsed = isObjectValue ? rawVal : JSON.parse(str);
@@ -78,14 +78,19 @@ export function extractLangValue(rawVal, chosenLang = 'en', isMultilingual = nul
                 const storedKey = keys.find(key => key.trim().toLowerCase().replaceAll('_', '-') === languageKey
                     && typeof parsed[key] === 'string');
                 if (storedKey !== undefined) {
-                    return String(parsed[storedKey]);
+                    return { text: parsed[storedKey], language: languageKey };
                 }
             }
             const firstKey = keys.find(k => typeof parsed[k] === 'string');
-            if (firstKey) return String(parsed[firstKey]);
+            if (firstKey) return { text: parsed[firstKey], language: firstKey.trim().toLowerCase().replaceAll('_', '-') };
         }
     } catch (_e) {
         // fall through on parse error
     }
-    return str;
+    return { text: str, language: '' };
+}
+
+/** Text-only projection for existing field renderers. */
+export function extractLangValue(rawVal, chosenLang = 'en', isMultilingual = null) {
+    return resolveLangValue(rawVal, chosenLang, isMultilingual).text;
 }

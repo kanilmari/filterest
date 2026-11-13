@@ -71,4 +71,13 @@ export default [
       "no-undef": "error",
     },
   },
+  {
+    // Retain the reviewed upstream engine verbatim inside its native module wrapper.
+    files: ["frontend/reusable_components/reading_hyphenation/vendor/hyphen.js"],
+    rules: {
+      "no-useless-escape": "off",
+      "no-redeclare": "off",
+      "no-constant-condition": "off",
+    },
+  },
 ];

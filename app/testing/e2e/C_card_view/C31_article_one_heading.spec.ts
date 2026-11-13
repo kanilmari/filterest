@@ -10,8 +10,9 @@ import { loadDatasetCardVisibility } from '../helpers/appearance-revisions';
 
 const presentations = ['article_view', 'image_first_view', 'image_first_page_view'] as const;
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
-const content = (same: boolean) => `<p><br></p><h2>${same ? 'Contact' : 'Contact us'}</h2>`
-  + '<p>Owned article heading proof; the full authored text must stay editable.</p><h1>Section</h1><h3>Subsection</h3>';
+const readingWord = (language: string) => language === 'fi' ? 'tietojenkäsittelyjärjestelmä' : 'internationalization';
+const content = (same: boolean, language: string) => `<p><br></p><h2>${same ? 'Contact' : 'Contact us'}</h2>`
+  + `<p><strong>${readingWord(language)}</strong>; the full authored text must stay editable.</p><h1>Section</h1><h3>Subsection</h3>`;
 
 async function applyTheme(page: Page, theme: 'light' | 'dark') {
   await page.evaluate(value => {
@@ -33,7 +34,7 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
       await createTempDataset(page, { datasetName: dataset,
         columns: { id: 'SERIAL', title: 'TEXT', content: 'TEXT' },
         seedRows: [true, false].map(same => ({ title: JSON.stringify({ fi: 'Contact', en: 'Contact' }),
-          content: JSON.stringify({ fi: content(same), en: content(same) }) })),
+          content: JSON.stringify({ fi: content(same, 'fi'), en: content(same, 'en') }) })),
       });
       created = true;
       // Matching needs known content languages; plain text deliberately has none.
@@ -89,6 +90,22 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
           });
           expect(titleStyles.title).toEqual(titleStyles.legacy);
           const body = article.locator('.big_description_value[data-column="content"]');
+          const word = body.locator('strong');
+          await expect(word).toHaveText(readingWord(language));
+          if (presentation === 'image_first_page_view') {
+            await expect(word.locator('.reading-hyphen').first()).toBeAttached();
+            await expect(body).toHaveAttribute('lang', language);
+            if (language === 'fi' && same) {
+              // The real radio change uses the same language handler while the Page dialog owns focus.
+              for (const next of ['en', 'fi']) {
+                await page.getByTestId(`language-menu-option-${next}`).first().dispatchEvent('change');
+                await expect(word).toHaveText(readingWord(next));
+                await expect(word.locator('.reading-hyphen').first()).toBeAttached();
+              }
+            }
+          } else {
+            await expect(article.locator('.reading-hyphen')).toHaveCount(0);
+          }
           await expect(body.locator('h2').filter({ hasText: /^Contact$/ })).toHaveCount(0);
           await expect(body.locator('h2').filter({ hasText: /^Contact us$/ })).toHaveCount(same ? 0 : 1);
           await expect(body.locator('h3')).toHaveText('Subsection');
@@ -114,7 +131,7 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
           const editor = page.locator('.active_row_article');
           await editor.getByTestId('big-card-edit-button').click();
           const input = editor.locator('[data-column="content"] textarea');
-          await expect(input).toHaveValue(content(same));
+          await expect(input).toHaveValue(content(same, language));
           const hint = editor.locator('[data-column="content"] .row-article-heading-hint');
           await expect(hint).toHaveAttribute('aria-live', 'polite');
           const copy = language === 'fi' ? 'Sisältö alkaa samalla otsikolla kuin rivi; otsikko näytetään jo.'
@@ -126,7 +143,7 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
             await title.fill('Another title'); await expect(hint).toHaveText('');
             await title.fill('Contact'); await expect(hint).toHaveText(copy);
             await input.fill('<h2>Contact us</h2><p>New content</p>'); await expect(hint).toHaveText('');
-            await input.fill(content(true)); await expect(hint).toHaveText(copy);
+            await input.fill(content(true, language)); await expect(hint).toHaveText(copy);
             await expect(editor.getByTestId('big-card-edit-button')).toBeEnabled();
           }
           await page.screenshot({ path: info.outputPath(`editor-${presentation}-${theme}-${language}-${id}.png`), fullPage: true });

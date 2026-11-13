@@ -53,6 +53,16 @@
     overflow: auto;
 }
 
+/* Generated soft hyphens wrap but do not enter selected text, page search or rich-field source. */
+.image_first_page_view :is(.big_card_header_value, .big_description_value) {
+    hyphens: manual;
+    overflow-wrap: anywhere;
+}
+
+.image_first_page_view .reading-hyphen::before {
+    content: "\00ad";
+}
+
 /* The description already supplies 20px of top padding; do not stack title/first-block margins on it. */
 .image_first_page_view .big_card_header {
     margin-block-end: 0;

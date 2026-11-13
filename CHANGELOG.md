@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- In the page-sized article (cifav), Finnish and English titles and descriptions break long words at hyphenation points, so they wrap on narrow screens. Copying, page search and editing keep the original words, and links and addresses wrap as before. Changing the interface language refreshes the article text and keeps the shown picture (#1036).
 - The worker launcher's missing-Claude-CLI test runs with its own PATH, so a Claude CLI installed on the machine no longer fails it (#1033).
 
 ## [9.6.8] - 2026-11-13

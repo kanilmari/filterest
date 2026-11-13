@@ -3,7 +3,7 @@
 // Shared by article rendering and advisory editors; never changes stored values.
 // Keeps entity, locale and first-block rules identical on both surfaces.
 
-import { looksLikeLangValue } from '../../../reusable_components/lang_value_reader.js';
+import { resolveLangValue } from '../../../reusable_components/lang_value_reader.js';
 
 /** Decode entities before stripping inner markup; punctuation remains significant. */
 export function normaliseHeadingText(text, language) {
@@ -20,19 +20,7 @@ const languageCode = (value) => String(value || '').trim().toLowerCase().replace
 
 /** Resolve the actual language selected by extractLangValue, including its fallbacks. */
 export function resolveHeadingLanguage(raw, isMultilingual, preferredLanguage) {
-    if (isMultilingual === false) return '';
-    let values;
-    try { values = typeof raw === 'string' ? JSON.parse(raw) : raw; }
-    catch { return ''; }
-    if (!values || typeof values !== 'object' || Array.isArray(values)
-        || isMultilingual !== true && !looksLikeLangValue(raw)) return '';
-    const keys = Object.keys(values).filter(key => typeof values[key] === 'string');
-    const preferred = languageCode(preferredLanguage);
-    for (const language of [preferred, preferred.split('-')[0], 'en']) {
-        const key = keys.find(key => languageCode(key) === language);
-        if (key) return languageCode(key);
-    }
-    return languageCode(keys[0]);
+    return resolveLangValue(raw, preferredLanguage, isMultilingual).language;
 }
 
 /**
