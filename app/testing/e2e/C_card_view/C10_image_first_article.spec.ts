@@ -185,7 +185,7 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(overlayReveal[0].backdropFilter).toContain('blur(0px)');
       expect(overlayReveal[0].applicationBlurProgress).toBe(0);
       expect(overlayReveal[3].applicationBlurProgress).toBeCloseTo(0.5, 1);
-      expect(overlayReveal[4].backdropFilter).toContain('blur(12px)');
+      expect(overlayReveal[4].backdropFilter).toBe('blur(48px)');
       expect(overlayReveal[4].applicationBlurProgress).toBe(1);
       expect(overlayReveal[0].titleOpacity).toBe(1);
       expect(overlayReveal[3].titleOpacity).toBe(1);

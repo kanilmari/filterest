@@ -48,7 +48,7 @@
    clickable image stage owns the sole visual backdrop and its reveal. */
 .modal_overlay_blur.image_first_view_overlay {
     --image-first-reveal-duration: 300ms;
-    --image-first-application-blur: 12px;
+    --image-first-application-blur: 48px;
 
     background: transparent;
     /* This transparent outermost surface can sample the application below the

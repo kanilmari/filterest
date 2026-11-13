@@ -356,7 +356,7 @@ export async function assertImageFirstVisualContract(page: Page, stage: Locator,
   expect(visualContract.backdropBackfaceVisibility).toBe('hidden');
   expect(visualContract.overlayBackground).not.toBe('rgba(0, 0, 0, 0.8)');
   expect(visualContract.outerOverlayBackground).toBe('rgba(0, 0, 0, 0)');
-  expect(visualContract.outerOverlayBackdropFilter).toContain('blur(12px)');
+  expect(visualContract.outerOverlayBackdropFilter).toBe('blur(48px)');
   expect(visualContract.modalBackground).toBe('rgba(0, 0, 0, 0)');
   expect(visualContract.modalBackdropFilter).toBe('none');
   expect(Math.abs(visualContract.imageHeight - viewportHeight)).toBeLessThanOrEqual(1);
@@ -409,7 +409,7 @@ export async function assertImageFirstVisualContract(page: Page, stage: Locator,
   for (const theme of Object.values(themeContract)) {
     expect(theme.backdropImage).not.toBe('none');
     expect(Number.parseFloat(theme.backdropOpacity)).toBeCloseTo(0.78, 2);
-    expect(theme.applicationBlur).toContain('blur(12px)');
+    expect(theme.applicationBlur).toBe('blur(48px)');
     expect(theme.foregroundOpacity).toBe('1');
   }
   expect(themeContract.forcedLightOnDarkOperatingSystem.backdropImage)

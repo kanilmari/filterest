@@ -24,7 +24,7 @@ const option = (viewKey: string) => `[data-testid="row-presentation-menu-option-
 const test = base.extend<{ fixture: Fixture }>({
   fixture: async ({ page }, use, info) => {
     // Limit fixture creation to the intended viewport(s) for each proof.
-    const projects = info.title.startsWith('R6 ') ? ['desktop-card', 'mobile-card']
+    const projects = /^R[67] /.test(info.title) ? ['desktop-card', 'mobile-card']
       : info.title.startsWith('R2 ') ? ['mobile-card'] : ['desktop-card'];
     test.skip(!projects.includes(info.project.name), 'Only the requested projects create fixtures');
     await login(page, loadCredentials());
@@ -318,4 +318,38 @@ test('R5 a reader without the Page right is never offered Page', async ({ browse
     await expect(reader.locator(PAGE)).toHaveCount(0);
     await info.attach('R5-reader-picker', { body: (await toggle.count()) ? 'picker shown without Page' : 'no picker', contentType: 'text/plain' });
   } finally { await context.close(); }
+});
+
+test('R7 #997 card photo and Page chooser share the application blur from open to close', async ({ browser, page: originalPage, fixture }, info) => {
+  const touch = info.project.name === 'mobile-card';
+  // This project's default changes the viewport only. Real taps need a touch-enabled context.
+  const phone = touch ? await browser.newContext({
+    baseURL: fixture.listURL, ignoreHTTPSErrors: true, hasTouch: true, isMobile: true,
+    viewport: originalPage.viewportSize()!, storageState: await originalPage.context().storageState(),
+  }) : undefined;
+  try {
+    const page = phone ? await phone.newPage() : originalPage;
+    await page.goto(fixture.listURL, { waitUntil: 'domcontentloaded' });
+    const overlay = page.locator('#custom_modal_overlay');
+    const photo = page.locator(`#${fixture.dataset}_card_view_container .card[data-id="1"] .card_image [data-image-first-src][role="button"]`);
+
+    for (const view of ['image_first_view', 'image_first_page_view'] as const) {
+      if (view === 'image_first_view' && !touch) {
+        await press(photo, touch);
+      } else {
+        await choose(page, view, touch);
+      }
+      await expectOpen(page, view === 'image_first_view' ? `${IFAV}:not(${PAGE})` : PAGE, FIRST, 1, view);
+      await expect.poll(() => overlay.evaluate(node => {
+        const style = getComputedStyle(node);
+        return { radius: style.getPropertyValue('--image-first-application-blur').trim(), filter: style.backdropFilter };
+      })).toEqual({ radius: '48px', filter: 'blur(48px)' });
+
+      await press(overlay.getByTestId('modal-close-button'), touch);
+      await expect(overlay).toBeHidden();
+      await expect(overlay).toHaveCSS('backdrop-filter', 'none');
+      await expect(page).toHaveURL(url => url.pathname === new URL(fixture.listURL).pathname && url.searchParams.get('view') === 'card');
+      await expect(photo).toBeVisible();
+    }
+  } finally { await phone?.close(); }
 });
