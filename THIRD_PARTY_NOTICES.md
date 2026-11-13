@@ -9,22 +9,22 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.6.8`
-- Database version: `9.13.6`
+- Filterest app version: `9.6.9`
+- Database version: `9.13.7`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `b3c70d820e874d45a68415d959d26da2ce3b5836e553e9268ef3f2fdae4ccf8e`
+- License bundle manifest SHA-256: `a08183a31f2cfbe2a7704e97669df902df52a59f1e47caae59737581cf217275`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
 - compiled Go modules listed: `19`
 - compiled Go runtime or vendored components listed: `2`
 - runtime npm packages listed: `0`
-- browser bundle build components listed: `3`
+- browser bundle build components listed: `4`
 - third-party asset files listed: `81`
 - source files containing third-party icon geometry: `7`
 - first-party asset files recorded: `65`
-- retained legal and attribution documents: `36`
+- retained legal and attribution documents: `38`
 - unresolved third-party rows: `0`
 
 Most development-only npm packages referenced by `app/package-lock.json` are not
@@ -38,6 +38,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 
 - `Apache-2.0`: 1
 - `BSD-3-Clause`: 11
+- `ISC`: 1
 - `MIT`: 12
 
 ## Compiled Go Modules Across Release Binaries
@@ -81,6 +82,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 | Component | Version | License | Scope | Upstream | Retained documents |
 | --- | --- | --- | --- | --- | --- |
 | esbuild | 0.25.4 | MIT | browser-production-bundle | [source](https://github.com/evanw/esbuild) | [`npm-build-esbuild-0.25.4-95852f084dcf-1-esbuild-0.25.4-LICENSE.md`](THIRD_PARTY_LICENSES/npm-build-esbuild-0.25.4-95852f084dcf-1-esbuild-0.25.4-LICENSE.md) |
+| hyphen | 1.14.1 | ISC | browser-production-bundle | [source](https://github.com/ytiurin/hyphen) | [`npm-build-hyphen-1.14.1-9bed4e7abcdd-1-hyphen-1.14.1-LICENSE.txt`](THIRD_PARTY_LICENSES/npm-build-hyphen-1.14.1-9bed4e7abcdd-1-hyphen-1.14.1-LICENSE.txt), [`npm-build-hyphen-1.14.1-9bed4e7abcdd-2-hyphen-1.14.1-patterns-NOTICE.md`](THIRD_PARTY_LICENSES/npm-build-hyphen-1.14.1-9bed4e7abcdd-2-hyphen-1.14.1-patterns-NOTICE.md) |
 | rollup | 4.60.4 | MIT | browser-production-bundle | [source](https://github.com/rollup/rollup) | [`npm-build-rollup-4.60.4-18d2319ddf3e-1-rollup-4.60.4-LICENSE.md`](THIRD_PARTY_LICENSES/npm-build-rollup-4.60.4-18d2319ddf3e-1-rollup-4.60.4-LICENSE.md) |
 | vite | 6.4.3 | MIT | browser-production-bundle | [source](https://github.com/vitejs/vite) | [`npm-build-vite-6.4.3-4fbd07552a3a-1-vite-6.4.3-LICENSE.md`](THIRD_PARTY_LICENSES/npm-build-vite-6.4.3-4fbd07552a3a-1-vite-6.4.3-LICENSE.md) |
 
