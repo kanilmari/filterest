@@ -61,7 +61,9 @@ test.each(['below_text', 'top_row'])('mounts accessible ordered payload links at
     const links = [...page.querySelectorAll('.front-page-article-button')];
     expect(links.map(link => link.textContent)).toEqual(['<Contact>', 'Second']);
     expect(links.map(link => link.getAttribute('href'))).toEqual(buttons.map(item => item.href));
-    expect(links[0].querySelector('*')).toBeNull();
+    const label = links[0].querySelector('.front-page-article-button__label');
+    expect(label.childNodes).toHaveLength(1);
+    expect(label.firstChild.nodeType).toBe(Node.TEXT_NODE);
     const list = page.querySelector('.front-page-article-buttons');
     if (placement === 'below_text') {
         expect(list.previousElementSibling.className).toBe('front-page-description');
@@ -145,9 +147,8 @@ test('top-row links align at the right edge, with no empty administrator column'
     expect(list).toContain('justify-self: end;'); expect(list).toContain('justify-content: flex-end;');
     expect(list).toContain('margin-inline-start: auto;');
     const phone = css.slice(css.indexOf('@media (width <= 700px)'));
-    expect(phone).toMatch(/\.front-page-top-row > \.front-page-article-buttons \{[^}]*grid-row: 3;[^}]*padding-inline: 4px;/);
-    expect(phone).toMatch(/\.front-page-article-buttons\[data-phone-alignment\] \{[^}]*width: fit-content;[^}]*margin-inline: 0 auto;/);
-    expect(phone).toMatch(/\.front-page-top-row > \.front-page-article-buttons > \.front-page-article-button \{[^}]*min-height: 54px;[^}]*padding-block: 0;[^}]*padding-inline: 27px;/);
+    expect(phone).toMatch(/header > \.front-page-article-buttons\[data-phone-alignment\] \{[^}]*width: fit-content;[^}]*margin-inline: 0 auto;/);
+    expect(phone).toMatch(/\.front-page-hero > \.front-page-article-buttons > a \{[^}]*min-height: 54px;[^}]*padding-block: 0;[^}]*padding-inline: 27px;/);
 });
 test('only top-row buttons become transparent outlined pills with theme contrast halos', () => {
     const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'front_page_article_buttons.css'), 'utf8');

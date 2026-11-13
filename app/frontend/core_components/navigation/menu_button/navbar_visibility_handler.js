@@ -252,8 +252,29 @@ function applyNavbarVisibility(
 // Kynnysarvo pikseleinä
 let navVisible = true; // Nykyisen leveyden näkyvyystila
 
+function isPlainPrimaryActivation(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+function recoverFocusFromClosedNavbar() {
+  if (!document.activeElement?.closest('#navbar.collapsed')) return;
+  const openers = document.querySelectorAll('button[aria-controls="navbar"][aria-expanded="false"][aria-hidden="false"]');
+  const visible = Array.from(openers).find(button => !button.closest('[hidden], [inert], .hidden, [aria-hidden="true"]'));
+  visible?.focus({ preventScroll: true });
+}
+
+/** Close the shared panel for a destination chosen in the overlay, including on phone Home. */
+export function closeOverlayNavbarOnNavigation(event) {
+  if (navVisible && window.innerWidth <= NAVBAR_WIDTH_THRESHOLD && isPlainPrimaryActivation(event)) {
+    toggleNavbarVisibility();
+    // Fast tabs navigate on mousedown, before the browser focuses the pressed button.
+    if (event.type === 'mousedown') requestAnimationFrame(recoverFocusFromClosedNavbar);
+    else recoverFocusFromClosedNavbar();
+  }
+}
+
 function storeNavbarVisibility(isVisible) {
-  const currentIsWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
+  const currentIsWide = window.innerWidth > NAVBAR_WIDTH_THRESHOLD;
   localStorage.setItem(
     currentIsWide ? 'navVisibleWide' : 'navVisibleNarrow',
     String(isVisible)
@@ -331,7 +352,7 @@ export function initNavbar() {
   // Haetaan tilat localStoragesta ja asetetaan alkutila
   const storedNavVisibleWide = localStorage.getItem('navVisibleWide');
   const storedNavVisibleNarrow = localStorage.getItem('navVisibleNarrow');
-  const isWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
+  const isWide = window.innerWidth > NAVBAR_WIDTH_THRESHOLD;
   if (isWide) {
     navVisible = storedNavVisibleWide !== null ? storedNavVisibleWide === 'true' : true;
   } else {
@@ -370,11 +391,19 @@ export function initNavbar() {
     toggleNavbarVisibility();
   });
 
+  // Tree leaves and favorites stop propagation. Capture their destination clicks
+  // here. Main tabs notify us from their accepted press or post-drag click.
+  navbar.addEventListener('click', (event) => {
+    if (event.target.closest?.('#navbarFrontPage a[href], .general_button_nav, .general_button_admin, .navbar-auth-action')) {
+      closeOverlayNavbarOnNavigation(event);
+    }
+  }, { capture: true });
+
   // Piilota navigaatio, jos klikataan sen ulkopuolelle kapeassa näkymässä
   document.addEventListener('click', (event) => {
     // Native link gestures must leave both the current page and its menu alone.
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const currentIsWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
+    if (!isPlainPrimaryActivation(event)) return;
+    const currentIsWide = window.innerWidth > NAVBAR_WIDTH_THRESHOLD;
     if (!currentIsWide && navVisible) {
       if (
         !navbar.contains(event.target) &&
@@ -420,7 +449,7 @@ function checkWindowWidth() {
   const tabsContainer = document.getElementById('tabs_container');
   const bodyContent = document.querySelector('.body_content');
 
-  const isWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
+  const isWide = window.innerWidth > NAVBAR_WIDTH_THRESHOLD;
   const storedNavVisibleWide = localStorage.getItem('navVisibleWide');
   const storedNavVisibleNarrow = localStorage.getItem('navVisibleNarrow');
 

@@ -4,6 +4,7 @@
 // Measures the border box and verifies focus and listener/observer teardown.
 // Browser specs provide sticky geometry and native drawer scrolling proofs.
 import { afterEach, expect, test, vi } from 'vitest';
+import { planHomeNavigationRows } from './front_page_phone_navigation_rows.js';
 import { mountFrontPagePhoneLayout } from './front_page_phone_layout.js';
 
 let layout;
@@ -102,14 +103,62 @@ test('border-box measurement includes safe-area growth and clears on desktop and
     observations[0].callback([{ borderBoxSize: [{ blockSize: 99 }] }]);
     expect(scroller.style.getPropertyValue('--home-phone-bar-size')).toBe('');
     move(700);
-    observations[1].callback([{ borderBoxSize: { blockSize: 69 } }]);
+    const nextBar = document.querySelector('.front-page-phone-topbar');
+    const nextObserver = observations.find(o => o.observe.mock.calls.some(([node]) => node === nextBar));
+    nextObserver.callback([{ borderBoxSize: { blockSize: 69 } }]);
     expect(scroller.style.getPropertyValue('--home-phone-bar-size')).toBe('69px');
     layout.destroy(); layout.destroy();
-    expect(observations[1].disconnect).toHaveBeenCalledOnce();
+    expect(nextObserver.disconnect).toHaveBeenCalledOnce();
     expect(removeMedia).toHaveBeenCalledWith('change', expect.any(Function));
     expect(removeWindow).toHaveBeenCalledWith('navbar-visibility-changed', expect.any(Function));
-    observations[1].callback([{ borderBoxSize: [{ blockSize: 99 }] }]); move(700);
+    nextObserver.callback([{ borderBoxSize: [{ blockSize: 99 }] }]); move(700);
     expect(scroller.style.getPropertyValue('--home-phone-bar-size')).toBe('');
     expect(scroller.querySelector('.front-page-phone-topbar')).toBeNull();
     removeWindow.mockRestore();
+});
+
+test.each([
+    [[], []],
+    [[60], [1]],
+    [[44, 56, 80], [3]],
+    [[60, 60, 60, 60], [2, 2]], // Greedy wrapping would leave one button on the last row.
+    [[85, 90, 44, 44, 44], [2, 3]],
+    [[44, 44, 44, 85, 90], [3, 2]],
+    [[200, 60, 60, 200], [1, 2, 1]], // A full-width final label necessarily stands alone.
+])('balances ordered button widths %j in a 200px row', (widths, counts) => {
+    const rows = planHomeNavigationRows(widths, 200, 4);
+    expect(rows.map(row => row.end - row.start)).toEqual(counts);
+});
+
+test('phone rows refit resized labels, hidden and new controls, then clear their sizes on desktop', async () => {
+    const { row, move, observations } = fixture(390);
+    row.style.padding = '0px';
+    row.style.columnGap = '4px';
+    row.getBoundingClientRect = () => ({ width: 200 });
+    const first = row.querySelector('nav a'), second = row.querySelector('nav button');
+    const list = row.querySelector('.front-page-article-buttons'), article = list.firstElementChild;
+    for (const button of [first, second, article]) {
+        button.getBoundingClientRect = () => ({ width: button.hidden ? 0 : 80 });
+    }
+    const label = document.createElement('span');
+    label.className = 'hero-dataset-tabs__label';
+    label.textContent = second.textContent;
+    second.replaceChildren(label);
+    const size = button => button.style.getPropertyValue('--home-phone-button-basis');
+    layout = mountFrontPagePhoneLayout(row, row.parentElement.querySelector('.front-page-scroller'));
+    expect([size(first), size(second), size(article)]).toEqual(['200px', '98px', '98px']);
+    // Changing a loaded font in a stylesheet can resize a label while the row stays 200px.
+    second.getBoundingClientRect = () => ({ width: second.hidden ? 0 : 84 });
+    const labelObserver = observations.find(o => o.observe.mock.calls.some(([node]) => node === label));
+    labelObserver.callback([{ target: label }]);
+    await vi.waitFor(() => expect([size(second), size(article)]).toEqual(['100px', '96px']));
+    second.hidden = true;
+    await vi.waitFor(() => expect(size(first)).toBe('98px'));
+    const extra = document.createElement('a');
+    extra.textContent = 'Another article';
+    extra.getBoundingClientRect = () => ({ width: 80 });
+    list.append(extra);
+    await vi.waitFor(() => expect([size(first), size(article), size(extra)]).toEqual(['200px', '98px', '98px']));
+    move(701);
+    expect([first, second, article, extra].every(button => size(button) === '')).toBe(true);
 });

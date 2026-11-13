@@ -174,11 +174,28 @@ for (const width of [1280, 1800, 390]) for (const theme of ['light', 'dark'] as 
         await filter.click();
         await expect(panel).toHaveClass(/filterbar-panel--hidden/);
       }
-      if (surface === 'home' && width <= 700) {
-        const opener = page.locator('.front-page-phone-topbar #showMenuButton');
-        await opener.focus(); await opener.press('Enter'); await expect(page.locator('#hideMenuButton')).toBeFocused();
-        await page.locator('#hideMenuButton').press('Enter'); await expect(opener).toBeFocused();
-        await menuGeometry(page, surface, false);
+      if (surface === 'home') {
+        const homeBar = width <= 700 ? '.front-page-phone-topbar' : '.front-page-top-row';
+        const opener = page.locator(homeBar).locator('#showMenuButton');
+        const currentHome = page.locator('#navbarFrontPage a[aria-current="page"]');
+        if (width <= 700) {
+          await opener.focus(); await opener.press('Enter'); await expect(page.locator('#hideMenuButton')).toBeFocused();
+          await page.locator('#hideMenuButton').press('Enter'); await expect(opener).toBeFocused();
+          await menuGeometry(page, surface, false);
+
+          await opener.press('Enter');
+          await expect(currentHome).toBeVisible();
+          await currentHome.focus();
+          await currentHome.press('Enter');
+          await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
+          await expect(opener).toBeFocused();
+          await expect(opener).toBeInViewport();
+        }
+        await opener.click();
+        await currentHome.click({ button: 'left' });
+        await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
+        await expect(opener).toBeFocused();
+        await expect(opener).toBeInViewport();
       }
     }
     expect(writes, 'No server mutations were attempted').toEqual([]);

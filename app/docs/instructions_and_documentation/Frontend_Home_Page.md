@@ -235,13 +235,12 @@ hidden while the inline hero is visible. This phone rule dates from 11 October 2
 was added. Home's own header puts its current-page link first in the tab row, before every dataset; the
 trailing actions keep their order. Keyboard order is menu → Home → first dataset. Both rows share
 `--top-nav-home-size` and `--top-nav-home-icon-size` from
-[top_nav_home_button.css](../../frontend/core_components/front_page/top_nav_home_button.css). Only Home's own
-stacked phone navigation gives Home the full tab width, 44px minimum height and its translated/site-name label
-(the fit controller never compacts that stack); dataset toolbars keep the 44px square Home. Focus ring,
-accessible name and current-page marker are unchanged. An ordinary Home activation bubbles to the same
-outside-click closer as a dataset tab: below 1850 CSS pixels it closes the overlay menu and saves that state;
-a docked menu stays open, Home inside the menu is an inside click, and modified or non-primary gestures stay
-native and leave the menu alone. Menu state still has one owner.
+[top_nav_home_button.css](../../frontend/core_components/front_page/top_nav_home_button.css). Phone Home keeps its current-page link in the side menu. Its scrolling
+navigation contains the permitted dataset buttons and configured top-row article links.
+At widths up to and including 1850 CSS pixels, selecting Home, a dataset or a tool in the side menu
+closes the overlay. Choosing Home or a dataset on the toolbar also closes it. The visibility owner
+remembers this choice separately from the docked menu. Using Back/Forward, changing the theme or
+language, expanding a group and opening a link in a new tab all preserve the open menu.
 
 Home always shows full-width rectangular navigation buttons in its vertical side menu, including when it has no background media.
 Dataset pages use rectangles for the overlay menu and for datasets with presentation media. A docked dataset without media keeps its curved connectors.
@@ -406,11 +405,18 @@ The menu keeps the shell's 12 px corner inset; safe-area top padding adds to it.
 The translucent theme surface keeps its 1px bottom edge in all drawer states and blur, with a solid theme surface
 when blur is unsupported. Its stacking level stays below drawers and modals.
 
-The existing row follows the bar inside the scroller: Home and dataset tabs,
-top-row article buttons, then administrator actions. The story and dataset
-blocks follow in the same scrolling surface. Tabs retain their centred vertical
-stack, at most 480 px wide within 16 px gutters, shared labels/icons, current-page
-and focus styles, and at least 44 px touch height. The page uses dynamic viewport
+The scrolling row follows the bar. Visible dataset buttons and configured top-row
+article links share the fewest rows that fit their measured widths, preserving
+reading and tab order. Row breaks balance unused space and keep the last two
+destinations together when they fit. Changes to the controls, labels, fonts or
+available width recalculate the breaks.
+Each button starts at the width of its icon and name. Buttons on the same row
+divide the remaining space equally and centre each icon and single-line label
+together, giving longer names wider buttons. A button moves to
+the next row when its full name needs more room. A name wider than the whole row
+wraps within its full-width button so the entire label remains visible. Rows have equal outer
+insets and touch targets at least 48 px high. Administrator actions, the story and dataset blocks follow.
+The page uses dynamic viewport
 height with the existing viewport-height fallback. A border-box ResizeObserver
 publishes `--home-phone-bar-size` on the scroller, including safe-area changes;
 the scrolled content's own scroll margin clears the bar (the bar has none, so
@@ -435,8 +441,8 @@ Home; the drawer scrolls natively and keeps its sticky controls and portalled
 language panel. Above 700 px wheel forwarding keeps its existing behavior.
 Through 1850 px the drawer overlays content; above it the ordinary sidebar width
 is reserved. Dataset layout, menu ownership and phone tab fitting are unchanged.
-Logo and site-name clicks never close the menu; ordinary outside clicks close
-below 1850 px. G14/E10 cover sole-control ownership, focus and corner parity on
+Logo and site-name clicks preserve the open menu. An ordinary outside click closes
+the overlay through 1850 px. G14/E10 cover sole-control ownership, focus and corner parity on
 scrolled phone Home; G13 measures 320/375/390/414/700 px and the 701 px boundary.
 The non-phone CSS hash and desktop DOM test pin the original desktop contract.
 
@@ -562,17 +568,19 @@ Route startup supplies and reconciles its tableless permission,
 and the existing administrator permission seed grants it. Home renders only these viewer-filtered links, in payload order, using the
 payload label as the accessible name. Empty lists have no wrapper. The stored
 placement selects either links immediately below the description inside the
-text block, or outlined pills at the far right after the dataset tabs, before
-administrator actions when present. Top-row pills have transparent backgrounds,
+text block, or links after the dataset tabs, before administrator actions when present.
+Above 700 px the latter sit at the far right as pills with transparent backgrounds,
 2 px theme-text borders, rounded ends, bold labels and generous horizontal padding.
 On wider screens, Home centres tabs, pills and actions vertically through its
 page-scoped row rule, which outranks the shared dataset hero's top alignment.
 Opposing theme-background halos around text and both border edges preserve their
 contrast over images, video and either Home wash without adding a top strip.
 Below-text links retain their shared primary-button appearance. At
-700 px and below, both placements use content-wide buttons (27 px inline padding, 54 px minimum height) with wrapping labels;
-the group follows the hero's phone alignment, inheriting desktop start/centre/end (justify → start), using logical margins and matching 16 px gutters.
-Navigation stays full-width; wider screens and visible keyboard focus are unchanged. A language change cancels an obsolete Home read and
+700 px and below, below-text links use 27 px inline padding and a 54 px minimum
+height. Their group follows the hero's phone alignment, inheriting desktop
+start/centre/end (justify maps to start). Top-row links use the phone dataset
+navigation’s wrapping layout and button surface, with a decorative article icon.
+A language change cancels an obsolete Home read and
 refetches the complete payload; session changes use the existing visit guards.
 Labels never trigger another public title request.
 

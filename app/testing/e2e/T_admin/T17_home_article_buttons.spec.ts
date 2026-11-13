@@ -277,47 +277,42 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           } else {
             const rowHost = width <= 700 ? '.front-page-scroller > .front-page-top-row' : '.front-page > .front-page-top-row';
             await expect(page.locator(`${rowHost} > .hero-dataset-tabs + .front-page-article-buttons > a`)).toHaveCount(1);
-            const pill = await link.evaluate(el => {
-              const style = getComputedStyle(el);
-              const luminance = (colour: string) => {
-                const rgb = colour.match(/[\d.]+/g)?.slice(0, 3).map(Number);
-                if (!rgb || rgb.length !== 3) throw new Error(`Unrecognised computed colour: ${colour}`);
-                const [r, g, b] = rgb.map(value => {
-                  const channel = value / 255;
-                  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-                });
-                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-              };
-              const contrast = (foreground: string, halo: string) => {
-                const a = luminance(foreground), b = luminance(halo);
-                return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-              };
-              const textHalo = style.textShadow.match(/rgb\([^)]+\)/)?.[0];
-              const borderHalo = style.boxShadow.match(/rgb\([^)]+\)/)?.[0];
-              if (!textHalo || !borderHalo) throw new Error('Transparent Home pills require opaque theme contrast halos.');
-              return { background: style.backgroundColor, border: parseFloat(style.borderTopWidth),
-                radius: parseFloat(style.borderTopLeftRadius), weight: Number(style.fontWeight),
-                padding: parseFloat(style.paddingInlineStart), textContrast: contrast(style.color, textHalo),
-                borderContrast: contrast(style.borderTopColor, borderHalo) };
-            });
-            expect(pill.background).toBe('rgba(0, 0, 0, 0)'); expect(pill.border).toBe(2);
-            expect(pill.radius).toBeGreaterThanOrEqual(bounds.height / 2); expect(pill.weight).toBeGreaterThanOrEqual(700);
-            expect(pill.padding).toBeGreaterThanOrEqual(24);
-            expect(pill.textContrast).toBeGreaterThanOrEqual(4.5); expect(pill.borderContrast).toBeGreaterThanOrEqual(3);
             if (width === 375) {
-              const tabs = (await page.locator('.front-page-top-row > .hero-dataset-tabs').boundingBox())!;
-              expect(bounds.y).toBeGreaterThanOrEqual(tabs.y + tabs.height);
-              const row = (await page.locator('.front-page-top-row').boundingBox())!;
-              const inset = await page.locator('.front-page-top-row').evaluate(el => {
-                const style = getComputedStyle(el);
-                return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-                  + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
-              });
-              // WO82b/K444: in the top row too, the button fits its label inside the row's content box.
-              expect(bounds.width).toBeLessThan(row.width - inset);
+              const last = page.locator('.front-page-top-row .hero-dataset-tabs__button').last();
+              const tab = (await last.boundingBox())!, row = (await page.locator(rowHost).boundingBox())!;
+              expect(bounds.height).toBeCloseTo(tab.height, 0);
+              expect(bounds.y > tab.y || bounds.x >= tab.x + tab.width).toBe(true);
               expect(bounds.x).toBeGreaterThanOrEqual(row.x);
               expect(bounds.x + bounds.width).toBeLessThanOrEqual(row.x + row.width);
+              await expect(link).toHaveCSS('justify-content', 'center');
             } else {
+              const pill = await link.evaluate(el => {
+                const style = getComputedStyle(el);
+                const luminance = (colour: string) => {
+                  const rgb = colour.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+                  if (!rgb || rgb.length !== 3) throw new Error(`Unrecognised computed colour: ${colour}`);
+                  const [r, g, b] = rgb.map(value => {
+                    const channel = value / 255;
+                    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+                  });
+                  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                };
+                const contrast = (foreground: string, halo: string) => {
+                  const a = luminance(foreground), b = luminance(halo);
+                  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+                };
+                const textHalo = style.textShadow.match(/rgb\([^)]+\)/)?.[0];
+                const borderHalo = style.boxShadow.match(/rgb\([^)]+\)/)?.[0];
+                if (!textHalo || !borderHalo) throw new Error('Transparent Home pills require opaque theme contrast halos.');
+                return { background: style.backgroundColor, border: parseFloat(style.borderTopWidth),
+                  radius: parseFloat(style.borderTopLeftRadius), weight: Number(style.fontWeight),
+                  padding: parseFloat(style.paddingInlineStart), textContrast: contrast(style.color, textHalo),
+                  borderContrast: contrast(style.borderTopColor, borderHalo) };
+              });
+              expect(pill.background).toBe('rgba(0, 0, 0, 0)'); expect(pill.border).toBe(2);
+              expect(pill.radius).toBeGreaterThanOrEqual(bounds.height / 2); expect(pill.weight).toBeGreaterThanOrEqual(700);
+              expect(pill.padding).toBeGreaterThanOrEqual(24);
+              expect(pill.textContrast).toBeGreaterThanOrEqual(4.5); expect(pill.borderContrast).toBeGreaterThanOrEqual(3);
               const lastTab = page.locator('.front-page-top-row .hero-dataset-tabs__button:visible').last();
               await expect(lastTab).toBeVisible();
               const tab = (await lastTab.boundingBox())!;

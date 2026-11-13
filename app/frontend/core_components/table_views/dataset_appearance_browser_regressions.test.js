@@ -40,6 +40,7 @@ vi.mock('./card_view/row_article_load_session.js', () => ({ createRowArticleLoad
 import { datasetAppearanceState } from './dataset_appearance_state.js';
 import { DEFAULT_DATASET_APPEARANCE } from '../../shared/dataset_appearance/validator.js';
 import { generate_table } from './dataset_view_printer.js';
+import { disposeCardResources } from './card_view/card_resource_lifecycle.js';
 import { openRowArticleView } from './card_view/row_article_opener.js';
 import { buildRowArticleContent } from './card_view/row_article_content_builder.js';
 import { ROW_ARTICLE_PERMISSION_ROUTES } from './card_view/row_article_permission_checker.js';
@@ -85,7 +86,7 @@ beforeEach(() => {
     vi.mocked(renderActiveFilters).mockReset();
     palette = null;
 });
-afterEach(() => { palette?.destroy(); vi.restoreAllMocks(); });
+afterEach(() => { disposeCardResources(document.body); palette?.destroy(); vi.restoreAllMocks(); });
 
 test.each(['start', 'end'])('empty searched cards keep %s chips when the first tree confirms their authorized UID', async side => {
     const response = result(); response.data = []; response.row_count = 0;

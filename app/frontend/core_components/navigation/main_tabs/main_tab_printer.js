@@ -34,7 +34,7 @@ import {
     refreshMainTabPresentation,
 } from "./main_tab_active_state.js";
 import { updateBrowserTabTitle } from "../nav_engine/browser_tab_title_writer.js";
-import { NAVBAR_VISIBILITY_CHANGED_EVENT } from "../menu_button/navbar_visibility_handler.js";
+import { closeOverlayNavbarOnNavigation, NAVBAR_VISIBILITY_CHANGED_EVENT } from "../menu_button/navbar_visibility_handler.js";
 import { resolveFilterBarElement } from "../../filterbar/filterbar_engine/filterbar_visibility_handler.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { isSeparateFrontPageEnabled, openFrontPage } from "../../front_page/front_page_navigation.js";
@@ -369,6 +369,7 @@ function attachFastTabOpenHandlers(button, tabId) {
             return;
         }
         suppressClickAfterMouseDown = true;
+        closeOverlayNavbarOnNavigation(event);
         void openNavTab(tabId);
     });
 
@@ -382,6 +383,7 @@ function attachFastTabOpenHandlers(button, tabId) {
             event.preventDefault();
             return;
         }
+        closeOverlayNavbarOnNavigation(event);
         void openNavTab(tabId);
     });
 }

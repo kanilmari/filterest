@@ -97,7 +97,7 @@ async function menuState(page: Page) {
 }
 
 async function expectHomeMenuState(page: Page, before: Awaited<ReturnType<typeof menuState>>, width: number) {
-  if (width >= 1850) expect(await menuState(page)).toEqual(before);
+  if (width > 1850) expect(await menuState(page)).toEqual(before);
   else {
     await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
     expect((await menuState(page)).narrow).toBe('false');

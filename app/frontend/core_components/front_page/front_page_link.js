@@ -59,7 +59,7 @@ export function createFrontPageLink({ topNavigation = false, current = false,
     link.addEventListener('click', event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        // Bubble through the same document outside-click closer as dataset tabs.
+        // Leave drawer visibility with the shared navbar activation handlers.
         // Native pointer and keyboard clicks can retry; synthetic/startup calls cannot.
         void import('./front_page_navigation.js').then(({ openFrontPage }) =>
             openFrontPage({ userActivation: event.isTrusted }));

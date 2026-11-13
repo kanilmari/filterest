@@ -24,7 +24,7 @@ describe("navbar_visibility_handler", () => {
         document.body.innerHTML = `
             <div class="body_wrapper">
                 <div class="body_content" style="max-width: 2560px;">
-                    <button id="showMenuButton">☰</button>
+                    <button id="showMenuButton" aria-controls="navbar">☰</button>
                     <div id="navbar">
                         <div class="top-button-bar">
                             <button id="hideMenuButton">☰</button>
@@ -61,7 +61,7 @@ describe("navbar_visibility_handler", () => {
             identity.append(nested); content.append(identity);
             nested.click();
             expect(navbar.classList.contains('collapsed')).toBe(false);
-            expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
+            expect(localStorage.getItem(width > 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
         }
         for (const className of ['filterbar-fixed-toggle', 'hide_filter_bar_button']) {
             const toggle = document.createElement('button');
@@ -82,10 +82,36 @@ describe("navbar_visibility_handler", () => {
         content.append(prefixedTitle);
         prefixedTitle.click();
         expect(navbar.classList.contains('collapsed')).toBe(false);
-        expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
+        expect(localStorage.getItem(width > 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
         content.click();
-        expect(navbar.classList.contains('collapsed')).toBe(width < 1850);
-        expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe(String(width >= 1850));
+        expect(navbar.classList.contains('collapsed')).toBe(width <= 1850);
+        expect(localStorage.getItem(width > 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe(String(width > 1850));
+    });
+
+    test.each([414, 850, 1850, 1851])('only destinations close an overlay, including tree leaves that stop propagation, at %ipx', async width => {
+        window.innerWidth = width;
+        localStorage.setItem('navVisibleWide', 'true');
+        localStorage.setItem('navVisibleNarrow', 'true');
+        const { initNavbar, toggleNavbarVisibility } = await loadModule();
+        const navbar = document.getElementById('navbar');
+        navbar.insertAdjacentHTML('beforeend', `
+            <button id="themeToggleBtn"></button><button class="language-button"></button>
+            <button class="navbar-section-heading"></button><button class="favorite-star"></button>
+            <button class="general_button_nav"><span>Dataset</span></button>
+            <button class="general_button_admin"><span>Tool</span></button>
+            <button class="navbar-auth-action"><span>Account</span></button>
+        `);
+        initNavbar();
+        for (const button of navbar.querySelectorAll('button:not(#hideMenuButton)')) {
+            button.disabled = false;
+            button.addEventListener('click', event => event.stopPropagation());
+            const label = button.querySelector('span') || button;
+            label.click();
+            const closed = Boolean(button.querySelector('span')) && width <= 1850;
+            expect(navbar.classList.contains('collapsed')).toBe(closed);
+            expect(localStorage.getItem('navVisibleWide')).toBe('true');
+            if (closed) toggleNavbarVisibility();
+        }
     });
 
     test("dispatches navbar visibility change events from each persistent navbar button", async () => {
@@ -105,15 +131,76 @@ describe("navbar_visibility_handler", () => {
         expect(document.getElementById("hideMenuButton").tabIndex).toBe(0);
     });
 
-    test('phone bar owns menu focus across open/close while the row scrolls separately', async () => {
+    test.each([390, 1280])('Home returns focus after a toggle, Enter or pointer click on its current link at %ipx', async width => {
+        window.innerWidth = width;
         const { initNavbar } = await loadModule();
-        localStorage.setItem('navVisibleWide', 'false');
-        const bar = document.createElement('div'); bar.className = 'front-page-phone-topbar';
+        localStorage.setItem('navVisibleNarrow', 'false');
+        const bar = document.createElement('div');
+        bar.className = width <= 700 ? 'front-page-phone-topbar' : 'front-page-top-row';
         document.getElementById('tabs_container').append(bar);
         const show = document.getElementById('showMenuButton'); bar.append(show);
         initNavbar(); show.focus(); show.click();
         expect(document.activeElement).toBe(document.getElementById('hideMenuButton'));
         document.getElementById('hideMenuButton').click();
+        expect(document.activeElement).toBe(show);
+
+        const navbar = document.getElementById('navbar');
+        navbar.insertAdjacentHTML('beforeend', '<nav id="navbarFrontPage"><a href="/" aria-current="page">Home</a></nav>');
+        const home = navbar.querySelector('a');
+        home.addEventListener('click', event => event.preventDefault());
+        for (const detail of [0, 1]) { // Enter and a primary pointer click.
+            show.click();
+            home.focus();
+            home.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
+            expect(navbar.classList.contains('collapsed')).toBe(true);
+            expect(show.getAttribute('aria-hidden')).toBe('false');
+            expect(document.activeElement).toBe(show);
+        }
+    });
+
+    test('destination close recovers any remaining drawer focus and preserves focus chosen by the view', async () => {
+        window.innerWidth = 414;
+        const { initNavbar, NAVBAR_VISIBILITY_CHANGED_EVENT } = await loadModule();
+        const navbar = document.getElementById('navbar');
+        const show = document.getElementById('showMenuButton');
+        const destination = document.createElement('button');
+        destination.className = 'general_button_nav';
+        navbar.append(destination);
+        const nextControl = document.createElement('button');
+        document.getElementById('tabs_container').append(nextControl);
+        initNavbar();
+
+        show.click();
+        destination.focus();
+        window.addEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, () => nextControl.focus(), { once: true });
+        destination.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        expect(navbar.classList.contains('collapsed')).toBe(true);
+        expect(document.activeElement).toBe(nextControl);
+
+        show.click();
+        // The clicked destination may differ from the previously focused menu item.
+        const back = document.getElementById('navBackBtn');
+        back.disabled = false;
+        back.focus();
+        destination.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        expect(navbar.classList.contains('collapsed')).toBe(true);
+        expect(document.activeElement).toBe(show);
+    });
+
+    test('a fast tab press recovers focus after the browser focuses the pressed button', async () => {
+        window.innerWidth = 414;
+        const { initNavbar, closeOverlayNavbarOnNavigation } = await loadModule();
+        const navbar = document.getElementById('navbar');
+        const show = document.getElementById('showMenuButton');
+        const tab = document.createElement('button');
+        navbar.append(tab);
+        tab.addEventListener('mousedown', closeOverlayNavbarOnNavigation);
+        initNavbar();
+        show.click();
+        tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        tab.focus(); // The browser's default mousedown action follows the tab handler.
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        expect(navbar.classList.contains('collapsed')).toBe(true);
         expect(document.activeElement).toBe(show);
     });
 

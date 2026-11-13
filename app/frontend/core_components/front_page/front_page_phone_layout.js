@@ -5,6 +5,7 @@
 // Moves existing nodes so tab subscriptions, translated copy and listeners survive.
 
 import { NAVBAR_VISIBILITY_CHANGED_EVENT } from '../navigation/menu_button/navbar_visibility_handler.js';
+import { mountHomeNavigationRows } from './front_page_phone_navigation_rows.js';
 import { mountFrontPageSearchSheet } from './front_page_search_sheet.js';
 
 const PHONE_QUERY = '(width <= 700px)';
@@ -20,6 +21,7 @@ export function mountFrontPagePhoneLayout(row, scroller) {
     const scrollerHadStyle = scroller.hasAttribute('style');
     let bar = null;
     let observer = null;
+    let stopNavigationRows = null;
     let returnPoints = [];
     let savedScrollTop = null;
     let destroyed = false;
@@ -62,6 +64,8 @@ export function mountFrontPagePhoneLayout(row, scroller) {
         if (!bar) return;
         observer?.disconnect();
         observer = null;
+        stopNavigationRows();
+        stopNavigationRows = null;
         unlock();
         scroller.style.removeProperty(BAR_SIZE);
         if (!scrollerHadStyle && !scroller.style.length) scroller.removeAttribute('style');
@@ -100,6 +104,7 @@ export function mountFrontPagePhoneLayout(row, scroller) {
             observer = new view.ResizeObserver(entries => { if (bar === observedBar) publishSize(entries[0]); });
             observer.observe(bar, { box: 'border-box' });
         }
+        stopNavigationRows = mountHomeNavigationRows(row);
         syncDrawer();
     }
 

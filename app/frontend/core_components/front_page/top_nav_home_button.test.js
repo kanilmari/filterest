@@ -92,6 +92,8 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
         await vi.importActual('../navigation/menu_button/navbar_visibility_handler.js');
     const navbar = document.getElementById('navbar');
     const home = createTopNavHomeButton();
+    renderNavbarFrontPage({ isLoggedIn: true });
+    const menuHome = document.querySelector('#navbarFrontPage a');
     const tabs = createHeroDatasetTabs('demo');
     const tab = tabs.element.querySelector('button');
     document.getElementById('hero').append(home, tabs.element);
@@ -109,21 +111,22 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
         for (const width of [375, 768, 1440, 1849, 1850, 1920]) {
             vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
             const results = [];
-            for (const target of [home, tab]) {
+            for (const target of [home, tab, menuHome]) {
                 if (navbar.classList.contains('collapsed')) toggleNavbarVisibility();
                 localStorage.setItem('navVisibleNarrow', 'true'); localStorage.setItem('navVisibleWide', 'true');
                 changed.mockClear(); writes.mockClear();
                 mocks.open.mockClear();
                 target.click();
-                if (target === home) await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledOnce());
+                if (target !== tab) await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledOnce());
                 results.push(snapshot());
-                expect(changed).toHaveBeenCalledTimes(width < 1850 ? 1 : 0);
+                expect(changed).toHaveBeenCalledTimes(width <= 1850 ? 1 : 0);
                 expect(writes.mock.calls.filter(([key]) => key === 'navVisibleNarrow' || key === 'navVisibleWide'))
-                    .toHaveLength(width < 1850 ? 1 : 0);
+                    .toHaveLength(width <= 1850 ? 1 : 0);
             }
             expect(results[0]).toEqual(results[1]);
-            expect(results[0]).toEqual({ collapsed: width < 1850, expanded: String(width >= 1850),
-                closerExpanded: String(width >= 1850), narrow: String(width >= 1850), wide: 'true' });
+            expect(results[2]).toEqual(results[1]);
+            expect(results[0]).toEqual({ collapsed: width <= 1850, expanded: String(width > 1850),
+                closerExpanded: String(width > 1850), narrow: String(width > 1850), wide: 'true' });
         }
         vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(375);
         if (navbar.classList.contains('collapsed')) toggleNavbarVisibility();
@@ -131,7 +134,7 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
         for (const gesture of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }, { button: 2 }]) {
             changed.mockClear(); mocks.open.mockClear(); writes.mockClear();
             const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...gesture });
-            home.dispatchEvent(event);
+            for (const link of [home, menuHome]) link.dispatchEvent(event);
             expect(event.defaultPrevented).toBe(false);
             await Promise.resolve();
             expect(mocks.open).not.toHaveBeenCalled();
@@ -139,9 +142,6 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
             expect(snapshot()).toEqual(before);
             expect(writes).not.toHaveBeenCalled();
         }
-        renderNavbarFrontPage({ isLoggedIn: true });
-        document.querySelector('#navbarFrontPage a').click();
-        expect(snapshot()).toEqual(before);
     } finally {
         const transition = new Event('transitionend');
         Object.defineProperty(transition, 'propertyName', { value: 'transform' });

@@ -262,10 +262,6 @@
   justify-content: center;
 }
 
-/* Use the ordinary surface, not the near-black extreme token, in dark mode.
-   The same OKLCH lightness step is perceptually subtle in both explicit themes.
-   White becomes L=0.977 (about the previous 97% HSL); dark loses only 0.023 too.
-   Resolve on this surface so an application theme override wins over the OS. */
 .dataset-filter-section {
   box-sizing: border-box;
   display: flex;
@@ -275,7 +271,7 @@
   padding: var(--fw-space-4);
   border-radius: var(--search_tools_radius);
   border: 1px solid var(--border_color);
-  background: oklch(from var(--bg_color_2) calc(l - 0.023) c h);
+  background: var(--bg_color_2);
 }
 
 .dataset-filter-section[hidden] {

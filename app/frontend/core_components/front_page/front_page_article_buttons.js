@@ -46,7 +46,10 @@ export function createFrontPageArticleButtons(items) {
         const link = document.createElement('a');
         link.className = 'front-page-article-button fw-btn fw-btn--primary';
         link.href = item.href;
-        link.textContent = item.label;
+        const label = document.createElement('span');
+        label.className = 'front-page-article-button__label';
+        label.textContent = item.label;
+        link.append(label);
         const address = new URL(item.href, location.origin);
         if (!address.searchParams.has('view')) {
             const target = address.pathname.match(/^\/([^/]+)\/(\d+)$/);

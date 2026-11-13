@@ -10,7 +10,7 @@ import { proveContactButton, type ArticleFixture } from '../helpers/home-contact
 import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
 type Theme = 'light' | 'dark';
-type Fixture = { name: string; width: number; height?: number; datasetCount?: number; scrolling?: boolean; article?: ArticleFixture };
+type Fixture = { name: string; width: number; height?: number; datasetCount?: number; datasetLabels?: string[]; scrolling?: boolean; article?: ArticleFixture };
 // Observe whole rendered frames and completed mutation batches, starting before
 // ownership changes. Settled locator assertions alone missed the fading copy.
 
@@ -118,6 +118,7 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
     }
   });
+  const datasetCount = fixture?.datasetLabels?.length ?? fixture?.datasetCount ?? 2;
   if (fixture) await page.route(url => url.pathname === '/api/datasets', async route => {
     expect(route.request().method()).toBe('GET');
     // Response-only destinations: no datasets, accounts or keys are created.
@@ -125,7 +126,7 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     const response = await route.fetch();
     expect(response.ok()).toBe(true);
     const data = await response.json();
-    data.datasets = Array.from({ length: fixture.datasetCount ?? 2 }, (_, index) => ({
+    data.datasets = Array.from({ length: datasetCount }, (_, index) => ({
       dataset_name: `app_e2e_home_menu_fixture_${index + 1}`, table_uid: 900000 + index,
       is_top_level_in_current_project: true, can_read_rows: true, icon_key: 'table',
     }));
@@ -139,8 +140,8 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     const data = await response.json();
     const translations = data.translations && typeof data.translations === 'object' ? data.translations : data;
     const label = new URL(route.request().url()).searchParams.get('lang') === 'fi' ? 'Testiaineisto' : 'Fixture dataset';
-    for (let index = 1; index <= (fixture.datasetCount ?? 2); index++) {
-      translations[`app_e2e_home_menu_fixture_${index}`] = `${label} ${index}`;
+    for (let index = 1; index <= datasetCount; index++) {
+      translations[`app_e2e_home_menu_fixture_${index}`] = fixture.datasetLabels?.[index - 1] ?? `${label} ${index}`;
     }
     // Response-only copy plus the protected E2E prefix prevents synthetic keys
     // from entering translation maintenance even before a dictionary arrives.
@@ -277,7 +278,7 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     expect(heroBox.x - stageBox.x).toBeCloseTo(16, 0);
     expect(stageBox.x + stageBox.width - heroBox.x - heroBox.width).toBeCloseTo(16, 0);
     const tabs = page.locator('.front-page-top-row > .hero-dataset-tabs');
-    await expect(tabs).toBeVisible();
+    await expect(page.getByRole('navigation').and(tabs)).toHaveCount(1);
     const buttons = tabs.locator(':scope > button');
     await expect(buttons).toHaveCount(2);
     await expect.poll(() => buttons.evaluateAll(elements => elements.every(element =>
@@ -291,11 +292,11 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     const homeBox = (await page.locator('.front-page').boundingBox())!;
     for (const [index, box] of boxes.entries()) {
       expect(box.height).toBeGreaterThanOrEqual(44);
-      expect(box.width).toBeCloseTo(boxes[0].width, 1);
-      expect(box.x).toBeCloseTo(boxes[0].x, 1);
-      expect(box.x).toBeGreaterThanOrEqual(homeBox.x + 16);
-      expect(box.x + box.width).toBeLessThanOrEqual(homeBox.x + homeBox.width - 16);
-      if (index) expect(box.y).toBeGreaterThanOrEqual(boxes[index - 1].y + boxes[index - 1].height);
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.y).toBeCloseTo(boxes[0].y, 1);
+      expect(box.x).toBeGreaterThanOrEqual(homeBox.x + 4);
+      expect(box.x + box.width).toBeLessThanOrEqual(homeBox.x + homeBox.width - 4);
+      if (index) expect(box.x).toBeGreaterThan(boxes[index - 1].x + boxes[index - 1].width);
       await expect(destinations.nth(index).locator('.navbar-front-page-icon, .hero-dataset-tabs__icon')).toBeVisible();
       await expect(destinations.nth(index)).toHaveAccessibleName(/\S/);
       if (!open) expect(await destinations.nth(index).evaluate(element => {
@@ -534,6 +535,7 @@ for (const open of [false, true]) {
       // The full-height drawer covers Home's tabs; use its real destination.
       const dataset = await firstDataset.getAttribute('data-dataset');
       await page.locator(`#navbar .navtablinks[data-id="${dataset}"]`).click();
+      await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
     } else await firstDataset.click();
     await expect(page.locator('.front-page-top-row')).toHaveCount(0);
     await expect(page.locator('#showMenuButton')).toHaveCount(1);
@@ -547,8 +549,7 @@ for (const open of [false, true]) {
     await expect(page.locator('.tab_parts_container:visible .filterbar-inline-hero__top-row .hero-dataset-tabs')).toBeHidden();
     const datasetMenu = page.locator('.dataset-shared-topbar:visible').getByTestId('shared-topbar-menu-button');
     const navbar = page.locator('#navbar');
-    // Clicking the destination may close the overlay; explicitly exercise both
-    // outgoing dataset states instead of relying on the Home state from earlier.
+    // Restore the requested outgoing dataset menu state before exercising browser history.
     if (/\bcollapsed\b/.test(await navbar.getAttribute('class') || '') === open) {
       await datasetMenu.click();
     }
@@ -578,8 +579,8 @@ for (const open of [false, true]) {
     await page.setViewportSize({ width: 1851, height: 900 });
     await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
     await setMenu(page, true); await proveHome(page, true, state.alignment, false);
-    // NAVBAR_WIDTH_THRESHOLD is 1850 and wide means innerWidth >= 1850, so 1849 is the first narrow width.
-    await page.setViewportSize({ width: 1849, height: 900 });
+    // At the inclusive CSS boundary, the overlay recalls its own setting.
+    await page.setViewportSize({ width: 1850, height: 900 });
     if (open) await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
     else await expect(page.locator('#navbar')).not.toHaveClass(/\bcollapsed\b/);
     await setMenu(page, false); await proveHome(page, false, state.alignment, false);
@@ -588,7 +589,7 @@ for (const open of [false, true]) {
     for (const width of [1280, 1850, 1851]) {
       await page.setViewportSize({ width, height: 900 });
       await expect.poll(() => page.evaluate(() => {
-        const stored = localStorage.getItem(window.innerWidth >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow');
+        const stored = localStorage.getItem(window.innerWidth > 1850 ? 'navVisibleWide' : 'navVisibleNarrow');
         return !document.getElementById('navbar')!.classList.contains('collapsed') === (stored === 'true');
       })).toBe(true);
       await setMenu(page, open);

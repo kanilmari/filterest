@@ -28,7 +28,13 @@ test.each([
     const closeFocus = vi.spyOn(close, 'focus');
     if (closeHidden === 'true') close.style.display = 'none';
     if (target !== 'showMenuButton') document.getElementById('showMenuButton').style.display = 'none';
-    element.style.flexDirection = homeOwnsMenu ? 'column' : 'row';
+    const row = element.parentElement;
+    const scroller = document.createElement('div');
+    if (homeOwnsMenu) {
+        scroller.className = 'front-page-scroller';
+        document.body.append(scroller);
+        scroller.append(row);
+    }
     let availableWidth = 400;
     vi.spyOn(element, 'clientWidth', 'get').mockImplementation(() => availableWidth);
     const buttons = [...element.children];
@@ -39,28 +45,29 @@ test.each([
         expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
         buttons[2].focus();
         expect(document.activeElement).toBe(buttons[2]);
-        element.style.flexDirection = 'row'; availableWidth = 250;
+        scroller.classList.remove('front-page-scroller'); availableWidth = 250;
         window.dispatchEvent(new Event('resize')); await vi.advanceTimersByTimeAsync(20);
         expect(buttons.map(button => button.hidden)).toEqual([false, false, true]);
         expect(document.activeElement).toBe(document.getElementById(target));
         expect(window.getComputedStyle(document.activeElement).display).not.toBe('none');
         if (homeOwnsMenu) {
             expect(closeFocus).toHaveBeenCalledTimes(target === 'hideMenuButton' ? 1 : 0);
-            element.style.flexDirection = 'column';
+            scroller.classList.add('front-page-scroller');
             window.dispatchEvent(new Event('resize')); await vi.advanceTimersByTimeAsync(20);
             expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
         }
     } finally { fit.destroy(); }
 });
 
-test('only a Home phone column restores destinations hidden by a narrower desktop row', async () => {
+test('only the projected Home phone navigation restores destinations hidden by a narrower desktop row', async () => {
     vi.useFakeTimers();
     const home = document.createElement('div');
     home.className = 'front-page-top-row';
     const element = document.createElement('nav');
     element.innerHTML = '<button>Matkainfo</button><button>Matkatarjoukset</button><button>Blogit</button>';
     home.append(element);
-    document.body.append(home);
+    const scroller = document.createElement('div'); scroller.className = 'front-page-scroller';
+    document.body.append(home, scroller);
     const buttons = [...element.children];
     vi.spyOn(element, 'clientWidth', 'get').mockReturnValue(120);
     for (const button of buttons) vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ width: 70 });
@@ -75,17 +82,17 @@ test('only a Home phone column restores destinations hidden by a narrower deskto
         expect(link.classList.contains('top-nav-home-button--compact')).toBe(true);
         link.classList.remove('top-nav-home-button--compact');
         homeMeasurement.mockClear();
-        element.style.flexDirection = 'column';
+        scroller.append(home);
         fit.sync(); await vi.advanceTimersByTimeAsync(20);
         expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
         expect(link.classList.contains('top-nav-home-button--compact')).toBe(false);
         expect(homeMeasurement).not.toHaveBeenCalled();
-        // A dataset projection still fits horizontally, even if a caller stacks it.
+        // A dataset projection still fits horizontally, even inside the scroller.
         home.className = 'dataset-hero';
         fit.sync(); await vi.advanceTimersByTimeAsync(20);
         expect(buttons.map(button => button.hidden)).toEqual([false, true, true]);
         home.className = 'front-page-top-row';
-        element.style.flexDirection = 'row';
+        document.body.append(home);
         fit.sync(); await vi.advanceTimersByTimeAsync(20);
         expect(buttons.map(button => button.hidden)).toEqual([false, true, true]);
     } finally { fit.destroy(); }
@@ -104,7 +111,7 @@ test('Home ancestry survives projection into the phone scroller and restores eve
     vi.stubGlobal('matchMedia', () => media);
     document.body.innerHTML = '<div class="front-page"><div class="front-page-top-row">'
         + '<div class="front-page-top-row__identity"><div class="dataset-shared-topbar__menu-slot"></div></div>'
-        + '<nav style="flex-direction:column"><button>Matkainfo</button><button hidden>Matkatarjoukset</button></nav></div>'
+        + '<nav><button>Matkainfo</button><button hidden>Matkatarjoukset</button></nav></div>'
         + '<div class="front-page-scroller"></div></div>';
     const row = document.querySelector('.front-page-top-row');
     const scroller = document.querySelector('.front-page-scroller');

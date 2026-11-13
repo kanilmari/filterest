@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones, Home sizes navigation buttons to their icons and labels, shares spare space equally within each row and centres each icon and label together. Labels wider than a whole row wrap inside the button. Dataset and article buttons form balanced rows at any count and keep the final two together when they fit. Selecting a destination from the overlay menu closes it. Dataset sort and filter controls use the current theme’s surface colour at all widths. Home’s Serif story headline and its italic accent use normal letter spacing (#1031).
+
 ## [9.6.6] - 2026-11-12
 
 - A site can show the filter bar’s Select visible fields section only to administrators. Every visitor still receives the effective fields for the current dataset and view (#1024).

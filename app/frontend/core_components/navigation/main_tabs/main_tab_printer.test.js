@@ -18,7 +18,8 @@ import {
     hasDatasetPermission,
     primeMultipleDatasetPermissions,
 } from "../../route_permission_checker.js";
-import { resetMainTabPrinterTestState } from "./main_tab_printer_test_helpers.js";
+import { resetMainTabPrinterTestState, setViewportWidth } from "./main_tab_printer_test_helpers.js";
+import { initNavbar, toggleNavbarVisibility } from "../menu_button/navbar_visibility_handler.js";
 
 // The retitle boundary is verified in main_tab_printer_browser_tab_title.test.js.
 vi.mock("../nav_engine/browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: vi.fn() }));
@@ -410,7 +411,20 @@ describe("initTabs", () => {
         );
     });
 
-    test("opens content tabs on mouse down and suppresses the following click", async () => {
+    function openNavbarAtWidth(width) {
+        setViewportWidth(width);
+        const navbar = document.getElementById('navbar');
+        navbar.append(document.getElementById('navmenu'));
+        navbar.insertAdjacentHTML('beforeend', '<button id="hideMenuButton"></button>');
+        document.body.insertAdjacentHTML('beforeend', '<button id="showMenuButton"></button>');
+        localStorage.setItem('navVisibleNarrow', 'true');
+        localStorage.setItem('navVisibleWide', 'true');
+        initNavbar();
+        return navbar;
+    }
+
+    test.each([414, 850, 1850, 1851])("at %ipx a tab navigates on press once and releases only the overlay", async width => {
+        const navbar = openNavbarAtWidth(width);
         const { initTabs } = await import("./main_tab_printer.js");
 
         await initTabs();
@@ -419,6 +433,7 @@ describe("initTabs", () => {
         const tabButton = document.querySelector('.navtablinks[data-id="app_service_catalog"]');
         expect(tabButton).not.toBeNull();
 
+        expect(navbar.classList.contains('collapsed')).toBe(false);
         tabButton.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
         expect(handle_all_navigation).toHaveBeenCalledTimes(1);
         expect(handle_all_navigation).toHaveBeenLastCalledWith(
@@ -427,16 +442,21 @@ describe("initTabs", () => {
             { skipUrlUpdate: false, forceReload: false }
         );
 
+        expect(navbar.classList.contains('collapsed')).toBe(width <= 1850);
         tabButton.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }));
         expect(handle_all_navigation).toHaveBeenCalledTimes(1);
 
-        tabButton.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }));
+        if (navbar.classList.contains('collapsed')) toggleNavbarVisibility();
+        tabButton.click(); // Keyboard and touch activation can arrive without a preceding mousedown.
         expect(handle_all_navigation).toHaveBeenCalledTimes(2);
+        expect(navbar.classList.contains('collapsed')).toBe(width <= 1850);
+        expect(localStorage.getItem('navVisibleWide')).toBe('true');
     });
 
     test.each(['Home', 'dataset'])('draggable tabs preserve %s through reorder and exact restoration', async surface => {
         const { initTabs } = await import('./main_tab_printer.js');
         const { enableTabDragAndDrop } = await import('./tab_reorder_handler.js');
+        const navbar = openNavbarAtWidth(850);
         await initTabs({ preloadedContentTablesResponse: {
             datasets: ['alpha', 'beta', 'gamma'].map(dataset_name => ({
                 dataset_name, is_top_level_in_current_project: true,
@@ -448,8 +468,11 @@ describe("initTabs", () => {
         const activeId = container.querySelector('.active')?.dataset.id;
         const home = document.createElement('div');
         home.className = 'front-page-top-row';
-        home.innerHTML = '<button id="showMenuButton">Menu</button><nav><button>Alpha</button><button>Beta</button></nav>';
-        if (surface === 'Home') document.getElementById('tabs_container').append(home);
+        home.innerHTML = '<nav><button>Alpha</button><button>Beta</button></nav>';
+        if (surface === 'Home') {
+            home.prepend(document.getElementById('showMenuButton'));
+            document.getElementById('tabs_container').append(home);
+        }
         enableTabDragAndDrop();
         vi.mocked(handle_all_navigation).mockClear();
         vi.mocked(endpoint_router).mockClear();
@@ -486,8 +509,10 @@ describe("initTabs", () => {
         expect(handle_all_navigation).not.toHaveBeenCalled();
         source.click();
         expect(handle_all_navigation).not.toHaveBeenCalled();
+        expect(navbar.classList.contains('collapsed')).toBe(false);
         await new Promise(resolve => setTimeout(resolve, 0));
         source.click();
+        expect(navbar.classList.contains('collapsed')).toBe(true);
         expect(handle_all_navigation).toHaveBeenCalledExactlyOnceWith(
             source.dataset.id, expect.anything(), { skipUrlUpdate: false, forceReload: false },
         );

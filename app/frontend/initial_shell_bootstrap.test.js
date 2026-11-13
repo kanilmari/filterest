@@ -37,11 +37,11 @@ describe('shell before application modules', () => {
         expect(initialOpen()).toBe(expected);
     });
 
-    test('uses the CSS breakpoint including the exact boundary', () => {
+    test('keeps the exact CSS overlay boundary in the narrow band', () => {
         document.documentElement.style.setProperty('--navbar-breakpoint', '1500px');
         vi.stubGlobal('innerWidth', 1500);
         run();
-        expect(initialOpen()).toBe('true');
+        expect(initialOpen()).toBe('false');
     });
 
     test('keeps the narrow shell usable when storage is denied', () => {

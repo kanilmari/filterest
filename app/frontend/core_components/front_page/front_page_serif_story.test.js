@@ -40,7 +40,7 @@ test.each(['light', 'dark'])('computed text styles defeat the element reset in t
     for (const index of [0, 1]) {
         expect(computed[index].fontFamily).toBe('Georgia, "Times New Roman", serif');
         expect(computed[index].fontWeight).toBe('400');
-        expect(computed[index].letterSpacing).toBe('-0.06em');
+        expect(computed[index].letterSpacing).toBe('0px');
     }
     for (const index of [2, 3]) {
         expect(computed[index].fontFamily).toContain('ui-sans-serif, system-ui');

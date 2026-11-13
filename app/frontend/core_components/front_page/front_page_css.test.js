@@ -136,8 +136,10 @@ test('sticky Home bar, drawer lock and measured offsets are confined to the phon
     expect(phone['.front-page'].height).toBe('100dvh');
 });
 
-test('phone navigation, Contact and actions occupy separate rows regardless of shared stylesheet import order', () => {
+test('top-row links share the phone rows while below-text links follow the hero in any stylesheet order', () => {
     const postcss = requireNodeDependency('postcss');
+    const reset = readFileSync(resolve(currentDirectory, '../../styles/base.css'), 'utf8');
+    const framework = readFileSync(resolve(currentDirectory, '../../styles/framework.css'), 'utf8');
     const articles = readFileSync(resolve(currentDirectory, 'front_page_article_buttons.css'), 'utf8');
     const hero = readFileSync(resolve(currentDirectory, '../filterbar/morphing_filterbar_content.css'), 'utf8');
     function activeRules(source, width) {
@@ -159,15 +161,23 @@ test('phone navigation, Contact and actions occupy separate rows regardless of s
     const style = document.createElement('style');
     const fixture = document.createElement('div');
     fixture.innerHTML = '<div class="front-page"><div class="front-page-scroller"><div class="front-page-top-row filterbar-inline-hero__top-row">'
-        + '<nav class="hero-dataset-tabs"></nav><div class="front-page-article-buttons"><a class="front-page-article-button">Ota yhteyttä</a></div>'
+        + '<nav class="hero-dataset-tabs"><button class="hero-dataset-tabs__button"><span class="hero-dataset-tabs__label">Matkainfo</span></button></nav>'
+        + '<div class="front-page-article-buttons"><a class="front-page-article-button fw-btn fw-btn--primary"><span class="front-page-article-button__label">Ota yhteyttä</span></a></div>'
         + '<div class="filterbar-inline-hero__actions"><button>Settings</button></div></div>'
-        + '<header class="front-page-hero"><div class="front-page-article-buttons"><a class="front-page-article-button">Ota yhteyttä</a></div></header></div></div>';
+        + '<header class="front-page-hero"><div class="front-page-article-buttons"><a class="front-page-article-button fw-btn fw-btn--primary"><span class="front-page-article-button__label">Ota yhteyttä</span></a></div></header></div></div>';
     document.head.append(style); document.body.append(fixture);
     try {
         for (const order of [[css, articles, hero], [hero, articles, css], [articles, css, hero]]) {
             for (const width of [390, 700, 701, 1440]) {
                 const phone = width <= 700;
-                style.textContent = order.map(source => activeRules(source, width)).join('\n');
+                style.textContent = [reset, framework, ...order.map(source => activeRules(source, width))].join('\n');
+                // The below-text primary button deliberately has a different foreground
+                // from the universal reset. Its label must follow the actual button colour.
+                const primary = fixture.querySelector('header a');
+                expect(getComputedStyle(primary).color).not.toBe(getComputedStyle(fixture).color);
+                for (const article of fixture.querySelectorAll('.front-page-article-button')) {
+                    expect(getComputedStyle(article.firstElementChild).color).toBe(getComputedStyle(article).color);
+                }
                 for (const [alignment, phoneAlignment, effective, marginInline] of alignmentCases) {
                     for (const list of fixture.querySelectorAll('.front-page-article-buttons')) {
                         delete list.dataset.alignment; delete list.dataset.phoneAlignment;
@@ -176,7 +186,14 @@ test('phone navigation, Contact and actions occupy separate rows regardless of s
                             marginInline: desktop.getPropertyValue('margin-inline'), marginInlineStart: desktop.marginInlineStart };
                         list.dataset.alignment = alignment; list.dataset.phoneAlignment = phoneAlignment;
                         const group = getComputedStyle(list), link = getComputedStyle(list.firstElementChild);
-                        if (phone) {
+                        if (phone && !list.closest('header')) {
+                            expect(group.display).toBe('contents');
+                            expect(link.width).toBe('max-content');
+                            expect(link.minWidth).toBe('44px');
+                            expect(link.minHeight).toBe('48px');
+                            expect(link.justifyContent).toBe('center');
+                            expect(link.whiteSpace).toBe('nowrap');
+                        } else if (phone) {
                             expect(group.getPropertyValue('margin-inline')).toBe(marginInline);
                             expect(group.justifyContent).toBe(effective);
                             expect(group.width).toBe('fit-content'); expect(group.maxWidth).toBe('100%');
@@ -193,9 +210,12 @@ test('phone navigation, Contact and actions occupy separate rows regardless of s
                     }
                 }
                 if (phone) {
-                    expect(getComputedStyle(fixture.querySelector('nav')).gridRow).toBe('1');
-                    expect(getComputedStyle(fixture.querySelector('.front-page-article-buttons')).gridRow).toBe('2');
-                    expect(getComputedStyle(fixture.querySelector('.filterbar-inline-hero__actions')).gridRow).toBe('3');
+                    for (const label of fixture.querySelectorAll('.front-page-top-row :is(.hero-dataset-tabs__label, .front-page-article-button__label)')) {
+                        expect(getComputedStyle(label).whiteSpace).toBe('normal');
+                        expect(getComputedStyle(label).overflowWrap).toBe('anywhere');
+                    }
+                    expect(getComputedStyle(fixture.querySelector('nav')).display).toBe('contents');
+                    expect(getComputedStyle(fixture.querySelector('.filterbar-inline-hero__actions')).flexBasis).toBe('100%');
                 }
             }
         }
@@ -332,12 +352,7 @@ test('Home reserves identity width and a fixed 10px menu gap before tabs and act
     expect(css).toContain('font-size: clamp(1.125rem, 4cqw, 2.15rem)');
 });
 
-test('Home phone tabs stack inside 16px gutters and the menu cannot squeeze the identity', () => {
-    const tabs = css.match(/\.front-page \.front-page-scroller > \.front-page-top-row > \.hero-dataset-tabs\s*\{([^}]+)\}/)?.[1];
-    expect(tabs).toContain('display: flex'); expect(tabs).toContain('flex-direction: column');
-    expect(tabs).toContain('grid-row: 1'); expect(tabs).toContain('width: calc(100% - 8px)');
-    expect(tabs).toContain('max-width: 480px'); expect(tabs).toContain('overflow: visible');
-    expect(css).toMatch(/\.front-page-top-row \.hero-dataset-tabs__button\s*\{[^}]*width: 100%;[^}]*min-height: 44px;[^}]*white-space: normal;/);
+test('Home stays stationary beneath the phone drawer', () => {
     expect(css).toMatch(/#tabs_container:has\(\.front-page:not\(\.hidden\) > \.front-page-scroller > \.front-page-phone-topbar\)\s*\{[^}]*width: 100%;[^}]*transform: translateX\(0\);/);
     expect(css).toContain('8cqw');
 });

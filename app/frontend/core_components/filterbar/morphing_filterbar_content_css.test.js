@@ -93,7 +93,7 @@ describe('morphing filterbar content CSS', () => {
         expect(cornerCss).not.toContain('.filterbar-scroll-sentinel + .filterbar-inline-hero');
     });
 
-    test('uses the title colour for wide slogans and one shaded filter section', () => {
+    test('uses the title colour for wide slogans and the active theme surface for the filter section', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
         const subtitleRule = css.match(
             /\.filterbar-panel--wide \.morphing-subtitle,[\s\S]*?\.filterbar-inline-hero \.morphing-subtitle,[\s\S]*?\.front-page-hero \.morphing-subtitle\s*\{([\s\S]*?)\n\}/,
@@ -105,10 +105,8 @@ describe('morphing filterbar content CSS', () => {
         expect(subtitleRule).toContain('color: var(--text_color)');
         expect(sortRule).not.toContain('border:');
         const sectionRule = css.match(/\.dataset-filter-section\s*\{([\s\S]*?)\n\}/)?.[1] || '';
-        expect(sectionRule).toContain('background: oklch(from var(--bg_color_2) calc(l - 0.023) c h)');
+        expect(sectionRule).toContain('background: var(--bg_color_2)');
         expect(sectionRule).toContain('border: 1px solid var(--border_color)');
-        // One consumer-relative rule covers both app themes, including forced light over OS dark.
-        expect(css.match(/background: oklch\(from var\(--bg_color_2\)/g)).toHaveLength(1);
         const themes = readFileSync(resolve(CURRENT_DIR, '../../styles/variables.css'), 'utf8');
         expect(themes).toContain('--bg_color_2: var(--bg-surface)');
         expect(themes).toMatch(/body\.light-mode\s*\{[^}]*--bg-surface: hsl\(var\(--brand-hue\) 8% 100%\)/s);

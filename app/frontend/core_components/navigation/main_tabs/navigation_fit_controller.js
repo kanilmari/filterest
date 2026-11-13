@@ -70,9 +70,9 @@ export function createNavigationFitController(element) {
     function sync() {
         if (destroyed) return;
         const buttons = [...element.querySelectorAll(':scope > button')];
-        // Only Home's phone stack restores every destination, including buttons
+        // Only Home's phone layout restores every destination, including buttons
         // hidden before crossing 700px. Dataset projections keep their fit rule.
-        if (element.closest('.front-page-top-row') && view.getComputedStyle(element).flexDirection === 'column') {
+        if (element.closest('.front-page-scroller > .front-page-top-row')) {
             buttons.forEach(button => { button.hidden = false; });
             applyNavigationOffset(element, 0);
             return;

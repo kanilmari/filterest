@@ -157,7 +157,7 @@
             if (isFinite(parsedBreakpoint)) threshold = parsedBreakpoint;
         } catch (error) { /* CSS unavailable: retain the shared layout fallback. */ }
         try {
-            var isWide = window.innerWidth >= threshold;
+            var isWide = window.innerWidth > threshold;
             var storedVisibility = localStorage.getItem(isWide ? 'navVisibleWide' : 'navVisibleNarrow');
             var visible = storedVisibility !== null ? storedVisibility === 'true' : isWide;
             bodyContent.setAttribute('data-navbar-initial-open', visible ? 'true' : 'false');

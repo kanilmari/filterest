@@ -438,37 +438,60 @@ body.dark-mode .front-page {
   }
 
   .front-page-scroller > .front-page-top-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: center;
-    container-type: inline-size;
-    gap: 8px;
-    margin: 0;
-  }
-
-  .front-page .front-page-scroller > .front-page-top-row > .hero-dataset-tabs {
     display: flex;
-    flex-direction: column;
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: center;
-    width: calc(100% - 8px);
-    max-width: 480px;
-    overflow: visible;
+    flex-wrap: wrap;
+    gap: 0 4px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 512px;
+    margin: 0 auto;
+    padding: 10px clamp(4px, 8vw - 22px, 10px);
+    align-items: stretch;
   }
 
-  .front-page-top-row .hero-dataset-tabs__button {
-    width: 100%;
-    min-height: 44px;
+  /* Let the original, permission-filtered buttons and links wrap together.
+     Their DOM parents still own navigation events and the dataset landmark. */
+  .front-page-scroller > .front-page-top-row > :is(.hero-dataset-tabs, .front-page-article-buttons) {
+    display: contents;
+  }
+
+  .front-page-scroller > .front-page-top-row[data-measuring-navigation] {
+    --home-phone-measure-flex: 0 0 auto;
+  }
+
+  .front-page .front-page-scroller > .front-page-top-row > :is(.hero-dataset-tabs, .front-page-article-buttons) > :is(button, a) {
+    /* Size each control to its icon and name, then share the spare width equally. */
+    flex: var(--home-phone-measure-flex, 1 1 var(--home-phone-button-basis, auto));
+    width: max-content;
+    min-width: 44px;
+    max-width: 100%;
+    min-height: 48px;
+    justify-content: center;
+    gap: 0.4em;
+    margin-block: 2px;
+    padding: 4px;
+    font-size: calc(var(--navigation-size, 0.85rem) - clamp(0rem, 0.7rem - 3vw, 0.1rem));
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .front-page-scroller > .front-page-top-row :is(.hero-dataset-tabs__label, .front-page-article-button__label) {
+    min-width: 0;
     white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .front-page-scroller .hero-dataset-tabs__icon {
+    flex-basis: 16px;
+    width: 16px;
+    height: 16px;
   }
 
   .front-page .front-page-scroller > .front-page-top-row > .filterbar-inline-hero__actions {
-    grid-column: 1;
-    grid-row: 3;
+    flex-basis: 100%;
+    margin-block: 2px;
+    justify-content: flex-end;
   }
-
-  .front-page-scroller > .front-page-top-row > .front-page-article-buttons { grid-row: 2; }
 
   /* Keep Home stationary underneath the phone drawer. */
   #tabs_container:has(.front-page:not(.hidden) > .front-page-scroller > .front-page-phone-topbar) {
