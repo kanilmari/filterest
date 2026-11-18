@@ -1,8 +1,8 @@
 // disclosure_palette_controls.js
 // Builds the shared and dataset disclosure defaults inside the existing appearance palette.
 // The caller owns scope, inheritance/reset, draft preview and explicit Save.
-import definition from '../../shared/dataset_appearance/definition.json';
-import contract from '../../shared/article_presentations/contract.json';
+import definition from '../../shared/dataset_appearance/definition.json' with { type: 'json' };
+import contract from '../../shared/article_presentations/contract.json' with { type: 'json' };
 import { getPaletteCopy } from './presentation_palette_shell.js';
 
 const COPY = {

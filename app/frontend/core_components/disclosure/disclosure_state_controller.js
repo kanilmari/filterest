@@ -2,7 +2,7 @@
 // Resolves personal tab choices above the existing UID-owned appearance defaults.
 // Connects deliberate disclosure activation, verified identity and appearance lifetimes.
 // Never sends setting writes or broadcasts ordinary opening/closing to other tabs.
-import definition from '../../shared/dataset_appearance/definition.json';
+import definition from '../../shared/dataset_appearance/definition.json' with { type: 'json' };
 import { appearanceScopeElements } from '../../reusable_components/appearance_scope_reader.js';
 import { getSessionGeneration, getVerifiedSessionIdentity, revalidateSessionIdentity,
     subscribeToSessionGeneration } from '../auth/session_generation_store.js';

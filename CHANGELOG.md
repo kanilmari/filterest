@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Pages load again when the browser reads the application's source files directly, as on the local native development server. Since 9.6.9 the collapsible-block settings loaded their definitions in a form browsers refuse, and the page showed only "The page could not load". Built release bundles were not affected (#986).
+
 ## [9.6.9] - 2026-11-14
 
 - Palette sections and collapsible blocks in all three article presentations start closed. Headings, primary pictures and article text remain visible. Readers' deliberate open/close choices stay with the same account and browser tab; administrators can set site defaults and dataset overrides through the existing appearance palette. The upgrade audits and retires the old shared collapse storage once, while later administrator choices survive replay (#986).
