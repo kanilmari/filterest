@@ -395,3 +395,16 @@ summary {
 .reading-hyphen::before {
     content: "\00ad";
 }
+
+/* Hyphenation wraps authored text in spans. They must not take the universal
+   reset at the top of this file, or a pre-wrap field such as an article
+   description loses its paragraph breaks and headings lose their own colour. */
+[data-hyphenated-run],
+.reading-hyphen {
+    font-family: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    white-space: inherit;
+    overflow-wrap: inherit;
+    word-break: inherit;
+}
