@@ -1,13 +1,13 @@
-# Filterest 9.6.9
+# Filterest 9.6.10
 
-## Articles, images and cards
+## Reading
 
-Image galleries use the image's dimensions when reserving space for its caption. The maintenance page can check stored image sizes across datasets and update missing or incorrect dimensions. Cards can show a short photo credit separately from the article's full caption. Image-first articles use a 48 px backdrop blur. Empty article metadata no longer leaves rows of dash placeholders.
+Finnish article and card texts keep their paragraph breaks again. In 9.6.9 the Finnish hyphenation let the page join an article's paragraphs into one block, and hyphenated headings could lose their own colour. English texts, which are not hyphenated by default, were not affected.
 
-## Reading and preferences
+## Development server
 
-Site administrators can turn automatic hyphenation on or off per supported content language. Finnish defaults to on; English defaults to off. On narrow screens, article detail values sit below their labels. Collapsible article sections and filter panel sections start closed by default; site and dataset defaults and the reader's remembered choices are handled separately. Repeated matching error notifications share one visible counter.
+The application loads again when the browser reads its source files directly, as on the native development server. Built release bundles were not affected.
 
 ## Database and rollback
 
-The upgrade from Filterest 9.6.8 migrates database 9.13.6 to 9.13.7. Existing row-opening settings, including CIFAV, are retained. Back up the database and media before upgrading. To roll back after migration, restore the matching pre-upgrade database backup and the previous application version together. Image dimension maintenance is a separate administrator action after upgrading.
+This release keeps database 9.13.7 and runs no migration. Back up the database and media before upgrading. To roll back, start the previous application version against the same database.
