@@ -136,6 +136,14 @@ python3 app/server_tools/release/build_bundle.py \
   --oci-archive amd64=/outside/prebuilt-image.tar
 ```
 
+The packager verifies the manifest with Go offline (`GOTOOLCHAIN=local`,
+`GOPROXY=off`), so it never downloads a newer toolchain. The `go` first on `PATH`
+must be at least the version in `app/go.mod`'s `go` line. An older one stops
+packaging with `go.mod requires go >= …`. Put a matching toolchain first on
+`PATH` for this command. The asset build above lets Go switch to the declared
+toolchain by itself, so it can succeed with an older `go` that the packager
+refuses.
+
 The specification contains exactly these manifest-v1 fields: `publisher`,
 `release_id`, `created_at`, `product`, `minimum_trust_policy_revision`,
 `composition`, `database`, `protocol`, `platform`, `health`, `recovery`, `capacity`.

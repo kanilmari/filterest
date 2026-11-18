@@ -9,6 +9,12 @@ the repository named by `app/server_tools/repo_details.json` from the repository
 maintainer's existing Git and GitHub CLI authentication; it never reads private
 installation credentials or requires another source repository.
 
+The account's GitHub Actions audit reads every repository page with
+`gh api --paginate --slurp`. A GitHub CLI without `--slurp` stops already at the
+plan with `unknown flag: --slurp`. Ubuntu 24.04's packaged 2.45.0 is such a
+version; 2.100.0 from GitHub's own release page works. Check `gh --version`
+before the plan.
+
 Use the source sequence described by [candidate preparation](PREPARING_RELEASES.md)
 and [candidate promotion](PROMOTING_RELEASES.md): reviewed source **S**, candidate
 metadata commit **C**, then published identity commit **P**. Promotion changes
