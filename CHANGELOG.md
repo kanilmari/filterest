@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.10] - 2026-11-18
+
 - Pages load again when the browser reads the application's source files directly, as on the local native development server. Since 9.6.9 the collapsible-block settings loaded their definitions in a form browsers refuse, and the page showed only "The page could not load". Built release bundles were not affected (#986).
 - Finnish article and card texts keep their paragraph breaks again. Since 9.6.9 the Finnish hyphenation wrapped the text in a way that let the page's base style join all paragraphs into one; hyphenated headings could also lose their own colour. English texts, which are not hyphenated, were not affected (#1036).
 
