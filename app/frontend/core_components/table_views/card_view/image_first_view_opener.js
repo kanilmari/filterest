@@ -18,9 +18,11 @@ import {
 } from "../../navigation/nav_engine/image_first_view_history.js";
 import { parseRoleString } from "./card_field_formatter.js";
 import {
+    isImageFirstModalOpen,
     openImageModalContent,
     transitionImageFirstModalContent,
 } from "./card_image_modal.js";
+import { cardImageFrameFollowsStoredShape } from "./card_image_presentation.js";
 import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { resolveRowArticleDataTypes } from "./row_article_data_types_resolver.js";
 import {
@@ -138,6 +140,40 @@ async function resolveImageRowsForView({
     };
 }
 
+/**
+ * Loads and decodes a picture outside the page and resolves once it is decoded
+ * or has failed. The stage later asks for the same address, which the browser
+ * then already holds. The opened picture starts here at once instead of after
+ * the picture list arrives; a picture the list replaces is merely unused.
+ */
+function decodePicture(src) {
+    const path = typeof src === "string" ? resolveImagePath(src) : "";
+    if (!path || typeof Image !== "function") return Promise.resolve();
+    const image = new Image();
+    image.decoding = "async";
+    image.src = path;
+    return typeof image.decode === "function"
+        ? image.decode().catch(() => undefined)
+        : Promise.resolve();
+}
+
+/**
+ * The photo a card already shows, when the view can grow from it at once: a plain
+ * raster card photo that is decoded on screen. Logos, SVGs and contrast frames
+ * return "" and open once their own presentation is known.
+ */
+function resolveShownCardPhoto(sourceMedia) {
+    // Plain card photos are the frames that follow stored photo geometry.
+    if (!(sourceMedia instanceof HTMLElement) || !cardImageFrameFollowsStoredShape(sourceMedia)) {
+        return "";
+    }
+    const image = sourceMedia.querySelector(":scope > img");
+    if (!(image instanceof HTMLImageElement) || !image.complete || !(image.naturalWidth > 0)) {
+        return "";
+    }
+    return image.currentSrc || image.getAttribute("src") || "";
+}
+
 function resolveTargetCardImage(targetCard) {
     const image = targetCard?.querySelector?.(
         ".card_image [data-image-first-src], .card_image img",
@@ -178,6 +214,7 @@ export async function openImageFirstView({
     rowItem = null,
     tableName = "",
     selectedCard = null,
+    sourceMedia = null,
     restoringHistory = false,
     search,
     isCurrent = () => true,
@@ -202,6 +239,8 @@ export async function openImageFirstView({
     // Restoring a chosen entry keeps its choice; Page never needs a photo.
     const textOnlyAllowed = !pageLayout && intent.presentationChoice;
     if (!await authorizeImageFirstView(tableName, intent.isCurrent, onAccessDenied, viewKey)) return null;
+    // The opened picture starts downloading now, not after the picture list arrives.
+    void decodePicture(imageSrc);
     // Reopening history always obtains current row/column permissions. Its state
     // contains only identities, never a cached copy of protected article data.
     let dataTypes = resolveRowArticleDataTypes(tableName, selectedCard);
@@ -231,38 +270,69 @@ export async function openImageFirstView({
     const imageRoleColumns = sortedColumns.filter((column) =>
         parseRoleString(dataTypes[column]?.card_element || "").baseRoles.includes("image")
     );
-    const [{ rows: resolvedRows, cardPicture, openedImageChosen }, currentUserProfile, sectionDefaults] = await Promise.all([
-        resolveImageRowsForView({
-            rowItem,
-            tableName,
-            imageRoleColumns,
-            imageRows,
-            imageSrc,
-        }),
-        fetchCurrentUserProfile().catch(() => null),
-        loadRowArticleSectionDefaults(tableName, pageLayout ? viewKey : "image_first"),
-    ]);
-    if (!intent.isCurrent() || (!pageLayout && resolvedRows.length === 0 && !textOnlyAllowed)) {
-        return null;
-    }
+
+    let closeImageFirstView = null;
+    let historyEntryId = null;
+    let currentImageRow = null;
+    // The stage reads this array whenever it syncs, so an instant opening can
+    // replace its stand-in picture with the fresh list in place.
+    const imageEntries = [];
+    // Before the view is committed the opening intent decides; afterwards only
+    // whether this opening's own view is still the open one.
+    const stillWanted = () => (historyEntryId != null ? intent.isOpen() : intent.isCurrent());
+    const reducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+
+    const imageRowsRequest = resolveImageRowsForView({
+        rowItem,
+        tableName,
+        imageRoleColumns,
+        imageRows,
+        imageSrc,
+    });
+    // Settled here only to keep an early return from leaving a rejection unhandled;
+    // the awaits below still receive the same outcome.
+    imageRowsRequest.catch(() => undefined);
+
+    // The article text does not depend on which pictures the view shows, so it is
+    // built while the picture list and the opened picture are still loading.
+    const loadArticle = async () => {
+        const [currentUserProfile, sectionDefaults] = await Promise.all([
+            fetchCurrentUserProfile().catch(() => null),
+            loadRowArticleSectionDefaults(tableName, pageLayout ? viewKey : "image_first"),
+        ]);
+        if (!stillWanted()) return null;
+        const recordTitle = resolveRecordTitle({ rowItem, columns: sortedColumns, tableName,
+            dataTypes, surface: 'article', currentUserID: currentUserProfile?.user_id });
+        const buildContent = async (chosenLanguage) => {
+            const { rowArticleContentElement: content } = await buildRowArticleContent(
+                rowItem, tableName, dataTypes, sortedColumns, buildCreationSeed(rowItem),
+                recordTitle.initial, imageRoleColumns.length > 0, currentUserProfile?.user_id ?? null,
+                pageLayout ? { sectionDefaults, chosenLanguage, presentationKey: viewKey }
+                    : { sectionDefaults, presentationKey: viewKey },
+            );
+            if (!content || !datasetAppearanceState.isCurrent(appearanceToken)) return null;
+            content.querySelectorAll(":scope > .big_card_image").forEach(image => image.remove());
+            content.classList.add("image_first_view_article_content");
+            placeRowArticleDetails(content, image_first_view_details_position);
+            return content;
+        };
+        const language = getLanguageWithBrowserFallback();
+        const contentRequest = buildContent(language);
+        contentRequest.catch(() => undefined);
+        return { recordTitle, buildContent, language, contentRequest };
+    };
+    const articleRequest = loadArticle();
+    articleRequest.catch(() => undefined);
 
     // A restored address names the picture the viewer last showed; a clicked thumbnail
     // or article image arrives as activeImageRow, or as the opened imageSrc.
-    let currentImageRow = resolveActiveImageRow(
-        resolvedRows,
+    const pickShownRow = (rows, cardPicture, openedImageChosen) => resolveActiveImageRow(
+        rows,
         intent.image ? null : activeImageRow,
         intent.image || (openedImageChosen ? imageSrc : ""),
         cardPicture,
     );
-    const imageEntries = resolvedRows.map((row, index) => ({ row, index }));
-    const recordTitle = resolveRecordTitle({ rowItem, columns: sortedColumns, tableName,
-        dataTypes, surface: 'article', currentUserID: currentUserProfile?.user_id });
-    const rowPresentationLabel = recordTitle.text;
-    let closeImageFirstView = null;
-    let historyEntryId = null;
-    const stage = pageLayout ? buildRowArticlePageImage({
-        imageRow: currentImageRow, resolvePath: resolveImagePath, resolveAlt: resolveImageAltText,
-    }) : resolvedRows.length === 0 ? null : buildRowArticleImageFirstStage({
+    const buildStage = (rowLabel) => buildRowArticleImageFirstStage({
         imageEntries,
         getActiveRow: () => currentImageRow,
         onSelectRow: (row) => {
@@ -272,31 +342,9 @@ export async function openImageFirstView({
         resolvePath: resolveImagePath,
         resolveAlt: resolveImageAltText,
         tableName,
-        rowLabel: rowPresentationLabel,
+        rowLabel,
         onBackdropActivate: () => closeImageFirstView?.(),
     });
-    if (!stage && !pageLayout && !textOnlyAllowed) {
-        return null;
-    }
-
-    const buildContent = async (chosenLanguage) => {
-        const { rowArticleContentElement: content } = await buildRowArticleContent(
-            rowItem, tableName, dataTypes, sortedColumns, buildCreationSeed(rowItem),
-            recordTitle.initial, imageRoleColumns.length > 0, currentUserProfile?.user_id ?? null,
-            pageLayout ? { sectionDefaults, chosenLanguage, presentationKey: viewKey }
-                : { sectionDefaults, presentationKey: viewKey },
-        );
-        if (!content || !datasetAppearanceState.isCurrent(appearanceToken)) return null;
-        content.querySelectorAll(":scope > .big_card_image").forEach(image => image.remove());
-        content.classList.add("image_first_view_article_content");
-        placeRowArticleDetails(content, image_first_view_details_position);
-        return content;
-    };
-    const language = getLanguageWithBrowserFallback();
-    const [rowArticleContentElement] = await Promise.all([
-        buildContent(language), stage?.whenTransitionMediaReady?.(),
-    ]);
-    if (!rowArticleContentElement || !intent.isCurrent()) return null;
 
     const shell = document.createElement("div");
     shell.classList.add("image_first_view");
@@ -343,6 +391,132 @@ export async function openImageFirstView({
             },
         });
     }
+    const ariaLabel = getTranslationForKey("open_article") || "Open article";
+    const topControlElements = rowNavigation ? [rowNavigation] : [];
+    const mount = (image) => {
+        historyEntryId = intent.commit(image);
+        if (!historyEntryId) return null;
+        const onClose = () => {
+            shell.remove();
+            imageFirstViewDidClose(historyEntryId);
+        };
+        const modalResult = transitionImageFirstModalContent({
+            contentElement: shell,
+            ariaLabel,
+            topControlElements,
+            onClose,
+        }) || openImageModalContent({
+            contentElement: shell,
+            classNames: ["image_first_view_modal"],
+            overlayClassNames: ["image_first_view_overlay"],
+            ariaLabel,
+            topControlElements,
+            onClose,
+        });
+        attachImageFirstView(historyEntryId, modalResult);
+        closeImageFirstView = modalResult?.close || null;
+        return modalResult;
+    };
+
+    // A fresh opening from a photo already on screen starts growing at once from
+    // that photo. Records handed over inside an open view, restored or chosen
+    // views, Page, galleries and non-photo media wait for their data as before.
+    const shownCardPhoto = !pageLayout && !restoringHistory && !presentationChoice
+        && !(Array.isArray(imageRows) && imageRows.length > 0)
+        && !isImageFirstModalOpen()
+        ? resolveShownCardPhoto(sourceMedia)
+        : "";
+    if (shownCardPhoto) {
+        const shownRow = { asset_kind: "image", filename: shownCardPhoto, is_image_first_fallback: true };
+        imageEntries.push({ row: shownRow, index: 0 });
+        currentImageRow = shownRow;
+        // The viewer is not known yet; the full record label follows with the article.
+        const stage = buildStage(resolveRecordTitle({ rowItem, columns: sortedColumns, tableName,
+            dataTypes, surface: 'article', currentUserID: null }).text);
+        await stage.whenTransitionMediaReady();
+        if (!intent.isCurrent()) return null;
+        shell.append(stage.element);
+        if (!reducedMotion) activateImageFirstStageTransitionMedia(stage.element);
+        // The address names the picture once the fresh list confirms it.
+        const modalResult = mount("");
+        if (!modalResult) return null;
+        // Leaves the view this opening put up. A newer opening still pending will
+        // replace the view itself: closing now would let the close animation finish
+        // on that opening's record (or, without motion, cancel the opening).
+        const leaveView = () => {
+            if (intent.isOpen() && intent.isLatest()) closeImageFirstView?.();
+        };
+        // Leaves the view when its data may no longer be shown here; says whether
+        // this opening should keep completing it.
+        const keepCompleting = () => {
+            if (!intent.isOpen()) return false;
+            if (datasetAppearanceState.isCurrent(appearanceToken)) return true;
+            leaveView();
+            return false;
+        };
+        try {
+            const { rows, cardPicture, openedImageChosen } = await imageRowsRequest;
+            if (!keepCompleting()) return null;
+            if (rows.length === 0) {
+                // The fresh list no longer offers a picture: leave at once instead of
+                // keeping the card's copy on screen.
+                leaveView();
+                return null;
+            }
+            const shownPicture = pickShownRow(rows, cardPicture, openedImageChosen);
+            imageEntries.splice(0, imageEntries.length, ...rows.map((row, index) => ({ row, index })));
+            currentImageRow = shownPicture;
+            // A newer opening still pending must keep the address it captured.
+            if (intent.isLatest()) updateImageFirstViewImage(historyEntryId, shownPicture?.filename || "");
+            // The card's copy stays only while the fresh list confirms that very
+            // picture and its full size decodes; any other picture replaces it now.
+            const sameAsShown = resolveRowArticlePictureIdentity(shownPicture?.filename || "")
+                === resolveRowArticlePictureIdentity(imageSrc);
+            const fullPicture = sameAsShown ? decodePicture(shownPicture.filename) : null;
+            stage.sync({ keepMedia: sameAsShown });
+
+            const article = await articleRequest;
+            const content = article ? await article.contentRequest : null;
+            if (!keepCompleting()) return null;
+            if (!content) {
+                leaveView();
+                return null;
+            }
+            stage.setRowLabel(article.recordTitle.text);
+            shell.append(content);
+
+            if (fullPicture) {
+                await fullPicture;
+                if (!keepCompleting()) return null;
+                // A picture the viewer chose meanwhile has already replaced the copy.
+                if (currentImageRow === shownPicture) stage.sync();
+            }
+            return modalResult;
+        } catch (error) {
+            leaveView();
+            throw error;
+        }
+    }
+
+    const article = await articleRequest;
+    if (!article || !stillWanted()) return null;
+    const { rows: resolvedRows, cardPicture, openedImageChosen } = await imageRowsRequest;
+    if (!stillWanted() || (!pageLayout && resolvedRows.length === 0 && !textOnlyAllowed)) {
+        return null;
+    }
+    currentImageRow = pickShownRow(resolvedRows, cardPicture, openedImageChosen);
+    imageEntries.push(...resolvedRows.map((row, index) => ({ row, index })));
+    const stage = pageLayout ? buildRowArticlePageImage({
+        imageRow: currentImageRow, resolvePath: resolveImagePath, resolveAlt: resolveImageAltText,
+    }) : resolvedRows.length === 0 ? null : buildStage(article.recordTitle.text);
+    if (!stage && !pageLayout && !textOnlyAllowed) {
+        return null;
+    }
+
+    const [rowArticleContentElement] = await Promise.all([
+        article.contentRequest, stage?.whenTransitionMediaReady?.(),
+    ]);
+    if (!rowArticleContentElement || !stillWanted()) return null;
 
     if (pageLayout) {
         shell.classList.add("image_first_page_view");
@@ -355,35 +529,14 @@ export async function openImageFirstView({
         shell.classList.add("image_first_view--text-only");
         shell.append(rowArticleContentElement);
     }
-    if (stage && !pageLayout && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    if (stage && !pageLayout && !reducedMotion) {
         activateImageFirstStageTransitionMedia(stage.element);
     }
-    const ariaLabel = getTranslationForKey("open_article") || "Open article";
-    const topControlElements = rowNavigation ? [rowNavigation] : [];
-    historyEntryId = intent.commit(currentImageRow?.filename || "");
+    const modalResult = mount(currentImageRow?.filename || "");
     if (!historyEntryId) return null;
-    const onClose = () => {
-        shell.remove();
-        imageFirstViewDidClose(historyEntryId);
-    };
-    const modalResult = transitionImageFirstModalContent({
-        contentElement: shell,
-        ariaLabel,
-        topControlElements,
-        onClose,
-    }) || openImageModalContent({
-        contentElement: shell,
-        classNames: ["image_first_view_modal"],
-        overlayClassNames: ["image_first_view_overlay"],
-        ariaLabel,
-        topControlElements,
-        onClose,
-    });
     if (pageLayout && modalResult) {
-        void bindPageArticleReading(shell, rowArticleContentElement, buildContent, language);
+        void bindPageArticleReading(shell, rowArticleContentElement, article.buildContent, article.language);
     }
-    attachImageFirstView(historyEntryId, modalResult);
-    closeImageFirstView = modalResult?.close || null;
     // The stage builder performs its initial synchronization before returning.
     // Rebuilding the same media after the modal animation has started forces
     // Firefox to decode and paint SVG presentations during their first frame.

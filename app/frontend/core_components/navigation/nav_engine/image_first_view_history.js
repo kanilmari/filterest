@@ -99,8 +99,16 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
         ? validOrigin(history.state?.[IMAGE_FIRST_HISTORY_KEY]?.origin)
         : captureOrigin(tableName));
     const canCommit = () => generation === ownGeneration && identityMatches(initial) && isCurrent();
+    let committedView = null;
     return {
         isCurrent: canCommit,
+        // After commit: this opening's own view is still the open one. A record
+        // handoff keeps the history entry but replaces the view, so the entry
+        // identity alone cannot tell the two records apart.
+        isOpen: () => committedView !== null && activeView === committedView,
+        // No newer opening has started since this one; its address writes would
+        // otherwise invalidate that pending opening's captured identity.
+        isLatest: () => generation === ownGeneration,
         image: target?.image || "",
         presentationChoice: chosen,
         commit(image) {
@@ -142,6 +150,7 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
                     if (holdsBackground) release('cifav');
                 },
             };
+            committedView = activeView;
             return entryId;
         },
     };

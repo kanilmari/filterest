@@ -562,9 +562,17 @@ test.describe('C10 — Standalone Image-first View', () => {
           '[data-testid="row-article-image-first-reveal-cluster"]',
         );
         const backdropStyle = window.getComputedStyle(stageElement, '::before');
+        const articleContent = view?.querySelector<HTMLElement>(
+          ':scope > .image_first_view_article_content',
+        );
         return {
           viewAnimationName: view ? window.getComputedStyle(view).animationName : '',
-          viewAnimationDuration: view ? window.getComputedStyle(view).animationDuration : '',
+          articleAnimationName: articleContent
+            ? window.getComputedStyle(articleContent).animationName
+            : '',
+          articleAnimationDuration: articleContent
+            ? window.getComputedStyle(articleContent).animationDuration
+            : '',
           foregroundAnimationName: revealCluster
             ? window.getComputedStyle(revealCluster).animationName
             : '',
@@ -575,8 +583,10 @@ test.describe('C10 — Standalone Image-first View', () => {
           backdropAnimationDuration: backdropStyle.animationDuration,
         };
       });
-      expect(closingContract.viewAnimationName).toBe('image-first-view-shrink-conceal');
-      expect(closingContract.viewAnimationDuration).toBe('0.3s');
+      // The view is not clipped while closing; the article beside the stage fades.
+      expect(closingContract.viewAnimationName).toBe('none');
+      expect(closingContract.articleAnimationName).toBe('image-first-view-content-conceal');
+      expect(closingContract.articleAnimationDuration).toBe('0.3s');
       expect(closingContract.foregroundAnimationName).toBe('image-first-foreground-shrink');
       expect(closingContract.foregroundAnimationDuration).toBe('0.3s');
       expect(closingContract.backdropAnimationName).toBe('image-first-backdrop-conceal');

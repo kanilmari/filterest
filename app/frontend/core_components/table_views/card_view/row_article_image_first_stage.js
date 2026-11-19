@@ -311,8 +311,9 @@ export function buildRowArticleImageFirstStage({
     revealTitle.classList.add("row_article_image_first_reveal_title");
     revealTitle.dataset.testid = "row-article-image-first-reveal-title";
     revealTitle.setAttribute("aria-hidden", "true");
-    revealTitle.textContent = rowLabel;
-    revealTitle.hidden = !rowLabel;
+    let currentRowLabel = rowLabel;
+    revealTitle.textContent = currentRowLabel;
+    revealTitle.hidden = !currentRowLabel;
     const caption = document.createElement("p");
     caption.classList.add("row_article_image_caption", "row_article_image_first_caption");
     caption.dataset.testid = "row-article-image-first-caption";
@@ -367,7 +368,10 @@ export function buildRowArticleImageFirstStage({
         return index >= 0 ? index : 0;
     };
 
-    const sync = () => {
+    // keepMedia refreshes the caption, arrows and position for the current entries
+    // while the picture already on screen stays (the same picture, still decoding
+    // at full size).
+    const sync = ({ keepMedia = false } = {}) => {
         const index = activeIndex();
         const row = imageEntries[index]?.row;
         if (!row) {
@@ -375,9 +379,13 @@ export function buildRowArticleImageFirstStage({
         }
         const imagePath = resolvePath(row.filename);
         setRowArticleImageCaption(caption, row);
+        if (keepMedia && mediaElement) {
+            syncControls(index);
+            return;
+        }
         const nextMediaElement = createImageElement(imagePath, true, {
             tableName,
-            rowLabel,
+            rowLabel: currentRowLabel,
             renderSlot: CARD_IMAGE_RENDER_SLOTS.IMAGE_FIRST,
             imageTypeId: row?.type_id,
             imageMetadata: row?.metadata_json,
@@ -386,7 +394,7 @@ export function buildRowArticleImageFirstStage({
             imageMimeType: row?.mime_type,
         });
         nextMediaElement.classList.add("row_article_image_first_media");
-        nextMediaElement.setAttribute("aria-label", resolveAlt(row) || rowLabel || "Image");
+        nextMediaElement.setAttribute("aria-label", resolveAlt(row) || currentRowLabel || "Image");
         const primaryImage = nextMediaElement.querySelector("img");
         if (primaryImage) {
             primaryImage.dataset.testid = "row-article-image-first-media";
@@ -444,10 +452,14 @@ export function buildRowArticleImageFirstStage({
             });
         }
         transitionMediaPreparation = Promise.all([transitionMediaPreparation, photoRatioPreparation]);
+        syncControls(index);
+    };
+
+    function syncControls(index) {
         previousButton.disabled = index === 0;
         nextButton.disabled = index === imageEntries.length - 1;
         position.textContent = `${index + 1} / ${imageEntries.length}`;
-    };
+    }
 
     function activateRelative(delta) {
         const nextIndex = activeIndex() + delta;
@@ -498,6 +510,12 @@ export function buildRowArticleImageFirstStage({
     return {
         element: stage,
         sync,
+        /** Replaces the record label used by the reveal title and by later picture syncs. */
+        setRowLabel(label) {
+            currentRowLabel = label || "";
+            revealTitle.textContent = currentRowLabel;
+            revealTitle.hidden = !currentRowLabel;
+        },
         whenTransitionMediaReady: () => transitionMediaPreparation,
     };
 }

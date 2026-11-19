@@ -29,6 +29,7 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({ DATASET_PREFIX: 
 vi.mock("../../endpoints/endpoint_data_fetcher.js", () => ({ fetchDatasetData: vi.fn() }));
 
 vi.mock("./card_image_modal.js", () => ({
+    isImageFirstModalOpen: () => document.querySelector(".image_first_view") !== null,
     openImageModalContent: openImageModalContentMock,
     transitionImageFirstModalContent: transitionImageFirstModalContentMock,
 }));
@@ -164,6 +165,250 @@ describe("openImageFirstView", () => {
         expect(content.querySelector('h2').dataset.demotedFrom).toBe('h1');
     });
 
+    describe("instant opening from a photo on the card", () => {
+        const galleryRelation = { dataset: "examples_assets", column: "examples_id" };
+        const first = { id: 1, asset_kind: "image", filename: "first.png", is_primary: true };
+        const second = { id: 2, asset_kind: "image", filename: "second.png", sort_order: 9 };
+
+        /** The card's own media: a plain photo frame whose image has already decoded. */
+        function buildShownCardPhoto({ photo = true, decoded = true } = {}) {
+            const media = document.createElement("div");
+            media.classList.add("wrapper");
+            if (photo) media.classList.add("card_photo_presentation");
+            const image = document.createElement("img");
+            image.setAttribute("src", "/storage/cards/first.png");
+            Object.defineProperty(image, "complete", { value: decoded });
+            Object.defineProperty(image, "naturalWidth", { value: decoded ? 1000 : 0 });
+            media.appendChild(image);
+            document.body.appendChild(media);
+            return media;
+        }
+
+        function pendingLookup() {
+            let finish;
+            loadSession.fetchDynamicChildren.mockImplementationOnce(
+                () => new Promise((resolve) => { finish = resolve; }),
+            );
+            return (response) => finish(response);
+        }
+
+        beforeEach(() => {
+            vi.mocked(resolveRowArticleDataTypes).mockReturnValueOnce({
+                title: { card_element: "header" },
+                cached_image: { card_element: "image" },
+            });
+        });
+
+        test("grows at once from the card's photo, then shows the fresh pictures and the article", async () => {
+            const finishLookup = pendingLookup();
+            const pending = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const view = document.querySelector('[data-testid="image-first-view"]');
+            expect(view.querySelector('[data-testid="row-article-image-first-media"]').getAttribute("src"))
+                .toBe("/storage/cards/first.png");
+            expect(view.querySelector(".image_first_view_article_content")).toBeNull();
+
+            finishLookup({
+                gallery_relation: galleryRelation,
+                card_picture: "first.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first, second] }],
+            });
+            expect(await pending).not.toBeNull();
+            expect(view.querySelector(".image_first_view_article_content")).not.toBeNull();
+            expect(readStageImageSources()).toEqual(["/storage/first.png", "/storage/second.png"]);
+            expect(openImageModalContentMock).toHaveBeenCalledOnce();
+        });
+
+        test("closes again when the fresh list no longer offers a picture", async () => {
+            const finishLookup = pendingLookup();
+            const pending = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const { close } = openImageModalContentMock.mock.results[0].value;
+
+            finishLookup({ gallery_relation: galleryRelation, card_picture: "",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [] }] });
+            expect(await pending).toBeNull();
+            expect(close).toHaveBeenCalledOnce();
+        });
+
+        test("adds nothing to a view the viewer closed before its data arrived", async () => {
+            const finishLookup = pendingLookup();
+            const pending = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const { onClose, contentElement } = openImageModalContentMock.mock.calls[0][0];
+            const { close } = openImageModalContentMock.mock.results[0].value;
+            onClose();
+
+            finishLookup({ gallery_relation: galleryRelation, card_picture: "first.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first, second] }] });
+            expect(await pending).toBeNull();
+            expect(contentElement.querySelector(".image_first_view_article_content")).toBeNull();
+            expect(close).not.toHaveBeenCalled();
+            // Closing goes Back to the list; let that traversal land before the next test.
+            await vi.waitFor(() => expect(location.search).not.toContain("image_first_view"));
+        });
+
+        test.each([
+            ["no longer lists a picture", { card_picture: "", rows: [] }],
+            ["lists its pictures", { card_picture: "first.png", rows: [first, second] }],
+        ])("a record opened meanwhile is neither closed nor readdressed when the earlier reply %s", async (_name, reply) => {
+            const finishFirst = pendingLookup();
+            const earlier = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const earlierClose = openImageModalContentMock.mock.results[0].value.close;
+
+            // The next record opens inside the same view and history entry.
+            loadSession.fetchDynamicChildren.mockResolvedValueOnce({ gallery_relation: galleryRelation,
+                card_picture: "second.png", child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [second] }] });
+            expect(await openImageFirstView({
+                imageSrc: "/storage/second.png", rowItem: { id: 4, title: "Next" }, tableName: "examples",
+            })).not.toBeNull();
+            const nextAddress = location.href;
+
+            finishFirst({ gallery_relation: galleryRelation, card_picture: reply.card_picture,
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: reply.rows }] });
+            expect(await earlier).toBeNull();
+            expect(earlierClose).not.toHaveBeenCalled();
+            expect(location.href).toBe(nextAddress);
+        });
+
+        test("a newer opening still loading keeps its address while the earlier view completes", async () => {
+            const finishFirst = pendingLookup();
+            const earlier = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const finishNext = pendingLookup();
+            const next = openImageFirstView({
+                imageSrc: "/storage/second.png", rowItem: { id: 4, title: "Next" }, tableName: "examples",
+            });
+            await vi.waitFor(() => expect(loadSession.fetchDynamicChildren).toHaveBeenCalledTimes(2));
+
+            finishFirst({ gallery_relation: galleryRelation, card_picture: "first.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first, second] }] });
+            expect(await earlier).not.toBeNull();
+            finishNext({ gallery_relation: galleryRelation, card_picture: "second.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [second] }] });
+            expect(await next).not.toBeNull();
+        });
+
+        test("leaves closing to a newer opening still loading when the earlier picture is gone", async () => {
+            // Closing here would let the close animation finish on the next record.
+            const finishFirst = pendingLookup();
+            const earlier = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const earlierClose = openImageModalContentMock.mock.results[0].value.close;
+            const finishNext = pendingLookup();
+            const next = openImageFirstView({
+                imageSrc: "/storage/second.png", rowItem: { id: 4, title: "Next" }, tableName: "examples",
+            });
+            await vi.waitFor(() => expect(loadSession.fetchDynamicChildren).toHaveBeenCalledTimes(2));
+
+            finishFirst({ gallery_relation: galleryRelation, card_picture: "",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [] }] });
+            expect(await earlier).toBeNull();
+            expect(earlierClose).not.toHaveBeenCalled();
+            finishNext({ gallery_relation: galleryRelation, card_picture: "second.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [second] }] });
+            expect(await next).not.toBeNull();
+        });
+
+        test("replaces the card's copy at once when the fresh list names another picture", async () => {
+            const finishLookup = pendingLookup();
+            let finishArticle;
+            buildContentMock.mockImplementationOnce(() => new Promise((resolve) => { finishArticle = resolve; }));
+            const pending = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const shownSource = () => document
+                .querySelector('[data-testid="image-first-view"] [data-testid="row-article-image-first-media"]')
+                .getAttribute("src");
+
+            finishLookup({ gallery_relation: galleryRelation, card_picture: "second.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first, second] }] });
+            // The article is still loading; the replaced picture must not wait for it.
+            await vi.waitFor(() => expect(shownSource()).toBe("/storage/second.png"));
+            finishArticle({ rowArticleContentElement: buildArticleContent() });
+            expect(await pending).not.toBeNull();
+        });
+
+        test("closes instead of adding the article once the dataset's appearance changed", async () => {
+            const finishLookup = pendingLookup();
+            const pending = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(),
+            });
+            await vi.waitFor(() => expect(openImageModalContentMock).toHaveBeenCalledOnce());
+            const { contentElement } = openImageModalContentMock.mock.calls[0][0];
+            const { close } = openImageModalContentMock.mock.results[0].value;
+            // The article finished building before the change.
+            await vi.waitFor(() => expect(buildContentMock).toHaveBeenCalledOnce());
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            datasetAppearanceState.clear();
+
+            finishLookup({ gallery_relation: galleryRelation, card_picture: "first.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first] }] });
+            expect(await pending).toBeNull();
+            expect(close).toHaveBeenCalledOnce();
+            expect(contentElement.querySelector(".image_first_view_article_content")).toBeNull();
+        });
+
+        test.each([
+            ["a logo or other non-photo frame", { photo: false }],
+            ["a photo that has not decoded yet", { decoded: false }],
+        ])("waits for the data as before for %s", async (_name, shape) => {
+            const finishLookup = pendingLookup();
+            const pending = openImageFirstView({
+                imageSrc: "/storage/first.png",
+                rowItem: { id: 3, title: "Example", cached_image: "first.png" },
+                tableName: "examples",
+                sourceMedia: buildShownCardPhoto(shape),
+            });
+            await vi.waitFor(() => expect(buildContentMock).toHaveBeenCalledOnce());
+            expect(openImageModalContentMock).not.toHaveBeenCalled();
+
+            finishLookup({ gallery_relation: galleryRelation, card_picture: "first.png",
+                child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first] }] });
+            expect(await pending).not.toBeNull();
+            expect(openImageModalContentMock).toHaveBeenCalledOnce();
+        });
+    });
+
     describe("image rows", () => {
         const pictureTypes = {
             title: { card_element: "header" },
@@ -195,6 +440,40 @@ describe("openImageFirstView", () => {
                 "/storage/second.png",
                 "/storage/first.png",
             ]);
+        });
+
+        test("starts loading the opened picture and building the article before the picture list arrives", async () => {
+            // The view used to wait for the list, then the picture, then the article,
+            // one after another: about half a second before anything moved.
+            let finishLookup;
+            loadSession.fetchDynamicChildren.mockImplementationOnce(
+                () => new Promise((resolve) => { finishLookup = resolve; }),
+            );
+            const createdImages = [];
+            const OriginalImage = globalThis.Image;
+            globalThis.Image = class extends OriginalImage {
+                constructor(...args) {
+                    super(...args);
+                    createdImages.push(this);
+                }
+            };
+            try {
+                const pending = openImageFirstView({
+                    imageSrc: "/storage/opened.png",
+                    rowItem: { id: 3, title: "Example", cached_image: "row.png" },
+                    tableName: "examples",
+                });
+                await vi.waitFor(() => expect(buildContentMock).toHaveBeenCalledOnce());
+                expect(createdImages.map((image) => image.getAttribute("src")))
+                    .toContain("/storage/opened.png");
+                expect(openImageModalContentMock).not.toHaveBeenCalled();
+
+                finishLookup({ child_tables: [], card_picture: "opened.png" });
+                await pending;
+                expect(openImageModalContentMock).toHaveBeenCalledOnce();
+            } finally {
+                globalThis.Image = OriginalImage;
+            }
         });
 
         test("never opens a picture the fresh gallery no longer lists", async () => {

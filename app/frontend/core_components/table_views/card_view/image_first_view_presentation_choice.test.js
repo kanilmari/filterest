@@ -19,6 +19,7 @@ vi.mock("../../navigation/nav_engine/dataset_aliases.js", () => ({ buildDatasetP
 vi.mock("../../navigation/nav_engine/query_params.js", () => ({ DATASET_PREFIX: "/" }));
 vi.mock("../../endpoints/endpoint_data_fetcher.js", () => ({ fetchDatasetData: vi.fn() }));
 vi.mock("./card_image_modal.js", () => ({
+    isImageFirstModalOpen: vi.fn(() => false),
     openImageModalContent: openImageModalContentMock,
     transitionImageFirstModalContent: vi.fn(() => null),
 }));

@@ -164,8 +164,12 @@ describe("image-first article CSS contract", () => {
         expect(galleryCss).toMatch(/\.row_article_image_first_reveal_cluster\s*\{[^}]*position:\s*relative;[^}]*backface-visibility:\s*hidden;[^}]*will-change:\s*transform;[^}]*animation:\s*image-first-foreground-grow[^;]*300ms/s);
         expect(galleryCss).toMatch(/\.row_article_image_first_reveal_title\s*\{[^}]*position:\s*absolute;[^}]*inset-block-start:\s*100%;[^}]*animation:\s*image-first-reveal-title[^;]*300ms/s);
         expect(galleryCss).toMatch(/@keyframes image-first-foreground-grow\s*\{[\s\S]*transform:\s*translate3d\(0, 0, 0\) scale3d\(0\.001, 0\.001, 1\);[\s\S]*transform:\s*translate3d\(0, 0, 0\) scale3d\(1, 1, 1\);/s);
-        expect(galleryCss).toMatch(/@keyframes image-first-view-shrink-conceal\s*\{[\s\S]*clip-path:\s*inset\(0\)[\s\S]*clip-path:\s*inset\([\s\S]*50dvh/s);
-        expect(galleryCss).toMatch(/\.image_first_view_overlay\.image-first-view-closing \.image_first_view\s*\{[^}]*animation:\s*image-first-view-shrink-conceal[^;]*300ms/s);
+        // Closing fades what sits beside the stage instead of clipping the view:
+        // a shrinking clip showed a sharp-edged backdrop rectangle the opening lacks.
+        // Only an end state, so idle-hidden controls do not reappear before fading.
+        expect(galleryCss).toMatch(/@keyframes image-first-view-content-conceal\s*\{\s*to\s*\{[^}]*opacity:\s*0;[^}]*\}\s*\}/s);
+        expect(galleryCss).toMatch(/\.image_first_view_overlay\.image-first-view-closing\s*\.image_first_view > :not\(\.row_article_image_first_stage\),\s*\.image_first_view_overlay\.image-first-view-closing\s*\.row_article_image_first_stage > :not\(\.row_article_image_first_reveal_cluster\)\s*\{[^}]*animation:\s*image-first-view-content-conceal[^;]*300ms/s);
+        expect(galleryCss).not.toContain("image-first-view-shrink-conceal");
         expect(galleryCss).toMatch(/@keyframes image-first-foreground-shrink\s*\{[\s\S]*transform:\s*translate3d\(0, 0, 0\) scale3d\(1, 1, 1\);[\s\S]*transform:\s*translate3d\(0, 0, 0\) scale3d\(0\.001, 0\.001, 1\);/s);
         expect(galleryCss).toMatch(/\.image_first_view_overlay\.image-first-view-closing[\s\S]*\.row_article_image_first_reveal_cluster\s*\{[^}]*animation:\s*image-first-foreground-shrink[^;]*300ms/s);
         expect(galleryCss).toMatch(/\.image-first-record-transitioning[\s\S]*\.image_first_view--outgoing[\s\S]*\.row_article_image_first_reveal_cluster\s*\{[^}]*animation:\s*image-first-record-media-shrink[^;]*300ms/s);

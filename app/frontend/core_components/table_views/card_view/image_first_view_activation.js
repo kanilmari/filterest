@@ -65,7 +65,9 @@ export function bindImageFirstViewActivation(
             event?.stopPropagation();
             return;
         }
-        void activate(layout ? { ...viewerOptions, layout } : viewerOptions).catch((error) => {
+        // The clicked media lets the view grow at once from the photo already on screen.
+        const openOptions = { ...viewerOptions, sourceMedia: element };
+        void activate(layout ? { ...openOptions, layout } : openOptions).catch((error) => {
             console.warn(
                 "image-first view could not be opened",
                 error?.message || error,

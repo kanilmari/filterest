@@ -49,7 +49,8 @@ describe("bindImageFirstViewActivation", () => {
         await vi.waitFor(() => {
             expect(openImageFirstViewMock).toHaveBeenCalledTimes(3);
         });
-        expect(openImageFirstViewMock).toHaveBeenLastCalledWith(options);
+        // The clicked media travels along so the view can grow from the photo on screen.
+        expect(openImageFirstViewMock).toHaveBeenLastCalledWith({ ...options, sourceMedia: media });
     });
 });
 

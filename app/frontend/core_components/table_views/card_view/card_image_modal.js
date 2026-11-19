@@ -135,6 +135,26 @@ function installTransientImageControls(modalOverlay) {
     return () => teardownTransientImageControls(modalOverlay);
 }
 
+function findOpenImageFirstModal() {
+    const modalOverlay = document.getElementById("custom_modal_overlay");
+    const modal = document.getElementById("custom_modal");
+    const modalBody = modal?.querySelector(":scope > .modal_body");
+    const outgoingView = modalBody?.querySelector(":scope > .image_first_view");
+    const isOpenImageFirstView = modalOverlay instanceof HTMLElement
+        && modal instanceof HTMLElement
+        && modalBody instanceof HTMLElement
+        && outgoingView instanceof HTMLElement
+        && modalOverlay.style.display !== "none"
+        && modalOverlay.classList.contains("image_first_view_overlay")
+        && modal.classList.contains("image_first_view_modal");
+    return isOpenImageFirstView ? { modalOverlay, modal, modalBody, outgoingView } : null;
+}
+
+/** True while an image-first view is open, so a new record hands off instead of opening. */
+export function isImageFirstModalOpen() {
+    return findOpenImageFirstModal() !== null;
+}
+
 /**
  * Replaces one already-open image-first record without closing its modal.
  * Both record surfaces coexist for the short handoff, while the outgoing
@@ -150,20 +170,11 @@ export function transitionImageFirstModalContent({
         return null;
     }
 
-    const modalOverlay = document.getElementById("custom_modal_overlay");
-    const modal = document.getElementById("custom_modal");
-    const modalBody = modal?.querySelector(":scope > .modal_body");
-    const outgoingView = modalBody?.querySelector(":scope > .image_first_view");
-    const isOpenImageFirstView = modalOverlay instanceof HTMLElement
-        && modal instanceof HTMLElement
-        && modalBody instanceof HTMLElement
-        && outgoingView instanceof HTMLElement
-        && modalOverlay.style.display !== "none"
-        && modalOverlay.classList.contains("image_first_view_overlay")
-        && modal.classList.contains("image_first_view_modal");
-    if (!isOpenImageFirstView) {
+    const openModal = findOpenImageFirstModal();
+    if (!openModal) {
         return null;
     }
+    const { modalOverlay, modal, modalBody, outgoingView } = openModal;
 
     const activeTransition = imageFirstRecordTransitionStates.get(modalOverlay);
     if (activeTransition) {
