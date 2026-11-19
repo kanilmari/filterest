@@ -1,4 +1,4 @@
-# Filterest 9.6.11
+# Filterest 9.6.12
 
 ## Articles in search engines
 
