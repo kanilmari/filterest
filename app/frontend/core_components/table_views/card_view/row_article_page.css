@@ -10,6 +10,8 @@
     overflow-wrap: anywhere;
     color: var(--text_color);
     background: var(--bg_color);
+    /* The page panel stands on the blurred application; its outline marks the edge. */
+    border: 1px solid var(--border_color);
 }
 
 .image_first_page_view .row_article_page_image {
@@ -72,6 +74,8 @@
     .image_first_page_view .image_first_view_article_content {
         width: 100%;
         margin-inline: 0;
+        /* Full-width panels meet the screen edges, where side lines add nothing. */
+        border-inline-width: 0;
     }
 }
 

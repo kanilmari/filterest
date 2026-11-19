@@ -24,6 +24,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 - A card photo opens its image-first article at once: the view grows from the photo already on the card while the picture list, the full-size picture and the article load, instead of waiting about half a second for all of them. If the fresh list no longer offers the picture, the view closes again; another picture replaces the card's copy immediately. Logos, SVG pictures, Page view, galleries and restored views open as before, now with their picture and article loading in parallel.
 - Closing the image-first article retraces its opening: the picture shrinks back while the blurred background, the article and the picture controls fade. A sharp-edged rectangle of background no longer shrinks with the picture.
+- The Page view's article panel has an outline in the theme's border colour.
 
 ## [9.6.10] - 2026-11-18
 

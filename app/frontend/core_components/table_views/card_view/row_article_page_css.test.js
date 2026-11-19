@@ -34,6 +34,8 @@ test('Page contains a taller desktop image and keeps the original phone cap at t
         });
     expect(css).toMatch(/color:\s*var\(--text_color\)/);
     expect(css).toMatch(/background:\s*var\(--bg_color\)/);
+    // The owner chose the ordinary border colour for the page panel's outline.
+    expect(withoutPhone(css)).toMatch(/\.image_first_page_view \.image_first_view_article_content\s*\{[^}]*border:\s*1px solid var\(--border_color\);/s);
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|@keyframes|animation:/i);
     expect(readFileSync(join(directory, '../../../styles/imports.css'), 'utf8')).toContain('row_article_page.css');
 });
