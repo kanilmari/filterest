@@ -384,13 +384,6 @@ summary {
 /* The document guard verifies this essential stylesheet actually applied. */
 :root { --filterest-shell-css-applied: 1; }
 
-/* Phone (≤ 700px, K444) */
-@media (width <= 700px) {
-    .tab-content-body {
-        --dataset-centered-scrollbar-gutter: auto;
-    }
-}
-
 /* Empty reading markers provide optional syllable breaks without altering copied text. */
 .reading-hyphen::before {
     content: "\00ad";
@@ -407,4 +400,11 @@ summary {
     white-space: inherit;
     overflow-wrap: inherit;
     word-break: inherit;
+}
+
+/* Phone (≤ 700px, K444) */
+@media (width <= 700px) {
+    .tab-content-body {
+        --dataset-centered-scrollbar-gutter: auto;
+    }
 }
