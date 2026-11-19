@@ -1,0 +1,21 @@
+{
+    "purpose": "One set of examples for the two implementations of the article address words (the slug after the row id), so the address the server announces to search engines and the one the app writes into the browser cannot drift apart (owner decision K428).",
+    "implementations": {
+        "frontend": "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js (buildSlug)",
+        "backend": "app/backend/core_components/dataset_routes/article_slug.go (ArticleSlug)"
+    },
+    "articleSlug": [
+        { "why": "Ordinary English words become lower-case words joined by hyphens.", "title": "Helsinki to Vienna fares are available from 85 euros", "expected": "helsinki-to-vienna-fares-are-available-from-85-euros" },
+        { "why": "Finnish letters lose their dots instead of disappearing.", "title": "Helsingistä Wieniin löytyy lentoja", "expected": "helsingista-wieniin-loytyy-lentoja" },
+        { "why": "Punctuation is removed, not turned into hyphens.", "title": "Save up to 20 percent: Stockholm cruises!", "expected": "save-up-to-20-percent-stockholm-cruises" },
+        { "why": "Runs of whitespace and hyphens collapse to one hyphen.", "title": "  Spa  -  hotel   deals  ", "expected": "spa-hotel-deals" },
+        { "why": "Letters with no ASCII base are dropped.", "title": "Ørsted ß Æsir", "expected": "rsted-sir" },
+        { "why": "Characters outside Latin script leave nothing behind.", "title": "全部文章", "expected": "" },
+        { "why": "A no-break space is whitespace in both implementations.", "title": "Turku Book Fair", "expected": "turku-book-fair" },
+        { "why": "A byte-order mark is whitespace in JavaScript, so the server treats it so too.", "title": "Book﻿Fair", "expected": "book-fair" },
+        { "why": "Tabs and line breaks are whitespace.", "title": "Line one\nline\ttwo", "expected": "line-one-line-two" },
+        { "why": "Leading and trailing hyphens are trimmed.", "title": "- Sunflower fields -", "expected": "sunflower-fields" },
+        { "why": "The words are cut at 80 characters, after trimming, so a cut can end on a hyphen.", "title": "Sunflower fields in Finland five outings from Helsinki and a long tail of extra words", "expected": "sunflower-fields-in-finland-five-outings-from-helsinki-and-a-long-tail-of-extra-" },
+        { "why": "An empty title has no words.", "title": "", "expected": "" }
+    ]
+}

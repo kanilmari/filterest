@@ -8,11 +8,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -40,41 +43,65 @@ type pageMeta struct {
 	SiteName        string // og:site_name and title suffix
 	OGLocale        string // og:locale (e.g. fi_FI, en_US)
 	LangCode        string // negotiated language code for <html lang="">
+	// Language versions of this page (WL175, D3): one address per published
+	// language plus x-default, and their Open Graph locales.
+	Alternates         []pageAlternate
+	OGLocaleAlternates []string
 }
 
-// supportedLangs lists the language columns available in system_lang_keys.
-var supportedLangs = []string{"fi", "en", "yue"}
+// pageAlternate is one <link rel="alternate" hreflang> of a page.
+type pageAlternate struct {
+	Lang string
+	URL  string
+}
 
-// isIndexingAllowed checks system_config for 'allow_search_indexing' and
+// isIndexingAllowed reports whether search engines may index the site. It is
+// false whenever that cannot be known: robots.txt, the sitemap and every page
+// then keep search engines out until the settings can be read again.
+func isIndexingAllowed() bool {
+	allowed, known := readIndexingPolicy()
+	return allowed && known
+}
+
+// readIndexingPolicy reads system_config's 'allow_search_indexing' and
 // 'login_to_browse'. Indexing is blocked when:
 //   - allow_search_indexing is explicitly set to false, OR
-//   - login_to_browse is true (content is behind authentication)
+//   - login_to_browse is true (content is behind authentication).
 //
-// When allow_search_indexing doesn't exist in system_config, we default to true.
-func isIndexingAllowed() bool {
+// A setting that does not exist leaves indexing allowed, as before; a setting
+// that cannot be read answers known=false, so a database failure can no longer
+// open a closed site to search engines.
+func readIndexingPolicy() (allowed bool, known bool) {
+	return readIndexingPolicyContext(context.Background())
+}
+
+// readIndexingPolicyContext is readIndexingPolicy bounded by ctx: a setting that
+// cannot be read in time counts as unknown.
+func readIndexingPolicyContext(ctx context.Context) (allowed bool, known bool) {
 	if backend.Db == nil {
-		return true
+		return true, true
 	}
-
-	// Check explicit indexing toggle
-	var allowIndexing sql.NullBool
-	err := backend.Db.QueryRow(`
-		SELECT boolean_value FROM system_config WHERE key = 'allow_search_indexing'
-	`).Scan(&allowIndexing)
-	if err == nil && allowIndexing.Valid && !allowIndexing.Bool {
-		return false
+	for _, setting := range []struct {
+		key     string
+		query   string
+		blocked bool // the value that keeps search engines out
+	}{
+		{"allow_search_indexing", `SELECT boolean_value FROM system_config WHERE key = 'allow_search_indexing'`, false},
+		{"login_to_browse", `SELECT boolean_value FROM system_config WHERE key = 'login_to_browse'`, true},
+	} {
+		var value sql.NullBool
+		err := backend.Db.QueryRowContext(ctx, setting.query).Scan(&value)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			continue
+		case err != nil:
+			log.Printf("\033[31m[seo] indexing setting %s unreadable; search engines kept out: %v\033[0m", setting.key, err)
+			return false, false
+		case value.Valid && value.Bool == setting.blocked:
+			return false, true
+		}
 	}
-
-	// Check login_to_browse — if true, content is gated
-	var loginToBrowse sql.NullBool
-	err = backend.Db.QueryRow(`
-		SELECT boolean_value FROM system_config WHERE key = 'login_to_browse'
-	`).Scan(&loginToBrowse)
-	if err == nil && loginToBrowse.Valid && loginToBrowse.Bool {
-		return false
-	}
-
-	return true
+	return true, true
 }
 
 // resolvePageMeta inspects the request URL and returns SEO metadata.
@@ -94,14 +121,11 @@ func resolvePageMeta(r *http.Request) pageMeta {
 // A generic or sign-in shell supplies nil and publishes only site metadata.
 func resolvePageMetaForDataset(r *http.Request, dataset *dataset_routes.DatasetNamePool) pageMeta {
 	siteName := resolvePageSiteName(r)
-	language := resolveLanguage(r)
-	shellLanguage := lang.ResolvePageLanguage(r)
-	shellBoot := frontendassets.NewShellBootData(r, shellLanguage)
-	// Generic previews use the shell's enabled/default language negotiation.
-	// Dataset titles and descriptions retain their existing language contract.
-	if dataset == nil {
-		language = shellLanguage
-	}
+	// One language for the whole page, negotiated against the site's own enabled
+	// languages and default (an explicit ?lang= first, then the browser's
+	// weighted preferences), the same as the recovery and sign-in copy.
+	language := lang.ResolvePageLanguage(r)
+	shellBoot := frontendassets.NewShellBootData(r, language)
 	favicon := frontendassets.NewSiteFaviconData(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db))
 	baseURL := resolveBaseURL(r)
 	canonicalPath := r.URL.Path
@@ -169,13 +193,42 @@ func resolvePageMetaForDataset(r *http.Request, dataset *dataset_routes.DatasetN
 	meta.OGDescription = description
 	meta.OGType = "website"
 
-	// A row address (/{dataset}/{id}-{slug}) keeps the dataset's own title. This page
-	// checks dataset access but does not evaluate row policies, so it must not read a row: an
-	// earlier version printed the row's header column here with no rights or row rule,
-	// for any dataset not marked hidden (WL140). A row's title may return here only
-	// when it is read through the normal read authorisation.
+	// A row address (/{dataset}/{id}-{slug}) still gets the dataset's head here.
+	// This function does not read rows: an earlier version printed the row's
+	// header column with no rights or row rule (WL140). The article's own head is
+	// added afterwards by applyArticleHead, from resolveArticleDocument, which reads
+	// the row only as the signed-out visitor through the canonical row reader and
+	// its rights, presentation and visibility checks (WL175).
 
 	return meta
+}
+
+// applyArticleHead replaces the dataset head with the article's own: its title
+// first in the browser tab, its description, its picture, og:type article and
+// the canonical address. Everything comes from the visitor's read.
+func applyArticleHead(meta *pageMeta, document articleDocument, baseURL string) {
+	article := document.article
+	datasetTitle := meta.OGTitle
+	if article.Title != "" {
+		meta.PageTitle = composeBrowserTabTitle(article.Title, datasetTitle, meta.SiteName)
+		meta.OGTitle = article.Title
+	}
+	if description := articleExcerpt(article.Description, 300); description != "" {
+		meta.MetaDescription = description
+		meta.OGDescription = description
+	} else if article.Title != "" {
+		meta.MetaDescription = article.Title
+		meta.OGDescription = article.Title
+	}
+	meta.OGType = "article"
+	if document.canonicalPath != "" {
+		meta.CanonicalURL = baseURL + document.canonicalPath
+		meta.OGURL = meta.CanonicalURL
+	}
+	if image := absoluteSiteURL(baseURL, article.ImagePath); image != "" {
+		meta.OGImage = image
+		meta.OGImageSize = 0
+	}
 }
 
 // browserTabTitleSeparator joins the parts of the browser tab title.
@@ -357,41 +410,6 @@ func buildCanonicalDatasetPath(publicName string, segments []string) string {
 	return path
 }
 
-// resolveLanguage determines the preferred language from:
-// 1. ?lang= query parameter
-// 2. Accept-Language header
-// Falls back to "en".
-func resolveLanguage(r *http.Request) string {
-	// 1. Explicit query parameter
-	if qLang := r.URL.Query().Get("lang"); qLang != "" {
-		qLang = strings.ToLower(strings.TrimSpace(qLang))
-		for _, supported := range supportedLangs {
-			if qLang == supported {
-				return supported
-			}
-		}
-	}
-
-	// 2. Accept-Language header (simplified parsing)
-	accept := r.Header.Get("Accept-Language")
-	if accept != "" {
-		// Parse comma-separated language tags, ignore quality values
-		parts := strings.Split(accept, ",")
-		for _, part := range parts {
-			tag := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
-			tag = strings.ToLower(tag)
-			// Match exact or prefix (e.g. "fi-FI" → "fi")
-			for _, supported := range supportedLangs {
-				if tag == supported || strings.HasPrefix(tag, supported+"-") {
-					return supported
-				}
-			}
-		}
-	}
-
-	return "en"
-}
-
 // langToLocale maps canonical shell and legacy dataset codes to Open Graph locales.
 func langToLocale(lang string) string {
 	switch lang {
@@ -482,34 +500,10 @@ func isDefaultSchemePort(scheme string, port string) bool {
 	}
 }
 
-// fetchTranslation retrieves a single translation from system_lang_keys.
-func fetchTranslation(langKey string, lang string) string {
-	if backend.Db == nil {
-		return ""
-	}
-
-	// Validate lang column name to prevent SQL injection
-	validCol := false
-	for _, supported := range supportedLangs {
-		if lang == supported {
-			validCol = true
-			break
-		}
-	}
-	if !validCol {
-		lang = "en"
-	}
-
-	query := fmt.Sprintf(`SELECT %s FROM system_lang_keys WHERE lang_key = $1`, lang)
-	var value sql.NullString
-	err := backend.Db.QueryRow(query, langKey).Scan(&value)
-	if err != nil {
-		return ""
-	}
-	if value.Valid {
-		return strings.TrimSpace(value.String)
-	}
-	return ""
+// fetchTranslation retrieves the copy one language is served for one key, from
+// the site's language registry (its own column or the normalized translations).
+func fetchTranslation(langKey string, language string) string {
+	return lang.ReadDisplayTranslation(language, langKey)
 }
 
 // fetchDatasetDisplayName retrieves the administrator-given display name from
@@ -549,24 +543,102 @@ func fetchDatasetDescription(tableUID int) string {
 
 // urlEntry represents a single <url> element in sitemap XML.
 type urlEntry struct {
-	XMLName    xml.Name `xml:"url"`
-	Loc        string   `xml:"loc"`
-	LastMod    string   `xml:"lastmod,omitempty"`
-	ChangeFreq string   `xml:"changefreq,omitempty"`
-	Priority   string   `xml:"priority,omitempty"`
+	XMLName    xml.Name           `xml:"url"`
+	Loc        string             `xml:"loc"`
+	LastMod    string             `xml:"lastmod,omitempty"`
+	ChangeFreq string             `xml:"changefreq,omitempty"`
+	Priority   string             `xml:"priority,omitempty"`
+	Alternates []sitemapAlternate `xml:"xhtml:link"`
+}
+
+// sitemapAlternate is one language version of an address (xhtml:link, D3).
+type sitemapAlternate struct {
+	Rel      string `xml:"rel,attr"`
+	Hreflang string `xml:"hreflang,attr"`
+	Href     string `xml:"href,attr"`
 }
 
 // urlSet represents the root <urlset> element in sitemap XML.
 type urlSet struct {
 	XMLName xml.Name   `xml:"urlset"`
 	XMLNS   string     `xml:"xmlns,attr"`
+	XHTML   string     `xml:"xmlns:xhtml,attr,omitempty"`
 	URLs    []urlEntry `xml:"url"`
 }
 
-// sitemapHandler generates a dynamic sitemap.xml from public datasets.
+// sitemapLanguageVersions turns one page into its sitemap entries: one per
+// language version, each naming every version and the x-default address, or the
+// single unqualified address when the page has fewer than two versions.
+func sitemapLanguageVersions(entry urlEntry, defaultAddress string, versions map[string]string, order []string) []urlEntry {
+	var present []string
+	for _, code := range order {
+		if _, exists := versions[code]; exists {
+			present = append(present, code)
+		}
+	}
+	if len(present) < 2 {
+		entry.Loc = defaultAddress
+		return []urlEntry{entry}
+	}
+	alternates := make([]sitemapAlternate, 0, len(present)+1)
+	for _, code := range present {
+		alternates = append(alternates, sitemapAlternate{Rel: "alternate", Hreflang: code, Href: versions[code]})
+	}
+	alternates = append(alternates, sitemapAlternate{Rel: "alternate", Hreflang: "x-default", Href: defaultAddress})
+	entries := make([]urlEntry, 0, len(present))
+	for _, code := range present {
+		version := entry
+		version.Loc = versions[code]
+		version.Alternates = alternates
+		entries = append(entries, version)
+	}
+	return entries
+}
+
+// sitemapPartSize is how many addresses one sitemap document lists (the plan's
+// threshold, well under the protocol's 50,000). A site with more is announced
+// as a sitemap index whose parts are /sitemap.xml?part=1, ?part=2, ….
+const sitemapPartSize = 10000
+
+// sitemapBudget bounds one sitemap answer as a whole, however many datasets and
+// pages it reads; a sitemap that cannot finish in time answers 503.
+var sitemapBudget = 25 * time.Second
+
+// sitemapListPageSize is the bounded page each list read asks for.
+const sitemapListPageSize = 20
+
+// sitemapIndex is the root <sitemapindex> of a sitemap split into parts.
+type sitemapIndex struct {
+	XMLName  xml.Name          `xml:"sitemapindex"`
+	XMLNS    string            `xml:"xmlns,attr"`
+	Sitemaps []sitemapIndexRef `xml:"sitemap"`
+}
+
+type sitemapIndexRef struct {
+	Loc string `xml:"loc"`
+}
+
+// sitemapHandler lists what a signed-out visitor can open: Home, each dataset
+// in the visitor's main menu (owner decision D2, WL175) and every article the
+// visitor may read in those datasets, at its canonical address with the words
+// of its title in the site's default language (K428). Everything is read as the
+// visitor through the canonical row reader, so the sitemap can never name a row
+// or dataset a visitor may not read. A date is given only when the visitor may
+// read the row's own modification time. The answer is not cached: a sitemap
+// read later must not list a row whose rights have since changed. When the
+// settings or the catalogue cannot be read, or the whole answer cannot finish
+// within sitemapBudget, the answer is 503, so search engines retry instead of
+// dropping the site's addresses.
 func sitemapHandler(w http.ResponseWriter, r *http.Request) {
-	// If indexing is disabled, return an empty sitemap
-	if !isIndexingAllowed() {
+	w.Header().Set("Cache-Control", "no-cache")
+	ctx, cancel := context.WithTimeout(r.Context(), sitemapBudget)
+	defer cancel()
+	allowed, known := readIndexingPolicyContext(ctx)
+	if !known {
+		http.Error(w, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if !allowed {
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, xml.Header)
@@ -575,109 +647,119 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := resolveBaseURL(r)
-
-	urls := []urlEntry{
-		{
-			Loc:        baseURL + "/",
-			ChangeFreq: "daily",
-			Priority:   "1.0",
-		},
+	urls, err := collectSitemapURLs(ctx, baseURL)
+	if err == nil && ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		log.Printf("\033[31m[sitemapHandler] sitemap unavailable: %v\033[0m", err)
+		http.Error(w, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+		return
 	}
 
-	for _, dataset := range readSitemapDatasets() {
-		entry := urlEntry{
-			Loc:        baseURL + "/" + dataset.preferredName,
-			ChangeFreq: "weekly",
-			Priority:   "0.8",
+	parts := (len(urls) + sitemapPartSize - 1) / sitemapPartSize
+	var document any = newURLSet(urls)
+	if rawPart := r.URL.Query().Get("part"); rawPart != "" {
+		part, err := strconv.Atoi(rawPart)
+		if err != nil || part < 1 || part > parts || parts < 2 {
+			http.NotFound(w, r)
+			return
 		}
-		if dataset.updated.Valid {
-			entry.LastMod = dataset.updated.Time.Format(time.RFC3339)
+		end := part * sitemapPartSize
+		if end > len(urls) {
+			end = len(urls)
 		}
-		urls = append(urls, entry)
-	}
-
-	smap := urlSet{
-		XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9",
-		URLs:  urls,
+		document = newURLSet(urls[(part-1)*sitemapPartSize : end])
+	} else if parts > 1 {
+		index := sitemapIndex{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
+		for part := 1; part <= parts; part++ {
+			index.Sitemaps = append(index.Sitemaps, sitemapIndexRef{Loc: baseURL + "/sitemap.xml?part=" + strconv.Itoa(part)})
+		}
+		document = index
 	}
 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache 1 hour
 	w.WriteHeader(http.StatusOK)
-
 	fmt.Fprint(w, xml.Header)
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
-	if err := enc.Encode(smap); err != nil {
+	if err := enc.Encode(document); err != nil {
 		log.Printf("\033[31m[sitemapHandler] encode error: %v\033[0m", err)
 	}
 }
 
-// sitemapVisitorUserID is the identity a signed-out visitor browses as: on a site that can be
-// browsed without signing in, rootHandler gives a visitor's session the user id 1, the number
-// isGuestUserID recognises.
-const sitemapVisitorUserID = 1
-
-// sitemapDataset is one dataset whose address the sitemap announces.
-type sitemapDataset struct {
-	tableUID      int
-	name          string
-	preferredName string
-	updated       sql.NullTime
+// newURLSet wraps entries in a <urlset>, declaring the xhtml namespace only
+// when some entry names its language versions.
+func newURLSet(urls []urlEntry) urlSet {
+	set := urlSet{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9", URLs: urls}
+	for _, entry := range urls {
+		if len(entry.Alternates) > 0 {
+			set.XHTML = "http://www.w3.org/1999/xhtml"
+			break
+		}
+	}
+	return set
 }
 
-// readSitemapDatasets answers which datasets the sitemap announces: only those a signed-out
-// visitor can open. The sitemap is public and search engines follow it, so every name in it is
-// published. It once listed every dataset not hidden from the interface, which published the
-// names of datasets a visitor cannot read and sent search engines to the login page.
-// The rule is the one rootHandler applies when a visitor opens a dataset address: the dataset
-// is shown (not ui_hidden, and not a cloud management dataset this instance hides), and the
-// visitor identity holds the read right on it.
-func readSitemapDatasets() []sitemapDataset {
-	if backend.Db == nil {
-		return nil
-	}
-	pools, err := dataset_routes.LoadDatasetNamePools(backend.Db)
+// collectSitemapURLs reads every address the sitemap announces, in order: Home,
+// then each published dataset followed by its articles, newest first.
+func collectSitemapURLs(ctx context.Context, baseURL string) ([]urlEntry, error) {
+	datasets, err := publicArticlesDatasetsReader(ctx)
 	if err != nil {
-		log.Printf("\033[31m[sitemapHandler] name pools unavailable: %v\033[0m", err)
-		return nil
+		return nil, fmt.Errorf("published datasets: %w", err)
 	}
-	rows, err := backend.Db.Query(`
-		SELECT t.table_uid, t.table_name, t.updated
-		FROM system_db_tables t
-		WHERE COALESCE(NULLIF(t.schema_name, ''), 'public') = 'public' AND NOT t.ui_hidden
-		ORDER BY t.table_name
-	`)
-	if err != nil {
-		log.Printf("\033[31m[sitemapHandler] query error: %v\033[0m", err)
-		return nil
-	}
-	var shown []sitemapDataset
-	for rows.Next() {
-		var dataset sitemapDataset
-		if err := rows.Scan(&dataset.tableUID, &dataset.name, &dataset.updated); err != nil {
-			continue
+	languages := pageLanguagesReader(ctx)
+	language := languages.Default
+	pageVersions := func(path string) map[string]string {
+		versions := map[string]string{}
+		for _, code := range languages.Published {
+			versions[code] = baseURL + path + "?lang=" + url.QueryEscape(code)
 		}
-		shown = append(shown, dataset)
+		return versions
 	}
-	iterationErr := rows.Err()
-	// Closed before the read rights are checked, so the checks never wait for a second
-	// connection while this list still holds the first.
-	rows.Close()
-	if iterationErr != nil {
-		log.Printf("\033[31m[sitemapHandler] query error: %v\033[0m", iterationErr)
-		return nil
-	}
-
-	readable := make([]sitemapDataset, 0, len(shown))
-	for _, dataset := range shown {
-		pool, accepted := pools[dataset.tableUID]
-		if accepted && pool.SchemaName == "public" && pool.DatasetName == dataset.name &&
-			backend.ShouldExposeCloudManagementDatasetName(dataset.name) &&
-			canReadDocumentDataset(pool, sitemapVisitorUserID) {
-			dataset.preferredName = pool.PreferredName
-			readable = append(readable, dataset)
+	urls := sitemapLanguageVersions(urlEntry{ChangeFreq: "daily", Priority: "1.0"}, baseURL+"/", pageVersions("/"), languages.Published)
+	for _, dataset := range datasets {
+		datasetPath := "/" + url.PathEscape(dataset.PreferredName)
+		datasetStart := len(urls)
+		urls = append(urls, sitemapLanguageVersions(urlEntry{ChangeFreq: "daily", Priority: "0.8"},
+			baseURL+datasetPath, pageVersions(datasetPath), languages.Published)...)
+		datasetEnd := len(urls)
+		var newest time.Time
+		for offset := 0; ; {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			articles, more, err := publicArticlesListReader(ctx, dataset, offset, sitemapListPageSize, language)
+			if err != nil {
+				return nil, fmt.Errorf("articles of %s: %w", dataset.Name, err)
+			}
+			for _, article := range articles {
+				entry := urlEntry{}
+				if !article.Updated.IsZero() {
+					entry.LastMod = article.Updated.UTC().Format(time.RFC3339)
+					if article.Updated.After(newest) {
+						newest = article.Updated
+					}
+				}
+				versions := map[string]string{}
+				for _, code := range article.TitleLanguages {
+					if languages.Publishes(code) {
+						versions[code] = baseURL + articleAddressFor(url.PathEscape(dataset.PreferredName), article, code, language)
+					}
+				}
+				urls = append(urls, sitemapLanguageVersions(entry,
+					baseURL+articleAddressFor(url.PathEscape(dataset.PreferredName), article, "", language), versions, languages.Published)...)
+			}
+			if !more || len(articles) == 0 {
+				break
+			}
+			offset += len(articles)
+		}
+		if !newest.IsZero() {
+			for index := datasetStart; index < datasetEnd; index++ {
+				urls[index].LastMod = newest.UTC().Format(time.RFC3339)
+			}
 		}
 	}
-	return readable
+	return urls, nil
 }

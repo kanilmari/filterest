@@ -185,13 +185,17 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			useMinified = true
 		}
 		meta := resolvePageMeta(r)
+		if !loginToBrowse && !isAuthShellEntryRequest(r) {
+			applyLanguageAddresses(&meta, r, articleDocument{}, pageLanguagesReader(r.Context()), resolveBaseURL(r))
+		}
 		assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 		data := indexTemplateData{
 			pageMeta: meta,
 			CSPNonce: nonce, UseMinifiedAssets: useMinified, IsDev: os.Getenv("ENVIRONMENT_TYPE") == "dev",
 			InstallationEnvironment: getInstallationEnvironment(),
 			ProductName:             getSiteName(),
-			RobotsNoIndex:           !isIndexingAllowed(),
+			RobotsNoIndex:           !isIndexingAllowed() || isAuthShellEntryRequest(r),
+			ServerFallback:          buildServerFallback(r.Context(), r, nil, "", articleDocument{}, loginToBrowse, meta.LangCode, meta.ShellBoot.Texts.PublicArticles),
 			ImportsCSSPath:          assetPaths.ImportsCSSPath,
 			MainBundlePath:          assetPaths.MainBundlePath,
 		}

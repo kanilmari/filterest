@@ -2,6 +2,45 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Search engine documents: robots.txt, sitemap and public article heads",
+      "paths": [
+        "app/backend/core_components/router/public_article_document.go",
+        "app/backend/core_components/router/seo_meta_builder.go",
+        "app/backend/core_components/middlewares/search_indexing_header.go",
+        "app/backend/core_components/system_table_tools/public_article_reader.go",
+        "app/backend/core_components/system_table_tools/public_article_projection.go",
+        "app/backend/core_components/dataset_routes/article_slug.go",
+        "app/backend/core_components/lang/page_language_registry.go",
+        "app/testing/shared_contracts/article_slug_examples.json",
+        "app/testing/e2e/G_navigation/G22_robots_rendering_reads.spec.ts"
+      ],
+      "specs": [
+        "app/testing/e2e/G_navigation/G22_robots_rendering_reads.spec.ts"
+      ],
+      "projects": [
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Readable article fallback, plain article index and its menu link",
+      "paths": [
+        "app/backend/core_components/router/public_articles_page.go",
+        "app/frontend/public_articles.html",
+        "app/backend/core_components/frontend_assets/shell_boot_recovery.css",
+        "app/backend/core_components/frontend_assets/shell_boot_recovery.js",
+        "app/frontend/core_components/navigation/navbar/navbar_all_articles_link.js",
+        "app/server_tools/migrations/20261119000175_seed_public_article_language_keys.sql",
+        "app/server_tools/migrations/20261119000199_record_database_release_public_articles.sql",
+        "app/testing/e2e/G_navigation/G23_readable_article_fallback.spec.ts"
+      ],
+      "specs": [
+        "app/testing/e2e/G_navigation/G23_readable_article_fallback.spec.ts"
+      ],
+      "projects": [
+        "mobile-card"
+      ]
+    },
+    {
       "area": "Disclosure defaults and private opening choices",
       "paths": [
         "app/frontend/core_components/disclosure",
@@ -396,7 +435,7 @@
         "app/backend/core_components/frontend_assets", "app/backend/reusable_components/vanilla_tree", "app/frontend/reusable_components/vanilla_tree", "app/frontend/main.js",
         "app/frontend/index.html"
       ],
-      "specs": ["app/testing/e2e/C_card_view/C33_disclosure_defaults.spec.ts", "app/testing/e2e/C_card_view/C32_row_presentation_choice.spec.ts", "app/testing/e2e/L_auth/L12_phone_form_edges.spec.ts", "app/testing/e2e/I_inline_edit/I7_edit_during_rebuild.spec.ts", "app/testing/e2e/G_navigation/G21_home_top_bar_setting.spec.ts", "app/testing/e2e/C_card_view/C27_article_image_controls_idle.spec.ts", "app/testing/e2e/L_auth/L11_verification_setup_screens.spec.ts", "app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts", "app/testing/e2e/M_language/M4_first_draw_language.spec.ts", "app/testing/e2e/L_auth/L9_guest_browser_privacy.spec.ts", "app/testing/e2e/G_navigation/G17_home_phone_search.spec.ts", "app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/G_navigation/G18_media_tab_shape.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/G_navigation/G23_readable_article_fallback.spec.ts", "app/testing/e2e/G_navigation/G22_robots_rendering_reads.spec.ts", "app/testing/e2e/C_card_view/C33_disclosure_defaults.spec.ts", "app/testing/e2e/C_card_view/C32_row_presentation_choice.spec.ts", "app/testing/e2e/L_auth/L12_phone_form_edges.spec.ts", "app/testing/e2e/I_inline_edit/I7_edit_during_rebuild.spec.ts", "app/testing/e2e/G_navigation/G21_home_top_bar_setting.spec.ts", "app/testing/e2e/C_card_view/C27_article_image_controls_idle.spec.ts", "app/testing/e2e/L_auth/L11_verification_setup_screens.spec.ts", "app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts", "app/testing/e2e/M_language/M4_first_draw_language.spec.ts", "app/testing/e2e/L_auth/L9_guest_browser_privacy.spec.ts", "app/testing/e2e/G_navigation/G17_home_phone_search.spec.ts", "app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/G_navigation/G18_media_tab_shape.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
@@ -1074,7 +1113,6 @@
     },
     {
       "paths": [
-        "app/frontend/robots.txt",
         "app/frontend/imageERR.png",
         "app/frontend/favicon.ico",
         "app/frontend/favicon4E.png",
@@ -1082,7 +1120,7 @@
         "app/frontend/favicon4S.png",
         "app/frontend/favicon4SL.png"
       ],
-      "reason": "Static crawler policy, legacy favicon bytes and the error-image fallback have no maintained focused assertion; favicon route tests read icons/site_favicons instead. Nightly asset/build checks retain integration coverage."
+      "reason": "Legacy favicon bytes and the error-image fallback have no maintained focused assertion; favicon route tests read icons/site_favicons instead. Nightly asset/build checks retain integration coverage."
     },
     {
       "paths": [

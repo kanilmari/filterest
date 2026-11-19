@@ -27,6 +27,7 @@ import {
 } from "../nav_engine/dataset_access_registry.js";
 import { useStorageParams, useUrlParams } from "../nav_engine/query_params.js";
 import { fetchProjectTabs, acceptMainDatasetTabs, AUTH_ACTION_TAB_IDS } from "./main_dataset_tabs.js";
+import { renderNavbarAllArticlesLink } from "../navbar/navbar_all_articles_link.js";
 import { getTabIconPath } from "./tab_icon_library.js";
 import { buildTabOutlinePresentation } from "./tab_presentation_builder.js";
 import {
@@ -234,6 +235,10 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
     });
 
     scheduleNavTabTextLineClassSync(container);
+    // The menu's link to the plain article index follows the datasets it shows.
+    renderNavbarAllArticlesLink({
+        tabs: allTabs.filter((tabData) => tabData.dataset && canReadDatasetFromRegistry(tabData.dataset) !== false),
+    });
 
     if (!isLoggedIn && hasExplicitAuthShellEntry()) {
         return;

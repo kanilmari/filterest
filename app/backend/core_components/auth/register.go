@@ -41,6 +41,9 @@ func buildRegisterEntryRedirectTarget(redirect string) string {
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	logging.Infof("registerHandler called")
+	// The registration page is never a search result (WL175); its address is
+	// configurable, so it marks itself instead of a path rule in the middleware.
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 
 	// Check if registration is enabled in system_config
 	if !registrationEnabledFunc() {

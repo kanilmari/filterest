@@ -10,9 +10,10 @@ import { readFileSync } from 'node:fs';
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 
 describe('navbar layout CSS', () => {
-    test('reserves the shared front-page track before tabs and favorites', () => {
+    test('reserves the shared front-page track before tabs, the article index link and favorites', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
-        expect(css).toContain('grid-template-areas: "controls" "auth" "front-page" "tabs" "favorites" "admin";');
+        expect(css).toContain('grid-template-areas: "controls" "auth" "front-page" "tabs" "articles" "favorites" "admin";');
+        expect(css).toMatch(/#navbar > #navbarAllArticles \{\s*grid-area: articles;/);
         expect(css).toContain('align-content: start;');
         expect(css).not.toMatch(/grid-row:\s*\d/);
     });

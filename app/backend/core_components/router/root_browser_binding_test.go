@@ -318,9 +318,10 @@ func TestSignedInVisitorWithItsBindingIsServedAndRenewed(t *testing.T) {
 					if !strings.Contains(recorder.Body.String(), "root-shell") {
 						t.Fatalf("expected the root shell, got %q", recorder.Body.String())
 					}
-					// The page is composed before any rights check, so it never carries a
-					// row's own title, not even for a person who signed in (WL140); the
-					// application shows the row after its own authorised read.
+					// The page never carries a row's own title on the requester's rights,
+					// not even for a person who signed in (WL140). Since WL175 it may carry
+					// what the signed-out visitor may read (public_article_document_test.go);
+					// this fixture's visitor read is unavailable, so the dataset head stays.
 					if strings.Contains(recorder.Body.String(), disclosableRowTitle) {
 						t.Fatalf("the page carried a row's own title before any rights check: %q", recorder.Body.String())
 					}

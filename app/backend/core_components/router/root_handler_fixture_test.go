@@ -24,7 +24,9 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
+	"easelect/backend/core_components/lang"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/system_table_tools"
 
 	gorillaSessions "github.com/gorilla/sessions"
 )
@@ -219,7 +221,7 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 		return rows, nil
 	case strings.Contains(query, "FROM system_lang_keys"):
 		if len(args) > 0 {
-			code := strings.Fields(query)[1]
+			code := strings.Trim(strings.Fields(query)[1], `"`)
 			if value, found := c.config.translations[code][fmt.Sprint(args[0].Value)]; found {
 				return &rootHandlerMockRows{cols: []string{code}, vals: []driver.Value{value}}, nil
 			}
@@ -287,6 +289,7 @@ func setupRootHandlerMockDBWithConfig(t *testing.T, config rootHandlerMockConfig
 	backend.DbAdmin = nil
 	backend.DbConfidential = db
 	backend.ResetEaselectInstanceRoleCache()
+	stubPublicArticleReads(t, nil)
 
 	t.Cleanup(func() {
 		_ = db.Close()
@@ -431,4 +434,37 @@ func assertAuthShellNoStoreHeaders(t *testing.T, rr *httptest.ResponseRecorder) 
 	if got := rr.Header().Get("Vary"); !strings.Contains(got, "Cookie") {
 		t.Fatalf("Vary = %q, want Cookie to be listed", got)
 	}
+}
+
+// stubPublicArticleReads answers the visitor's article reads without a database.
+// An article address reads its row through system_table_tools, whose rights and
+// row rules the PostgreSQL proofs there cover; these root-page fixtures only
+// decide what the reader answers. With no articles, every read is "unavailable",
+// so an address keeps the dataset's own head exactly as before WL175.
+func stubPublicArticleReads(t *testing.T, articles map[string]system_table_tools.PublicArticle) {
+	t.Helper()
+	originalReader, originalLanguages := publicArticleReader, pageLanguagesReader
+	originalDatasets, originalList := publicArticlesDatasetsReader, publicArticlesListReader
+	publicArticleReader = func(_ context.Context, dataset system_table_tools.PublicArticleDataset, rowID string, _ string) (system_table_tools.PublicArticle, system_table_tools.PublicArticleStatus) {
+		if articles == nil {
+			return system_table_tools.PublicArticle{}, system_table_tools.PublicArticleUnavailable
+		}
+		if article, found := articles[dataset.Name+"/"+rowID]; found {
+			return article, system_table_tools.PublicArticleFound
+		}
+		return system_table_tools.PublicArticle{}, system_table_tools.PublicArticleNotFound
+	}
+	pageLanguagesReader = func(context.Context) lang.PageLanguages {
+		return lang.PageLanguages{Enabled: []string{"en", "fi"}, Published: []string{"en", "fi"}, Default: "en"}
+	}
+	publicArticlesDatasetsReader = func(context.Context) ([]system_table_tools.PublicArticleDataset, error) {
+		return nil, fmt.Errorf("published datasets are not stubbed in this fixture")
+	}
+	publicArticlesListReader = func(context.Context, system_table_tools.PublicArticleDataset, int, int, string) ([]system_table_tools.PublicArticle, bool, error) {
+		return nil, false, fmt.Errorf("published articles are not stubbed in this fixture")
+	}
+	t.Cleanup(func() {
+		publicArticleReader, pageLanguagesReader = originalReader, originalLanguages
+		publicArticlesDatasetsReader, publicArticlesListReader = originalDatasets, originalList
+	})
 }

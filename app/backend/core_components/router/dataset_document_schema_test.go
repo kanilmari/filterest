@@ -8,7 +8,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -114,17 +113,9 @@ func assertDocumentSchemaDenied(t *testing.T) {
 			})
 		}
 	}
-	t.Run("sitemap", func(t *testing.T) {
-		response := httptest.NewRecorder()
-		sitemapHandler(response, httptest.NewRequest("GET", "/sitemap.xml", nil))
-		var sitemap urlSet
-		if err := xml.Unmarshal(response.Body.Bytes(), &sitemap); err != nil {
-			t.Fatal(err)
-		}
-		if response.Code != 200 || len(sitemap.URLs) != 1 || strings.Contains(response.Body.String(), "orders") {
-			t.Errorf("audit-only guest grant published public address: %s", response.Body.String())
-		}
-	})
+	// The sitemap's published datasets come from PublicArticleDatasets, which reads
+	// grants through the same catalogue functions as /api/datasets; its rejection of
+	// audit-only grants is proven against PostgreSQL in system_table_tools.
 }
 
 func TestDocumentAndSitemapRejectAuditOnlyReadGrants(t *testing.T) {

@@ -50,3 +50,54 @@ html[data-shell-boot-theme="dark"] #shell-boot-notice {
         --shell-boot-text: #f5f5f5;
     }
 }
+/* Readable fallback (WL175): the server's plain article or list, [data-server-article] in index.html. */
+/* With JavaScript the application shows its own view and the fallback appears only when it cannot start; */
+/* without JavaScript the fallback is the page. Either way the hidden shell takes no room and the page scrolls. */
+[data-server-article] {
+    --shell-boot-background: #fafafa;
+    --shell-boot-text: #202020;
+    --server-article-link: #0b57a4;
+    display: block;
+    box-sizing: border-box;
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    background: var(--shell-boot-background);
+    color: var(--shell-boot-text);
+    font: 17px/1.6 system-ui, sans-serif;
+    text-align: start;
+    overflow-wrap: anywhere;
+}
+[data-server-article] h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 16px; }
+[data-server-article] p { margin: 0 0 12px; }
+[data-server-article] img { display: block; max-width: 100%; height: auto; margin: 0 0 16px; }
+[data-server-article] ul { list-style: none; margin: 0; padding: 0; }
+[data-server-article] li { padding: 8px 0; }
+[data-server-article] a { color: var(--server-article-link); }
+[data-server-article] .server-article-links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 24px; }
+html[data-shell-boot-script]:not([data-shell-boot-article="visible"]) [data-server-article] { display: none !important; }
+html[data-shell-boot-pending]:not([data-shell-boot-script]) [data-shell-boot-content],
+html[data-shell-boot-article="visible"] [data-shell-boot-content] { display: none !important; }
+html:not([data-shell-boot-script]), html:not([data-shell-boot-script]) body,
+html[data-shell-boot-article="visible"], html[data-shell-boot-article="visible"] body {
+    overflow: auto !important;
+    height: auto !important;
+    position: static !important;
+}
+.shell-boot-noscript--slim, html[data-shell-boot-article="visible"] #shell-boot-notice {
+    position: static !important;
+    inset: auto;
+    padding: 12px 16px;
+}
+html[data-shell-boot-theme="dark"] [data-server-article] {
+    --shell-boot-background: #202020;
+    --shell-boot-text: #f5f5f5;
+    --server-article-link: #8ab8ff;
+}
+@media (prefers-color-scheme: dark) {
+    html:not([data-shell-boot-theme="light"], [data-shell-boot-theme="dark"]) [data-server-article] {
+        --shell-boot-background: #202020;
+        --shell-boot-text: #f5f5f5;
+        --server-article-link: #8ab8ff;
+    }
+}

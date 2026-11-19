@@ -7846,6 +7846,134 @@
       ]
     },
     {
+      "path_pattern": "/articles",
+      "match_type": "exact",
+      "handler_name": "router.publicArticlesHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/articles/",
+      "match_type": "prefix",
+      "handler_name": "router.publicArticlesHandler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
       "path_pattern": "/components/",
       "match_type": "prefix",
       "handler_name": "router.handleComponents",

@@ -315,6 +315,7 @@ var lowSignalSuccessfulAuditHandlers = map[string]struct{}{
 	"router.handleApps":                   {},
 	"router.handleFrontend":               {},
 	"router.robotsHandler":                {},
+	"router.publicArticlesHandler":        {},
 	"router.rootHandler":                  {},
 	"router.ServeStorage":                 {},
 	"router.sitemapHandler":               {},

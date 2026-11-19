@@ -25,6 +25,9 @@ type ShellBootTexts struct {
 	// remain empty so metadata can fall back to the site's own name.
 	HomeSlogan      string
 	HomeDescription string
+	// The readable fallback's link to the plain article index (WL175), read from
+	// the same map so the page makes no extra query for it.
+	PublicArticles string
 }
 
 var shellBootFallbacks = map[string][2]string{
@@ -34,6 +37,7 @@ var shellBootFallbacks = map[string][2]string{
 	"shell_boot_reload":              {"Lataa sivu uudelleen", "Reload page"},
 	"shell_boot_javascript_required": {"Sovelluksen käyttö vaatii JavaScriptin. Ota JavaScript käyttöön ja lataa sivu uudelleen.", "JavaScript is required to use this application. Enable JavaScript and reload the page."},
 	"shell_boot_browser_unsupported": {"Tätä selainta ei tueta. Avaa sivu ajan tasalla olevalla selaimella.", "This browser is not supported. Open the page in an up-to-date browser."},
+	"public_articles_all":            {"Kaikki artikkelit", "All articles"},
 }
 
 var pageLanguageTagRegexp = regexp.MustCompile(`(?i)^[a-z]{2,3}(-[a-z0-9]{2,8})*$`)
@@ -148,5 +152,6 @@ func readShellBootTexts(languageCode string, reader func(string) (map[string]str
 		FailedMessage: text("shell_boot_failed_message"), Reload: text("shell_boot_reload"),
 		JavaScriptRequired: text("shell_boot_javascript_required"), BrowserUnsupported: text("shell_boot_browser_unsupported"),
 		HomeSlogan: values["site_front_page_slogan"], HomeDescription: values["site_front_page_description"],
+		PublicArticles: text("public_articles_all"),
 	}
 }

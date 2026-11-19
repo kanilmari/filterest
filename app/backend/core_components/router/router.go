@@ -151,6 +151,8 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/media-library/attach", media_library.AttachHandler, "media_library.AttachHandler", http.MethodPost)
 	functionRegisterHandler("/api/media-library/detach", media_library.DetachHandler, "media_library.DetachHandler", http.MethodPost)
 	functionRegisterHandler("/robots.txt", robotsHandler, "router.robotsHandler", http.MethodGet)
+	functionRegisterHandler("/articles", publicArticlesHandler, "router.publicArticlesHandler", http.MethodGet)
+	functionRegisterHandler("/articles/", publicArticlesHandler, "router.publicArticlesHandler", http.MethodGet)
 	functionRegisterHandler("/health", healthHandler, "router.healthHandler", http.MethodGet)
 	functionRegisterHandler("/system/health", systemHealthHandler, "router.systemHealthHandler", http.MethodGet)
 	functionRegisterHandler("/system/ready", systemReadyHandler, "router.systemReadyHandler", http.MethodGet)

@@ -272,7 +272,9 @@ func TestSitePreviewKeepsDatasetDescriptionOrderLanguageAndRowPrivacy(t *testing
 				},
 			})
 			r := httptest.NewRequest(http.MethodGet, "https://travel.example/service_catalog/123-private-title", nil)
-			r.Header.Set("Accept-Language", "fi;q=0.1,en;q=1")
+			// The page language honours the browser's preference weights (WL175); the
+			// router's own copy once took the first listed language whatever its weight.
+			r.Header.Set("Accept-Language", "fi;q=1,en;q=0.1")
 			dataset := dataset_routes.DatasetNamePool{DatasetName: "app_service_catalog", PreferredName: "service_catalog", SchemaName: "public", TableUID: 7}
 			meta := resolvePageMetaForDataset(r, &dataset)
 			if meta.MetaDescription != tc.expected || meta.OGDescription != tc.expected || meta.LangCode != "fi" || meta.PageTitle != "Dataset title — Travel site" {

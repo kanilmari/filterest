@@ -4,6 +4,9 @@
 // Keeps public aliases covered without a built-in dataset-name exception.
 
 import { afterEach, beforeEach, describe, test, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from '../../navigation/nav_engine/dataset_access_registry.js';
 import {
     buildSlug,
@@ -23,6 +26,15 @@ afterEach(clearDatasetAccessRegistry);
 // buildSlug
 // ---------------------------------------------------------------------------
 describe('buildSlug', () => {
+    // The server builds the canonical article address with its own twin of this
+    // function (ArticleSlug in app/backend/core_components/dataset_routes/article_slug.go).
+    // Both read these examples, so the two addresses cannot drift apart.
+    const sharedSlugExamples = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)),
+        '../../../../testing/shared_contracts/article_slug_examples.json'), 'utf8')).articleSlug;
+    test.each(sharedSlugExamples)('shared example: $why', ({ title, expected }) => {
+        expect(buildSlug(title)).toBe(expected);
+    });
+
     test('converts simple text to lowercase slug', () => {
         expect(buildSlug('Hello World')).toBe('hello-world');
     });

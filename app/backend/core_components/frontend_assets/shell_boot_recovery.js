@@ -6,6 +6,8 @@
     'use strict';
     var root = document.documentElement;
     if (!root.hasAttribute('data-shell-boot-pending')) return;
+    // Scripts run: the server's readable fallback stays hidden unless the application cannot start (WL175).
+    root.setAttribute('data-shell-boot-script', '');
     var initialURL = window.location.href;
     var budgetKey = '__filterest_shell_boot_retry_v1:' + initialURL;
     var diagnosticKey = '__filterest_shell_boot_records_v1';
@@ -125,6 +127,10 @@
     }
 
     function displayNotice(state) {
+        // A page that failed to start shows the server's readable article or list, with a slim notice above it.
+        if ((state === 'failed' || state === 'unsupported') && document.querySelector('[data-server-article]')) {
+            root.setAttribute('data-shell-boot-article', 'visible');
+        }
         var notice = document.getElementById('shell-boot-notice');
         if (!notice) return;
         notice.hidden = !state;
@@ -165,6 +171,7 @@
             if (ready || capSpent) {
                 revealed = true;
                 root.removeAttribute('data-shell-boot-pending');
+                root.removeAttribute('data-shell-boot-article');
                 displayNotice(null);
                 finishEpisode();
                 if (failed) record('recovered');

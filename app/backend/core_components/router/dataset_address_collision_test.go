@@ -8,10 +8,8 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/xml"
 	"fmt"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -58,26 +56,9 @@ func TestDatasetAddressCollisionResolutionCanonicalAndSitemap(t *testing.T) {
 			}
 		}
 	})
-	t.Run("sitemap", func(t *testing.T) {
-		response := httptest.NewRecorder()
-		sitemapHandler(response, httptest.NewRequest("GET", "/sitemap.xml", nil))
-		var sitemap urlSet
-		if err := xml.Unmarshal(response.Body.Bytes(), &sitemap); err != nil {
-			t.Fatal(err)
-		}
-		var listed []string
-		for _, entry := range sitemap.URLs {
-			listed = append(listed, entry.Loc)
-		}
-		if response.Code != 200 || !reflect.DeepEqual(listed, []string{sitemapTestBaseURL + "/", sitemapTestBaseURL + "/app_orders"}) {
-			t.Fatalf("sitemap publishes the colliding private name: %s", response.Body.String())
-		}
-		visit := httptest.NewRecorder()
-		rootHandler(visit, httptest.NewRequest("GET", "/app_orders", nil))
-		if visit.Code != 200 {
-			t.Fatalf("published address is not guest-readable: %d", visit.Code)
-		}
-	})
+	// Which public name the sitemap uses is the published-dataset reader's answer
+	// (PublicArticleDatasets, proven against PostgreSQL in system_table_tools); the
+	// pool it reads is the same LoadDatasetNamePools this resolution uses.
 }
 
 type datasetCollisionDriver struct{}
@@ -99,8 +80,6 @@ func (c datasetCollisionConn) QueryContext(ctx context.Context, query string, ar
 			return &sitemapMockRows{cols: []string{"table_uid", "table_name", "schema_name"}, vals: [][]driver.Value{{int64(11), "app_orders", "public"}, {int64(12), "orders", "public"}}}, nil
 		}
 		return &sitemapMockRows{cols: []string{"table_uid", "table_name"}, vals: [][]driver.Value{{int64(11), "app_orders"}, {int64(12), "orders"}}}, nil
-	case strings.Contains(query, "NOT t.ui_hidden"):
-		return &sitemapMockRows{cols: []string{"table_uid", "table_name", "updated"}, vals: [][]driver.Value{{int64(11), "app_orders", sitemapTestUpdated}, {int64(12), "orders", sitemapTestUpdated}}}, nil
 	case strings.Contains(query, "FROM system_group_table_func_rights"):
 		allowed := len(args) > 2 && fmt.Sprint(args[0].Value) == "/api/get-results" && fmt.Sprint(args[1].Value) == "1" && fmt.Sprint(args[2].Value) == "11"
 		return &rootHandlerMockRows{cols: []string{"allowed"}, vals: []driver.Value{1}, empty: !allowed}, nil

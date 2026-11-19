@@ -19,6 +19,8 @@
     <title>{{.PageTitle}}</title>
     <meta name="description" content="{{.MetaDescription}}">
     <link rel="canonical" href="{{.CanonicalURL}}">
+    {{range .Alternates}}<link rel="alternate" hreflang="{{.Lang}}" href="{{.URL}}">
+    {{end}}
     {{if .RobotsNoIndex}}<meta name="robots" content="noindex, nofollow">{{end}}
 
     <!-- Open Graph / Facebook -->
@@ -31,6 +33,8 @@
     <meta property="og:image:height" content="{{.OGImageSize}}">{{end}}
     <meta property="og:image:alt" content="{{.SiteName}}">
     <meta property="og:locale" content="{{.OGLocale}}">
+    {{range .OGLocaleAlternates}}<meta property="og:locale:alternate" content="{{.}}">
+    {{end}}
     <meta property="og:site_name" content="{{.SiteName}}">
 
     <!-- Twitter Card -->
@@ -96,7 +100,36 @@
         </div>
         <p id="shell-boot-unsupported" hidden>{{.ShellBoot.Texts.BrowserUnsupported}}</p>
     </div>
+    {{with .ServerFallback}}
+    <noscript><div class="shell-boot-noscript shell-boot-noscript--slim"><p>{{$.ShellBoot.Texts.JavaScriptRequired}}</p></div></noscript>
+    <!-- Readable without the application (WL175): shown when JavaScript is off or the application cannot start;
+         otherwise hidden (shell_boot_recovery.css). Filled only with what a signed-out visitor may read. -->
+    <main id="server-article" class="server-article" data-server-article>
+        {{with .Article}}
+        <article>
+            {{if .Title}}<h1>{{.Title}}</h1>{{end}}
+            {{if .ImageURL}}<img src="{{.ImageURL}}" alt="{{.Title}}" loading="lazy" decoding="async">{{end}}
+            {{range .Paragraphs}}<p>{{.}}</p>
+            {{end}}
+        </article>
+        {{end}}
+        {{with .List}}
+        <section>
+            <h1>{{.Title}}</h1>
+            <ul>
+                {{range .Articles}}<li><a href="{{.URL}}">{{.Title}}</a></li>
+                {{end}}
+            </ul>
+        </section>
+        {{end}}
+        <nav class="server-article-links">
+            {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>
+            {{end}}
+        </nav>
+    </main>
+    {{else}}
     <noscript><div class="shell-boot-noscript"><p>{{.ShellBoot.Texts.JavaScriptRequired}}</p></div></noscript>
+    {{end}}
     <div class="body_wrapper" data-shell-boot-content>
         <!-- Sisältö -->
         <div class="body_content">
@@ -133,6 +166,7 @@
                 <div class="navtabs_relative navbar-tab-region">
                     <div id="navmenu" class="navtabs"></div>
                 </div>
+                <nav id="navbarAllArticles" class="navbar-all-articles" hidden></nav>
                 <!-- <a href="/register_ndYOyXV0INOK3F" data-lang-key="register_a_companion"></a> -->
                 <!-- <div id="session_debug"></div> -->
             </div>

@@ -18,7 +18,7 @@
     height: 100vh;
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-areas: "controls" "auth" "front-page" "tabs" "favorites" "admin";
+    grid-template-areas: "controls" "auth" "front-page" "tabs" "articles" "favorites" "admin";
     align-content: start;
     gap: 2px;
     background-color: var(--bg_color);
@@ -454,6 +454,38 @@ body.light-mode #nav_tree .tree-current-project-badge {
 /* WL143 fills the reserved area; an empty track has no intrinsic height. */
 #navbar > #navbarFrontPage {
     grid-area: front-page;
+}
+
+/* The plain article index link under the dataset tabs (WL175, navbar_all_articles_link.js). */
+#navbar > #navbarAllArticles {
+    grid-area: articles;
+    margin: 12px 0 0;
+}
+
+#navbarAllArticles[hidden] {
+    display: none;
+}
+
+.navbar-all-articles-link {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 0 18px 0 22px;
+    color: var(--text_color);
+    font-size: 16px;
+    text-decoration-line: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
+}
+
+.navbar-all-articles-link:hover {
+    background: var(--button_hover_bg_color);
+}
+
+.navbar-all-articles-link:focus-visible {
+    outline: 2px solid var(--primary_color);
+    outline-offset: -2px;
 }
 
 .navtabs_relative {

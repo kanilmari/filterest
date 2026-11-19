@@ -3,6 +3,8 @@
   "one_project": {
     "C_card_view/C28_details_edges_and_show_more.spec.ts": "desktop-card",
     "G_navigation/G12_top_nav_home_button.spec.ts": "desktop-card",
+    "G_navigation/G22_robots_rendering_reads.spec.ts": "desktop-card",
+    "G_navigation/G23_readable_article_fallback.spec.ts": "mobile-card",
     "G_navigation/G13_phone_topbar_measurements.spec.ts": "mobile-card",
     "G_navigation/G14_home_menu_parity.spec.ts": "desktop-card",
     "G_navigation/G15_home_boxes.spec.ts": "desktop-card",

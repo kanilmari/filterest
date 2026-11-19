@@ -39,7 +39,8 @@ type indexTemplateData struct {
 	IsDev                   bool
 	InstallationEnvironment string
 	ProductName             string
-	RobotsNoIndex           bool // true → emit <meta name="robots" content="noindex, nofollow">
+	RobotsNoIndex           bool            // true → emit <meta name="robots" content="noindex, nofollow">
+	ServerFallback          *serverFallback // readable content outside the application shell (WL175)
 	ImportsCSSPath          string
 	MainBundlePath          string
 }
@@ -116,7 +117,33 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, d
 	// 3) Ajetaan templaatti ja syötetään nonce + SEO-metatiedot
 	isDev := os.Getenv("ENVIRONMENT_TYPE") == "dev"
 	meta := resolvePageMetaForDataset(r, dataset)
-	noIndex := !isIndexingAllowed()
+	noIndex := !isIndexingAllowed() || isAuthShellEntryRequest(r)
+	status := http.StatusOK
+	// An article address answers for its own article, read as the signed-out
+	// visitor (resolveArticleDocument): its own head, a permanent redirect to its
+	// canonical words, or "not found" when the visitor may read no such row.
+	document := resolveArticleDocument(r, dataset, loginToBrowse, meta.LangCode)
+	datasetTitle := meta.OGTitle
+	switch document.outcome {
+	case articleDocumentRedirect:
+		http.Redirect(w, r, document.location, http.StatusMovedPermanently)
+		return
+	case articleDocumentFound:
+		applyArticleHead(&meta, document, resolveBaseURL(r))
+	}
+	if dataset != nil && !loginToBrowse && !isAuthShellEntryRequest(r) && document.outcome != articleDocumentNotFound {
+		applyLanguageAddresses(&meta, r, document, document.pageLanguagesOf(r), resolveBaseURL(r))
+	}
+	switch document.outcome {
+	case articleDocumentNotFound:
+		// A person who signed in may have rights of their own to the row, so they
+		// get the application as before, but the page is never indexed. Anyone
+		// else is told plainly that there is nothing here.
+		noIndex = true
+		if !requestIsSignedInCheck(r) {
+			status = http.StatusNotFound
+		}
+	}
 	assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 	data := indexTemplateData{
 		pageMeta: meta,
@@ -124,8 +151,12 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, d
 		InstallationEnvironment: getInstallationEnvironment(),
 		ProductName:             getSiteName(),
 		RobotsNoIndex:           noIndex,
+		ServerFallback:          buildServerFallback(r.Context(), r, dataset, datasetTitle, document, loginToBrowse, meta.LangCode, meta.ShellBoot.Texts.PublicArticles),
 		ImportsCSSPath:          assetPaths.ImportsCSSPath,
 		MainBundlePath:          assetPaths.MainBundlePath,
+	}
+	if status != http.StatusOK {
+		w.WriteHeader(status)
 	}
 	if err := tpl.Execute(w, data); err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
@@ -178,7 +209,8 @@ func datasetsRedirectHandler(w http.ResponseWriter, r *http.Request) {
 
 // canReadDocumentDataset checks the accepted UID, never another schema's namesake.
 // It shares row-read authorization, including explicit administrator recovery,
-// with the readable catalogue. The sitemap always supplies the guest principal.
+// with the readable catalogue. The sitemap and the plain article pages read
+// through system_table_tools.PublicArticleDatasets instead (WL175).
 func canReadDocumentDataset(dataset dataset_routes.DatasetNamePool, userID int) bool {
 	if dataset.TableUID <= 0 || dataset.SchemaName != "public" || userID <= 0 {
 		return false
@@ -230,14 +262,60 @@ func isGuestUserID(userIDVal interface{}) bool {
 	return ok && userID == 1
 }
 
+// robotsRenderingReads are the data requests the application makes while it
+// draws a page for a signed-out visitor: a dataset list, an article and Home.
+// Search engines fetch them to see the page as a visitor does, so robots.txt
+// allows exactly these and keeps every other /api/ address out. The list was
+// recorded from a visitor's page loads (WL175, 19.11.2026); the browser test
+// app/testing/e2e/G_navigation/G22_robots_rendering_reads.spec.ts fails when the application
+// starts to need a read that is missing here. Every response under /api/ also
+// carries X-Robots-Tag: noindex (middlewares/search_indexing_header.go), so an
+// allowed read is fetched for drawing but never listed as a result.
+var robotsRenderingReads = []string{
+	"/api/auth-modes",
+	"/api/check-table-right",
+	"/api/check-table-rights",
+	"/api/csrf-token",
+	"/api/dataset-sort-default",
+	"/api/datasets",
+	"/api/fetch-dynamic-children",
+	"/api/filterbar-section-layout",
+	"/api/front-page",
+	"/api/get-results",
+	"/api/product-identity",
+	"/api/site-presentation-settings",
+	"/api/translations",
+	"/api/ui-languages",
+	"/api/view-field-sets",
+	"/api/view-field-settings/article-section-defaults",
+}
+
+// robotsHandler writes robots.txt from the site's own settings and address.
+// An indexable site lets search engines fetch its pages, the files they need
+// to draw them, its pictures and the rendering reads, and names the sitemap by
+// its absolute address, as the protocol requires. A site that is not indexed,
+// requires signing in, or whose settings cannot be read keeps everything out.
 func robotsHandler(w http.ResponseWriter, r *http.Request) {
-	// If indexing is not allowed, return a restrictive robots.txt
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	if !isIndexingAllowed() {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprint(w, "User-agent: *\nDisallow: /\n")
 		return
 	}
-	http.ServeFile(w, r, filepath.Join(localFrontendDir, "robots.txt"))
+	fmt.Fprint(w, buildIndexableRobots(resolveBaseURL(r)))
+}
+
+func buildIndexableRobots(baseURL string) string {
+	var document strings.Builder
+	document.WriteString("User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /api/\n")
+	// Each read is allowed exactly: the address itself ("$" ends the match) and
+	// the address with its query. A plain prefix would also open longer
+	// neighbours such as /api/get-results-vector or /api/view-field-sets/….
+	for _, read := range robotsRenderingReads {
+		document.WriteString("Allow: " + read + "$\nAllow: " + read + "?\n")
+	}
+	document.WriteString("\nSitemap: " + baseURL + "/sitemap.xml\n")
+	return document.String()
 }
 
 // setAuthShellNoStoreHeaders protects every rendered shell, including public pages.

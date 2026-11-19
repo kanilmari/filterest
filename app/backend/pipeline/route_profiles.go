@@ -125,6 +125,7 @@ var RouteProfiles = map[string]RouteProfile{
 	// Static / navigation
 	"router.faviconHandler":                 PublicProfile,
 	"router.robotsHandler":                  PublicProfile,
+	"router.publicArticlesHandler":          PublicProfile,
 	"router.healthHandler":                  PublicProfile,
 	"router.systemHealthHandler":            PublicProfile,
 	"router.systemReadyHandler":             PublicProfile,

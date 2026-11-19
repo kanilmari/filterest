@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- public_articles.html -->
+<!-- The plain article index (/articles) and one dataset's article list (/articles/{dataset}). -->
+<!-- Filled by app/backend/core_components/router/public_articles_page.go with what a signed-out visitor may read. -->
+<!-- Ordinary links and no application JavaScript, so any browser and any search engine can follow them (WL175). -->
+<html lang="{{.LangCode}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.PageTitle}}</title>
+    <meta name="description" content="{{.MetaDescription}}">
+    <link rel="canonical" href="{{.CanonicalURL}}">
+    {{if .RobotsNoIndex}}<meta name="robots" content="noindex, nofollow">{{end}}
+    <link rel="icon" href="{{.FaviconPath}}">
+    <script nonce="{{.CSPNonce}}">
+    // The application's own light/dark choice, when the visitor has made one here before.
+    try { var theme = localStorage.getItem('theme'); if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme); } catch (error) { /* Storage blocked: follow the system. */ }
+    </script>
+    <style nonce="{{.CSPNonce}}">
+    :root { --page-background: #fafafa; --page-text: #202020; --page-muted: #5c5c5c; --page-link: #0b57a4; --page-rule: #dcdcdc; color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) { --page-background: #202020; --page-text: #f2f2f2; --page-muted: #b8b8b8; --page-link: #8ab8ff; --page-rule: #3c3c3c; color-scheme: dark; }
+    }
+    :root[data-theme="dark"] { --page-background: #202020; --page-text: #f2f2f2; --page-muted: #b8b8b8; --page-link: #8ab8ff; --page-rule: #3c3c3c; color-scheme: dark; }
+    html, body { margin: 0; background: var(--page-background); color: var(--page-text); }
+    body { font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: 32px 16px 64px; overflow-wrap: anywhere; }
+    h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 24px; }
+    h2 { font-size: 1.3rem; margin: 40px 0 8px; }
+    h2 a { color: inherit; }
+    p { margin: 0 0 12px; }
+    .section-description, .excerpt, .page-label { color: var(--page-muted); }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 12px 0; border-bottom: 1px solid var(--page-rule); }
+    li a { font-weight: 600; }
+    .excerpt { display: block; font-size: 0.95rem; margin-top: 4px; }
+    a { color: var(--page-link); }
+    a:focus-visible { outline: 2px solid currentcolor; outline-offset: 2px; }
+    nav { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 32px; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>{{.Heading}}</h1>
+    {{if .PageLabel}}<p class="page-label">{{.PageLabel}}</p>{{end}}
+    {{range .Sections}}
+    <section>
+        {{if .Title}}<h2><a href="{{.URL}}">{{.Title}}</a></h2>{{end}}
+        {{if .Description}}<p class="section-description">{{.Description}}</p>{{end}}
+        <ul>
+            {{range .Articles}}<li><a href="{{.URL}}">{{.Title}}</a>{{if .Excerpt}}<span class="excerpt">{{.Excerpt}}</span>{{end}}</li>
+            {{end}}
+        </ul>
+        {{if .MoreURL}}<p><a href="{{.MoreURL}}">{{.MoreLabel}}</a></p>{{end}}
+    </section>
+    {{end}}
+    {{if .EmptyText}}<p>{{.EmptyText}}</p>{{end}}
+    {{if or .PreviousURL .NextURL}}
+    <nav aria-label="{{.Heading}}">
+        {{if .PreviousURL}}<a href="{{.PreviousURL}}" rel="prev">{{.PreviousLabel}}</a>{{end}}
+        {{if .NextURL}}<a href="{{.NextURL}}" rel="next">{{.NextLabel}}</a>{{end}}
+    </nav>
+    {{end}}
+    <nav>
+        {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>
+        {{end}}
+    </nav>
+</main>
+</body>
+</html>
