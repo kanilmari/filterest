@@ -104,3 +104,23 @@ func TestDatasetNamePoolResolverKeepsUIDAndAmbiguityInPermissionSubsets(t *testi
 		}
 	}
 }
+
+// The plain article index (/articles, WL175) yields to a dataset that answers
+// to "articles". That check reads these pools, so the name must survive here:
+// an automatic alias of app_articles and a stored alias both keep it.
+func TestArticlesNameStaysWithTheDatasetThatOwnsIt(t *testing.T) {
+	automatic := buildDatasetNamePools([]datasetNamePoolTable{{21, "app_articles", "public"}}, nil)
+	if automatic[21].PreferredName != "articles" {
+		t.Fatalf("app_articles lost its automatic address: %#v", automatic[21])
+	}
+	stored := buildDatasetNamePools([]datasetNamePoolTable{{22, "app_posts", "public"}},
+		map[int][]datasetNamePoolAlias{22: {{"articles", true}}})
+	if stored[22].PreferredName != "articles" {
+		t.Fatalf("a stored articles alias was dropped: %#v", stored[22])
+	}
+	db := openDatasetRouteTestDB(t, nil, map[string]string{"app_posts": "articles"})
+	defer db.Close()
+	if got := ResolveRawDatasetNameWithQuerier(db, "articles"); got != "app_posts" {
+		t.Fatalf("incoming /articles no longer reaches its dataset: %s", got)
+	}
+}

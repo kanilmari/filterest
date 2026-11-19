@@ -48,7 +48,6 @@ var reservedDatasetRouteSegments = map[string]struct{}{
 	"admin":      {},
 	"api":        {},
 	"apps":       {},
-	"articles":   {}, // the plain article index (WL175)
 	"datasets":   {},
 	"frontend":   {},
 	"health":     {},

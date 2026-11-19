@@ -151,9 +151,10 @@ func publicArticleLinks(dataset system_table_tools.PublicArticleDataset, article
 // that requires signing in has no public articles, so these addresses do not
 // exist there.
 func publicArticlesHandler(w http.ResponseWriter, r *http.Request) {
-	// An installation that already owns the name "articles" (a dataset or an
-	// alias made before the name was reserved) keeps its own addresses: the
-	// plain index never takes them over. New datasets cannot take the name.
+	// A dataset or alias that answers to "articles" keeps its own addresses,
+	// including /articles/{id}-{words}: the plain index never takes them over.
+	// The name is deliberately not reserved, because a reservation would drop
+	// such an existing alias before this check could see it.
 	if articlesNameIsOwnedByADataset() {
 		rootHandler(w, r)
 		return
