@@ -23,9 +23,10 @@ import {
 import { getSelectedDataset, clearSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import {
-    canReadDatasetFromRegistry,
+    canReadDatasetFromRegistry, hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry,
 } from "../nav_engine/dataset_access_registry.js";
-import { useStorageParams, useUrlParams } from "../nav_engine/query_params.js";
+import { DATASET_PREFIX, useStorageParams, useUrlParams } from "../nav_engine/query_params.js";
+import { buildDatasetPath } from "../nav_engine/dataset_aliases.js";
 import { fetchProjectTabs, acceptMainDatasetTabs, AUTH_ACTION_TAB_IDS } from "./main_dataset_tabs.js";
 import { renderNavbarAllArticlesLink } from "../navbar/navbar_all_articles_link.js";
 import { getTabIconPath } from "./tab_icon_library.js";
@@ -190,7 +191,20 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
 
         renderedTabIds.add(tabData.id);
 
-        const tabButton = document.createElement("button");
+        // A dataset's entry is a real link to the dataset's own address: search
+        // engines follow it, and a person can open it in a new tab or copy it.
+        // The application still opens it in place (attachFastTabOpenHandlers).
+        // Entries that are not a dataset (signing in, registration) stay buttons.
+        const datasetAddress = tabData.dataset && tabData.route
+            ? buildDatasetPath(tabData.dataset, DATASET_PREFIX) : null;
+        const tabButton = document.createElement(datasetAddress ? "a" : "button");
+        if (datasetAddress) {
+            tabButton.href = datasetAddress;
+            tabButton.dataset.linkDataset = tabData.dataset;
+            // A link is draggable by default; only an administrator's reordering
+            // makes a tab draggable (tab_reorder_handler.js).
+            tabButton.draggable = false;
+        }
         tabButton.classList.add("navtablinks");
         tabButton.setAttribute("data-id", tabData.id);
         tabButton.dataset.testid = `tab-${tabData.id}`;
@@ -363,6 +377,32 @@ function createNavbarAuthActionButton({ id, text, langKey, iconPath }) {
     return button;
 }
 
+/**
+ * Keeps the menu's dataset links on the addresses the catalogue names now. A
+ * dataset's public name can change while the page is open (an alias renamed or
+ * removed); the old address would then answer "not found" when a person opens
+ * the link in a new tab or copies it. Without a catalogue there is nothing to
+ * check against, so the links stay as they are.
+ */
+function refreshMenuDatasetLinks() {
+    if (!hasDatasetAccessSnapshot()) return;
+    for (const link of document.querySelectorAll("#navmenu a.navtablinks[data-link-dataset]")) {
+        const address = buildDatasetPath(link.dataset.linkDataset, DATASET_PREFIX);
+        if (link.getAttribute("href") !== address) link.setAttribute("href", address);
+    }
+}
+subscribeDatasetAccessRegistry(refreshMenuDatasetLinks);
+
+/**
+ * Tells whether a press on a dataset's link asks the browser to open it
+ * elsewhere (a new tab or window, or a download). The browser does that itself;
+ * the application must not open the dataset in place as well.
+ */
+function opensLinkElsewhere(element, event) {
+    return element instanceof HTMLAnchorElement
+        && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey);
+}
+
 function attachFastTabOpenHandlers(button, tabId) {
     let suppressClickAfterMouseDown = false;
 
@@ -370,7 +410,8 @@ function attachFastTabOpenHandlers(button, tabId) {
         // An administrator's press may become a native drag. Opening its
         // dataset here tears down Home and moves the navbar before the drop.
         // Draggable tabs navigate on click, after the drag handler's guard.
-        if (event.defaultPrevented || event.button !== 0 || button.draggable) {
+        if (event.defaultPrevented || event.button !== 0 || button.draggable
+            || opensLinkElsewhere(button, event)) {
             return;
         }
         suppressClickAfterMouseDown = true;
@@ -388,6 +429,9 @@ function attachFastTabOpenHandlers(button, tabId) {
             event.preventDefault();
             return;
         }
+        if (opensLinkElsewhere(button, event)) return;
+        // A dataset's link is opened by the application, not by loading a new page.
+        event.preventDefault();
         closeOverlayNavbarOnNavigation(event);
         void openNavTab(tabId);
     });

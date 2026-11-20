@@ -44,6 +44,7 @@ async function loadModule() {
         getSelectedDataset: getSelectedDatasetMock,
     }));
     vi.doMock("../navigation/nav_engine/query_params.js", () => ({
+        DATASET_PREFIX: "/",
         getParams: getParamsMock,
         setParams: setParamsMock,
         updateURL: updateURLMock,

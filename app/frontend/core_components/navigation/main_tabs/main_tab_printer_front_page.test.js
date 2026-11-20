@@ -113,6 +113,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
 }));
 
 vi.mock("../nav_engine/query_params.js", () => ({
+    DATASET_PREFIX: "/",
     useStorageParams: vi.fn(),
     useUrlParams: vi.fn(),
 }));

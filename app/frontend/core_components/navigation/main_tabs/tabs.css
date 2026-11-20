@@ -22,6 +22,13 @@
         background-color var(--navtab-presentation-transition-duration, 150ms) var(--navtab-presentation-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
+/* A dataset's entry is a link (main_tab_printer.js); it looks exactly like the other entries. */
+a.navtablinks {
+    display: block;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
 .navtablinks[draggable="true"] {
     cursor: grab;
 }

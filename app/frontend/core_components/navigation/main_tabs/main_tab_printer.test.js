@@ -114,6 +114,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
 }));
 
 vi.mock("../nav_engine/query_params.js", () => ({
+    DATASET_PREFIX: "/",
     useStorageParams: vi.fn(),
     useUrlParams: vi.fn(),
 }));
@@ -451,6 +452,58 @@ describe("initTabs", () => {
         expect(handle_all_navigation).toHaveBeenCalledTimes(2);
         expect(navbar.classList.contains('collapsed')).toBe(width <= 1850);
         expect(localStorage.getItem('navVisibleWide')).toBe('true');
+    });
+
+    test("a dataset's entry is a real link that the application still opens in place", async () => {
+        // Search engines follow only real links; a person can also open one in a new tab or copy it.
+        openNavbarAtWidth(1851);
+        const { initTabs } = await import("./main_tab_printer.js");
+        const { buildDatasetPath } = await import("../nav_engine/dataset_aliases.js");
+        await initTabs();
+        vi.mocked(handle_all_navigation).mockClear();
+
+        const link = document.querySelector('.navtablinks[data-id="app_service_catalog"]');
+        expect(link.tagName).toBe("A");
+        expect(link.getAttribute("href")).toBe(buildDatasetPath("app_service_catalog", "/"));
+        // A link is draggable by default; only an administrator's reordering may make it so.
+        expect(link.draggable).toBe(false);
+        expect(document.querySelectorAll("#navmenu a.navtablinks:not([href])")).toHaveLength(0);
+
+        // Opening it elsewhere is the browser's: the application neither opens it nor stops the browser.
+        for (const modifier of ["ctrlKey", "metaKey", "shiftKey"]) {
+            link.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, [modifier]: true }));
+            const elsewhere = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, [modifier]: true });
+            link.dispatchEvent(elsewhere);
+            expect(elsewhere.defaultPrevented).toBe(false);
+        }
+        expect(handle_all_navigation).not.toHaveBeenCalled();
+
+        // An ordinary activation (keyboard Enter arrives as a click) opens it in place, not as a new page.
+        const inPlace = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+        link.dispatchEvent(inPlace);
+        expect(inPlace.defaultPrevented).toBe(true);
+        expect(handle_all_navigation).toHaveBeenCalledExactlyOnceWith(
+            "app_service_catalog", expect.anything(), { skipUrlUpdate: false, forceReload: false },
+        );
+    });
+
+    test("a dataset's link follows a public name renamed while the page is open", async () => {
+        // An alias renamed in Dataset aliases leaves the old address answering "not found";
+        // a menu link opened in a new tab or copied must not keep it.
+        openNavbarAtWidth(1851);
+        const { initTabs } = await import("./main_tab_printer.js");
+        const { primeDatasetAccessRegistry } = await import("../nav_engine/dataset_access_registry.js");
+        await initTabs({ preloadedContentTablesResponse: {
+            datasets: [{ dataset_name: "app_reports", table_uid: 41, names: ["app_reports", "old-reports"],
+                preferred_name: "old-reports", is_top_level_in_current_project: true, can_read_rows: true }],
+            tab_order: null,
+        } });
+        const link = document.querySelector('.navtablinks[data-id="app_reports"]');
+        expect(link.getAttribute("href")).toBe("/old-reports");
+
+        primeDatasetAccessRegistry({ datasets: [{ dataset_name: "app_reports", table_uid: 41,
+            names: ["app_reports", "new-reports"], preferred_name: "new-reports", can_read_rows: true }] });
+        expect(link.getAttribute("href")).toBe("/new-reports");
     });
 
     test.each(['Home', 'dataset'])('draggable tabs preserve %s through reorder and exact restoration', async surface => {

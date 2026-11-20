@@ -59,6 +59,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
     endpoint_router: vi.fn().mockResolvedValue({ datasets: [], tab_order: null }),
 }));
 vi.mock("../nav_engine/query_params.js", () => ({
+    DATASET_PREFIX: "/",
     useStorageParams: vi.fn(),
     useUrlParams: vi.fn(),
 }));
