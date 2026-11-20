@@ -1,17 +1,17 @@
-# Filterest 9.6.12
+# Filterest 9.6.13
 
-## Articles in search engines
+## Article links open their article
 
-Search engines can find and show a public site's articles. Each article a signed-out visitor may read has its own title, description, picture and address words in its page head and link previews. An address with missing or old words moves permanently to the current one, and a missing or hidden article answers "not found". Finnish and English versions have their own `?lang=` addresses, which the page and the sitemap announce. The sitemap lists Home, the menu datasets and every such article in every published language. robots.txt is written from the site's settings: an indexable site lets search engines fetch the data a visitor's page needs, while a site that is not indexed or requires signing in keeps everything out. Sign-in, registration and administration pages tell search engines not to index them. Every server-side read uses the signed-out visitor's own rights.
+A link that names one article, as the All articles page, the sitemap, search results and shared links give it, opens that article also on a dataset whose rows open as an image-first article (IFAV or Page). Such a link used to show the dataset's list: the list loading underneath the article replaced the article's address with its own before the article could open. The list view or search the link names stays behind the article, the readable address stays in the address bar, and the dataset's saved default sort is applied when the article is closed. An image-first article also opens when the list behind it happens to answer first, and a record opened while a slow article is still loading is the one shown.
 
-## Reading without the application
+## Titles for readers and search engines
 
-An article's text is part of its page, so it can be read when JavaScript is off or the application cannot start. A new plain page, All articles (`/articles`), lists the menu datasets' articles 20 to a page, and the menu links to it at the bottom. Sites that require signing in have no such page.
+An open image-first article names the browser tab after itself, as an ordinary article does; this is also the title a search engine reads after rendering the page. A title stored with heading markup, such as `<h1>…</h1>`, reads as plain text in page titles, link previews and the plain article pages, exactly as the application shows it.
 
-## Image-first articles
+## Menu and language addresses
 
-A card photo opens its image-first article at once, growing from the photo already on the card while the rest loads. Closing the article retraces the opening. The Page view's article panel has an outline in the theme's border colour.
+The menu's datasets are real links: search engines can follow them, and a person can open a dataset in a new tab or copy its link, while an ordinary click still opens it in place. Hovering All articles no longer hides the menu's right edge. A language address (`?lang=fi`) no longer shows the language as a filter above the list, keeps it when the filters are cleared, and no longer brings it back in other tabs or on later visits.
 
 ## Database and rollback
 
-The upgrade from Filterest 9.6.10 migrates database 9.13.7 to 9.13.8. The migration only adds interface texts; the schema does not change. Back up the database and media before upgrading. To roll back after migration, restore the matching pre-upgrade database backup and the previous application version together.
+The database stays at 9.13.8; the upgrade from Filterest 9.6.12 runs no migrations. To roll back, install the previous application version; back up the database and media before upgrading, as always.
