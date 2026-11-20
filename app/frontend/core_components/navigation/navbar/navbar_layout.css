@@ -459,7 +459,9 @@ body.light-mode #nav_tree .tree-current-project-badge {
 /* The plain article index link under the dataset tabs (WL175, navbar_all_articles_link.js). */
 #navbar > #navbarAllArticles {
     grid-area: articles;
-    margin: 12px 0 0;
+    /* The menu's right edge is its own inset shadow (see #navbar); a hovered
+       link's background must stop short of those 2px instead of painting over it. */
+    margin: 12px 2px 0 0;
 }
 
 #navbarAllArticles[hidden] {

@@ -18,6 +18,14 @@ describe('navbar layout CSS', () => {
         expect(css).not.toMatch(/grid-row:\s*\d/);
     });
 
+    test("keeps the article index link clear of the menu's 2px right edge", () => {
+        // The edge is #navbar's own inset shadow; a hovered link's background painted over it.
+        const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
+        expect(css).toContain('box-shadow: inset -2px 0 0 0 var(--border_color);');
+        const rule = css.match(/#navbar > #navbarAllArticles \{([^}]*)\}/)?.[1] || '';
+        expect(rule).toMatch(/margin:\s*12px 2px 0 0;/);
+    });
+
     test('keeps the opening top row neutral except for its menu button', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
 
