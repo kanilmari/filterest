@@ -17,6 +17,7 @@ import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.j
 import { getMainTabLangKey } from "../main_tabs/main_tab_lang_keys.js";
 import { DATASET_PREFIX } from "./query_params.js";
 import { getPrefixFromPathname, parseDeepLink } from "./history_navigation_handler_helpers.js";
+import { IMAGE_FIRST_ARTICLE_CHANGED, findImageFirstArticle } from "./image_first_article_presence.js";
 
 /** Same separator the server uses when it builds the first-load title. */
 const BROWSER_TAB_TITLE_SEPARATOR = " — ";
@@ -143,19 +144,23 @@ function readOpenArticleTitleForBrowserTab(datasetName) {
     if (!datasetName) {
         return "";
     }
-    const datasetContainer = document.getElementById(`${datasetName}_container`);
-    if (!datasetContainer) {
-        return "";
+    // The article on top is the one the address names: an image-first article is
+    // mounted in the shared dialog, above whatever the dataset's own container
+    // still holds. Until it has drawn its heading, the article beneath still names the tab.
+    const candidates = [
+        findImageFirstArticle(datasetName),
+        document.getElementById(`${datasetName}_container`)
+            ?.querySelector(".active_row_article, .active_big_card"),
+    ];
+    for (const openArticle of candidates) {
+        const heading = openArticle?.querySelector(".big_card_header_value")
+            || openArticle?.querySelector(".big_card_header");
+        const title = String(heading?.textContent || "").trim();
+        if (title) {
+            return title;
+        }
     }
-    const openArticle = datasetContainer.querySelector(
-        ".active_row_article, .active_big_card"
-    );
-    if (!openArticle) {
-        return "";
-    }
-    const heading = openArticle.querySelector(".big_card_header_value")
-        || openArticle.querySelector(".big_card_header");
-    return String(heading?.textContent || "").trim();
+    return "";
 }
 
 /** Resolves the whole title from the state the application is in right now. */
@@ -233,9 +238,10 @@ function handleInterfaceLanguageChanged() {
 }
 
 /**
- * Subscribes the title owner to the two boundaries that announce themselves
- * instead of calling in: an article opening or closing, and the interface
- * language changing. Safe to call more than once.
+ * Subscribes the title owner to the boundaries that announce themselves
+ * instead of calling in: an article opening or closing, an image-first article
+ * drawing its text or leaving the screen, and the interface language changing.
+ * Safe to call more than once.
  *
  * It runs on the first title request rather than while this module is being
  * evaluated, so a shared import cycle can never leave a subscription unbound.
@@ -245,6 +251,9 @@ function startBrowserTabTitleOwnership() {
         return;
     }
     document.addEventListener("row-article-toggle", handleRowArticleToggle);
+    // An image-first article has drawn its text, drawn it again in another language,
+    // or was taken off the screen without a history restoration to retitle the tab.
+    document.addEventListener(IMAGE_FIRST_ARTICLE_CHANGED, handleRowArticleToggle);
     languageChangeObserver = new MutationObserver(handleInterfaceLanguageChanged);
     languageChangeObserver.observe(document.documentElement, {
         attributes: true,
@@ -257,6 +266,7 @@ export function resetBrowserTabTitleOwnershipForTests() {
     latestTitleRequest = null;
     hasWrittenBrowserTabTitle = false;
     document.removeEventListener("row-article-toggle", handleRowArticleToggle);
+    document.removeEventListener(IMAGE_FIRST_ARTICLE_CHANGED, handleRowArticleToggle);
     languageChangeObserver?.disconnect();
     languageChangeObserver = null;
 }

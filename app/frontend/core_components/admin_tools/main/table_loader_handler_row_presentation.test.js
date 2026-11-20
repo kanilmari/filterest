@@ -36,11 +36,20 @@ vi.mock("../../front_page/front_page_navigation.js", () => ({
     openFrontPage: mocks.openFrontPage,
 }));
 
-const ifav = vi.hoisted(() => ({ restore: vi.fn(async () => true) }));
+// The claim is recorded here so a case can ask who owned the entry at each step.
+const ifav = vi.hoisted(() => {
+    const landing = { owned: false };
+    return {
+        landing,
+        restore: vi.fn(async () => true),
+        claim: vi.fn(() => { landing.owned = true; return () => { landing.owned = false; }; }),
+    };
+});
 vi.mock("../../navigation/nav_engine/image_first_view_history.js", () => ({
     isImageFirstViewURL: () => new URL(location.href).searchParams.get("view") === "image_first_view",
     getImageFirstViewBackingView: () => "card",
     handleImageFirstViewHistory: ifav.restore,
+    claimImageFirstViewEntry: ifav.claim,
 }));
 
 vi.mock("../../navigation/database_tree/nav_builder.js", () => ({
@@ -92,6 +101,7 @@ import { setRowPresentationChoice } from "../../table_views/row_presentation/row
 
 function resetLoaderMocks(datasets) {
     vi.clearAllMocks();
+    ifav.landing.owned = false;
     resetEarlierVisitForgettingForTests();
     localStorage.clear();
     sessionStorage.clear();
@@ -139,6 +149,57 @@ test("a superseding address while a row is resolving leaves the new landing enti
         expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
         expect(location.pathname).toBe('/dev_agent_tasks/29');
     } finally { decision.mockRestore(); }
+});
+
+test("a plain row address its row opens image-first is claimed for the article while the list behind it loads", async () => {
+    // A shared link or a search result does not name the view. The list behind
+    // the article then wrote its own address over the row (its settled view, a
+    // saved sort) and the article never opened (fintravel.fi, 9.6.12). The entry
+    // is claimed instead, and the address stays exactly as it was requested.
+    resetLoaderMocks(['dev_agent_tasks']);
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/image_first_page_view']));
+    setRowPresentationChoice('dev_agent_tasks', 'image_first_page_view');
+    history.replaceState({ someoneElses: 'state' }, '', '/dev_agent_tasks/853-a-shared-link?lang=fi#image=7_853_1.jpg');
+    const seen = {};
+    const snapshot = () => ({ owned: ifav.landing.owned, address: location.pathname + location.search + location.hash });
+    mocks.openNavTab.mockImplementationOnce(async () => { seen.whileListLoads = snapshot(); });
+    ifav.restore.mockImplementationOnce(async () => { seen.whileArticleOpens = snapshot(); return true; });
+    await load_tables();
+    const requested = '/dev_agent_tasks/853-a-shared-link?lang=fi#image=7_853_1.jpg';
+    expect(seen.whileListLoads).toEqual({ owned: true, address: requested });
+    expect(seen.whileArticleOpens).toEqual({ owned: true, address: requested });
+    // An opened article owns its entry by being open; the landing keeps nothing.
+    expect(ifav.landing.owned).toBe(false);
+    expect(history.state.someoneElses).toBe('state');
+    expect(ifav.restore).toHaveBeenCalledWith(expect.objectContaining({ tableName: 'dev_agent_tasks', rowId: '853', viewKey: 'image_first_page_view' }));
+});
+
+test("the claim ends when the list behind an image-first row could not finish loading", async () => {
+    resetLoaderMocks(['dev_agent_tasks']);
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/image_first_page_view']));
+    setRowPresentationChoice('dev_agent_tasks', 'image_first_page_view');
+    history.replaceState({}, '', '/dev_agent_tasks/853');
+    mocks.openNavTab.mockResolvedValueOnce({ abort: true });
+    await load_tables();
+    expect(ifav.claim).toHaveBeenCalledTimes(1);
+    expect(ifav.restore).not.toHaveBeenCalled();
+    expect(ifav.landing.owned).toBe(false);
+});
+
+test("a row that opens as an ordinary article, or may not open at all, claims nothing", async () => {
+    resetLoaderMocks(['dev_agent_tasks']);
+    history.replaceState({}, '', '/dev_agent_tasks/853');
+    await load_tables();
+    expect(mocks.setUnifiedTableState).toHaveBeenCalledWith('dev_agent_tasks', expect.objectContaining({
+        articleView: expect.objectContaining({ collapsed: true, expandedId: '853' }),
+    }));
+    expect(ifav.claim).not.toHaveBeenCalled();
+
+    resetLoaderMocks(['dev_agent_tasks']);
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view', '/ui/view/table']));
+    history.replaceState({}, '', '/dev_agent_tasks/853?view=image_first_page_view');
+    await load_tables();
+    expect(ifav.claim).not.toHaveBeenCalled();
 });
 
 test("a bare row URL opens its saved Page choice without preselecting the classic dataset view", async () => {

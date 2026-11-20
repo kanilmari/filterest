@@ -29,13 +29,14 @@ import { show_filterbar_search_basic_controls_section } from "../../../ui_config
 import { resolveSortSelection } from "./sort_sync_state_helpers.js";
 import { ongoingSearchResults } from "../text_search/dataset_search_executor.js";
 
-/** Reset query filters while preserving the chosen ordinary ordering and view. */
+/** Reset query filters while preserving the chosen ordinary ordering, the view and the address's language. */
 export function clearAllFilters(tableName, filterBar) {
     const state = getUnifiedTableState(tableName);
     const oldParams = getParams(tableName);
     const selection = resolveSortSelection({ ...oldParams, search: "" }, state);
     const [column, direction] = selection.split(":");
-    const params = { sort_column: column, sort_order: direction };
+    // The language an address names is the page's, not a filter: clearing the filters keeps it.
+    const params = { ...(oldParams.lang ? { lang: oldParams.lang } : {}), sort_column: column, sort_order: direction };
     if (oldParams.view) params.view = oldParams.view;
     ongoingSearchResults[tableName]?.abortController?.abort();
     ongoingSearchResults[tableName] = null;

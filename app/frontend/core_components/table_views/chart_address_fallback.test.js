@@ -20,7 +20,7 @@ vi.mock('../navigation/main_tabs/main_tab_printer.js', () => ({
 }));
 vi.mock('../dev_tools/function_counter.js', () => ({ count_this_function: vi.fn() }));
 vi.mock('../front_page/front_page_navigation.js', () => ({ isSeparateFrontPageEnabled: () => false }));
-vi.mock('../navigation/nav_engine/image_first_view_history.js', () => ({ isImageFirstViewURL: () => false }));
+vi.mock('../navigation/nav_engine/image_first_view_history.js', () => ({ imageFirstViewOwnsEntry: () => false, isImageFirstViewURL: () => false }));
 vi.mock('../navigation/nav_engine/card_article_return_state.js', () => ({
     getCardArticleReturnToken: () => null, invalidateCardArticleReturn: vi.fn(),
     shouldPreserveCardReturnHost: () => false,

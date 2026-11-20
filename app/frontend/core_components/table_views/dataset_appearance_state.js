@@ -202,24 +202,40 @@ export function createDatasetAppearanceState() {
         return Object.freeze({ registry: true, epoch, lifecycleVersion,
             registryVersion: getTableSpecOwnershipVersion(), siteGeneration, sequence: ++sequence });
     }
-    function accept(name, snapshot, { token, isCurrent: canCommit = () => true } = {}) {
-        const resolved = readDatasetAppearance(snapshot);
+    /** Says why an answer may not become the saved appearance, or '' when it may. */
+    function refusal(name, snapshot, token, canCommit) {
         if (!isCurrent(token) || !canCommit() || !Number.isInteger(snapshot?.dataset_uid) || snapshot.dataset_uid < 1
-            || !resolved) return false;
+            || !readDatasetAppearance(snapshot)) return 'unusable';
         const uid = String(snapshot.dataset_uid), knownUID = resolveUID(name);
-        if (knownUID && knownUID !== uid) return false;
+        if (knownUID && knownUID !== uid) return 'unusable';
         // A denial clears appearance without cancelling readable related rows.
         // Its dispatch order still blocks older requests from restoring privacy.
         const revokedSequence = Math.max(revokedSequences.get(`name:${name}`) || 0,
             revokedSequences.get(`uid:${uid}`) || 0);
-        if (token && token.sequence <= revokedSequence) return false;
+        if (token && token.sequence <= revokedSequence) return 'unusable';
         const previous = entries.get(uid);
         // Dataset revisions are monotonic integers (or the absent-row token).
         const revision = value => value === 'none' ? 0n : /^\d+$/.test(String(value)) ? BigInt(value) : null;
         const before = revision(previous?.snapshot.version), after = revision(snapshot.version);
-        if (previous && before !== null && after !== null && after < before) return false;
+        if (previous && before !== null && after !== null && after < before) return 'superseded';
         if (previous && before === after && token
-            && (token.siteGeneration < previous.siteGeneration || token.sequence < previous.sequence)) return false;
+            && (token.siteGeneration < previous.siteGeneration || token.sequence < previous.sequence)) return 'superseded';
+        return '';
+    }
+    /**
+     * Tells whether an answer was kept out only because an authorized answer at least as
+     * new already stands for the same dataset. Its own request is still current and nothing
+     * was denied since it was sent, so the rows it carries remain a permitted read: an
+     * article opening must not be lost to a list reload that happened to be answered first.
+     */
+    function isSuperseded(name, snapshot, { token, isCurrent: canCommit = () => true } = {}) {
+        return refusal(name, snapshot, token, canCommit) === 'superseded';
+    }
+    function accept(name, snapshot, { token, isCurrent: canCommit = () => true } = {}) {
+        if (refusal(name, snapshot, token, canCommit)) return false;
+        const resolved = readDatasetAppearance(snapshot);
+        const uid = String(snapshot.dataset_uid);
+        const previous = entries.get(uid);
         const previousDefaults = savedRowDefaults(name);
         names.set(name, uid);
         entries.set(uid, { snapshot: clone({ ...snapshot, effective: resolved, overrides: snapshot.overrides || {} }),
@@ -411,7 +427,7 @@ export function createDatasetAppearanceState() {
         revokedSequences.clear();
         signalRowDefaults();
     }
-    return { capture, captureRegistry, isCurrent, accept, bind, paint, ownsSurface, effective, updateSite, revoke, rejectRelated, forget, clear,
+    return { capture, captureRegistry, isCurrent, accept, isSuperseded, bind, paint, ownsSurface, effective, updateSite, revoke, rejectRelated, forget, clear,
         savedSnapshot, savedRowDefaults, setPreview, releasePreview };
 }
 

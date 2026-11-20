@@ -92,6 +92,8 @@ export function isDatasetRowPath(pathname, datasetPrefix, expectedDatasetName) {
  */
 export function buildParamsFromParsed(parsed) {
     return {
+        // The address's language comes first, where a language address has it.
+        ...(parsed.lang ? { lang: parsed.lang } : {}),
         ...parsed.filters,
         ...(parsed.sort.column ? { sort_column: parsed.sort.column } : {}),
         ...(parsed.sort.direction ? { sort_order: parsed.sort.direction } : {}),

@@ -2,6 +2,7 @@
 // Proves the two explicit Page pilot entry paths with disposable rows and media.
 // Connects native APIs, real Page history and the existing IFAV denial notice.
 // Restores only the article-button setting and account theme, including on failure.
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { isDeepStrictEqual } from 'node:util';
 import { login, loadCredentials, loadUserCredentials, readSessionInfo } from '../helpers/auth';
@@ -76,6 +77,8 @@ const test = base.extend<{ pilot: Pilot; homeButton: void }>({
       const enabled = await postJsonWithCsrf(page, '/api/asset-linking/images/enable', { parent_table: dataset, max_file_size_mb: 10 });
       expect(enabled.status, enabled.body).toBe(201);
       await openTempDatasetRowArticle(page, dataset, 1);
+      // Article blocks start closed (#986); the picture list is drawn only in an open one.
+      await openArticleDisclosure(page, 'images');
       const input = page.locator('.big_card_image_gallery input[type="file"]').first();
       await input.setInputFiles({ name: 'page-pilot.png', mimeType: 'image/png', buffer: solidPng(320, 640) });
       await expect(page.locator('[data-testid^="big-card-image-thumb-"]').first()).toBeVisible();

@@ -195,7 +195,9 @@ function applyChatFilterPlan(table_name, plan = {}) {
 
     const sortColumn = String(plan?.sort_column || "").trim();
     const sortOrder = String(plan?.sort_order || "").trim().toUpperCase();
-    const nextParams = { ...filters };
+    // The plan replaces the filters; the language the address names is the page's and stays.
+    const addressLanguage = getParams(table_name).lang;
+    const nextParams = { ...(addressLanguage ? { lang: addressLanguage } : {}), ...filters };
     if (sortColumn && ["ASC", "DESC"].includes(sortOrder)) {
         currentState.sort.column = sortColumn;
         currentState.sort.direction = sortOrder;

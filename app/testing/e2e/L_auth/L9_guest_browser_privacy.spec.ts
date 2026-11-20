@@ -4,6 +4,7 @@
 // Never changes login_to_browse or reads credentials outside loadCredentials().
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { login, loadCredentials, logout, readSessionInfo } from '../helpers/auth';
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 import { buildTempDatasetName, createTempDataset, dropTempDataset, openTempDatasetRowArticle,
   fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { configureArticleFieldRoles, postJsonWithCsrf } from '../helpers/image-first-article';
@@ -114,6 +115,8 @@ test.describe('L9 — Guest browser privacy', () => {
       const enabled = await postJsonWithCsrf(ownerPage, '/api/asset-linking/images/enable', { parent_table: dataset, max_file_size_mb: 1 });
       expect(enabled.status, enabled.body).toBe(201);
       await openTempDatasetRowArticle(ownerPage, dataset, 1);
+      // Article blocks start closed (#986); the picture list is drawn only in an open one.
+      await openArticleDisclosure(ownerPage, 'images');
       // A tiny synthetic PNG, never a local or owner-owned media file.
       await ownerPage.locator('.big_card_image_gallery input[type="file"]').first().setInputFiles({
         name: 'guest-privacy.png', mimeType: 'image/png',

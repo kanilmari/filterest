@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { announceImageFirstArticle, markImageFirstArticle } from "./image_first_article_presence.js";
 
 // The same composed titles the server is checked against, so the two sides cannot drift.
 // Its twin reader is TestComposeBrowserTabTitleMatchesTheSharedExamples in
@@ -163,6 +164,54 @@ describe("browser tab title ownership", () => {
         expect(document.title).toBe(
             "Sunset in Lapland — Travel deals — fintravel.fi"
         );
+    });
+
+    test("names an image-first article, which is mounted outside its dataset's container", async () => {
+        // A row address that opens image-first (fintravel.fi) kept the dataset's title
+        // for every article, also in what a search engine reads after rendering.
+        translations.set("travel_deals_front_page", "Travel deals");
+        mountDataset("travel_deals");
+        window.history.replaceState({}, "", "/travel_deals/12-sunset-in-lapland");
+        const { updateBrowserTabTitle } = await loadTitleWriter();
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+        expect(document.title).toBe("Travel deals — fintravel.fi");
+
+        // Two views of this dataset while one record replaces another, and another dataset's
+        // view after them: the tab names the newest view of the dataset the address names.
+        const dialog = document.createElement("div");
+        const view = (dataset, heading) => {
+            const node = document.createElement("div");
+            node.className = "image_first_view";
+            markImageFirstArticle(node, dataset);
+            node.innerHTML = `<div class="big_card_header"><span class="big_card_header_value">${heading}</span></div>`;
+            return node;
+        };
+        dialog.append(view("travel_deals", "The record being replaced"), view("travel_deals", "Sunset in Lapland"),
+            view("blog", "Another dataset's article"));
+        document.body.append(dialog);
+        announceImageFirstArticle("travel_deals");
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.title).toBe("Sunset in Lapland — Travel deals — fintravel.fi");
+
+        // Opened over an ordinary article, the image-first article on top names the tab;
+        // before it has drawn its heading, the article beneath still does.
+        mountDataset("travel_deals", { articleHeading: "The article beneath" });
+        document.body.append(dialog);
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+        expect(document.title).toBe("Sunset in Lapland — Travel deals — fintravel.fi");
+        dialog.querySelectorAll(".image_first_view")[1].replaceChildren();
+        await updateBrowserTabTitle({ dataset: "travel_deals" });
+        expect(document.title).toBe("The article beneath — Travel deals — fintravel.fi");
+        mountDataset("travel_deals");
+
+        // Taken off the screen without a history restoration (access taken away), the view is
+        // announced again and the tab gives the article's name back.
+        dialog.remove();
+        announceImageFirstArticle("travel_deals");
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(document.title).toBe("Travel deals — fintravel.fi");
     });
 
     test("ignores a stale answer about a dataset the person already left", async () => {

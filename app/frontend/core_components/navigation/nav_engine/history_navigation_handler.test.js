@@ -45,6 +45,8 @@ vi.mock('../../front_page/custom_root_navigation.js', async importOriginal => ({
     ...await importOriginal(), loadCustomRootFromHistory: customRootHistory.load,
 }));
 vi.mock("./image_first_view_history.js", () => ({
+    // No image-first article lands or is open in these cases.
+    imageFirstViewOwnsEntry: () => false,
     handleImageFirstViewHistory: ifavHistory.handle,
     isImageFirstViewURL: () => new URL(location.href).searchParams.get("view") === "image_first_view",
 }));

@@ -12,6 +12,8 @@ import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { ensureHistoryEntryId, HISTORY_ENTRY_ID } from "../../navigation/nav_engine/history_entry_state.js";
+import { imageFirstViewOwnsEntry } from "../../navigation/nav_engine/image_first_view_history.js";
+import { postponeUntilDatasetOwnsAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
 import { hasRoutePermission } from "../../route_permission_checker.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
 import { showErrorToast, showSuccessToast } from "../../../reusable_components/notifications/toast_notification_printer.js";
@@ -119,6 +121,17 @@ export async function applyDatasetSortDefault(tableName, dropdown, availableValu
         // this identity. The application object also rejects an obsolete control
         // when Back restores its entry and a rebuilt control now owns the answer.
         if (!isCurrentApplication()) return;
+        // An image-first article owns this entry. The saved default is the list's
+        // own choice: applying it writes the list's address and reloads the rows,
+        // so it waits until the list has settled on this entry again. The attempt
+        // is not counted meanwhile, so that later run, or a rebuilt control, can
+        // still apply it.
+        if (imageFirstViewOwnsEntry()) {
+            applications.entries.delete(requestedEntryId);
+            postponeUntilDatasetOwnsAddress(tableName,
+                () => void applyDatasetSortDefault(tableName, dropdown, availableValues));
+            return;
+        }
         application.completed = true;
         if (!response?.configured) return;
         // A late settings response must not overwrite a choice made while it loaded.

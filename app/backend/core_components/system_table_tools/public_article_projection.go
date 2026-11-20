@@ -5,6 +5,7 @@
 package system_table_tools
 
 import (
+	"bytes"
 	"encoding/json"
 	"html"
 	"math"
@@ -89,8 +90,14 @@ func projectPublicArticle(result frontPageArticleResult, language string, langua
 	}
 	fields := publicArticleVisibleFields(result)
 
-	title, titleField := publicArticleTitle(fields, language, translate)
-	article.Title = title
+	// The address words come from the first stored title, even when its markup
+	// has no words to show. The shown title is the first one with words, read
+	// as the card and article draw it. Both follow resolveRecordTitle in
+	// app/frontend/core_components/table_views/record_title_resolver.js.
+	title, titleField := publicArticleTitle(fields, language, translate, false)
+	if shown, _ := publicArticleTitle(fields, language, translate, true); shown != "" {
+		article.Title = publicArticleHeadingText(shown)
+	}
 	if titleField != nil {
 		article.TitleLanguages = articleValueLanguages(titleField.raw, titleField.meta.IsMultilingual)
 		if _, languageKey := articleHeaderRole(titleField.meta.CardElement); languageKey {
@@ -111,7 +118,7 @@ func projectPublicArticle(result frontPageArticleResult, language string, langua
 	if title != "" {
 		article.Slugs[language] = dataset_routes.ArticleSlug(title)
 		for _, code := range languages {
-			if translated, _ := publicArticleTitle(fields, code, translate); translated != "" {
+			if translated, _ := publicArticleTitle(fields, code, translate, false); translated != "" {
 				article.Slugs[code] = dataset_routes.ArticleSlug(translated)
 			}
 		}
@@ -163,10 +170,28 @@ func publicArticleVisibleFields(result frontPageArticleResult) []publicArticleFi
 			hidden = hidden || hiddenArticleRole.MatchString(role)
 		}
 		if !hidden {
-			fields = append(fields, publicArticleField{column: column, raw: raw, meta: meta, facts: facts})
+			fields = append(fields, publicArticleField{column: column, raw: articleStoredValue(raw), meta: meta, facts: facts})
 		}
 	}
 	return fields
+}
+
+// articleStoredValue is a stored text as the app starts to read it. The app's
+// trim (JavaScript's) also takes a byte-order mark U+FEFF off the two ends,
+// which Go's does not. Left there, as the first cell of an imported file can
+// carry it, the mark hides a language map from articleDisplayValue, and the
+// raw map would be printed as the title. The opposite difference stays: Go's
+// trim removes U+0085, which the app keeps and nobody sees.
+func articleStoredValue(raw json.RawMessage) json.RawMessage {
+	var stored string
+	if json.Unmarshal(raw, &stored) != nil || !strings.Contains(stored, "\ufeff") {
+		return raw
+	}
+	trimmed, err := json.Marshal(strings.TrimFunc(stored, isHeadingSpace))
+	if err != nil {
+		return raw
+	}
+	return trimmed
 }
 
 // publicArticleTitle answers the article's title in language: the first header
@@ -174,11 +199,13 @@ func publicArticleVisibleFields(result frontPageArticleResult) []publicArticleFi
 // plain single-line text column named as the app's title inference names
 // them. Rarer inferences of the app (relation labels, other columns) give no
 // title here; a page then keeps the dataset's own title and no address words.
-func publicArticleTitle(fields []publicArticleField, language string, translate articleTranslator) (string, *publicArticleField) {
+// With mustShow, a title the app would not show as a heading is passed over
+// for the next one (visibleHeading in record_title_resolver.js).
+func publicArticleTitle(fields []publicArticleField, language string, translate articleTranslator, mustShow bool) (string, *publicArticleField) {
 	for index := range fields {
 		field := &fields[index]
 		header, languageKey := articleHeaderRole(field.meta.CardElement)
-		if !header {
+		if !header || articleValueIsNoTitle(field) {
 			continue
 		}
 		value := articleDisplayValue(field.raw, field.meta.IsMultilingual, language)
@@ -188,7 +215,7 @@ func publicArticleTitle(fields []publicArticleField, language string, translate 
 		if languageKey && value != "" {
 			value = strings.TrimSpace(translate(language, value))
 		}
-		if value != "" {
+		if value != "" && (!mustShow || articleHeadingIsShown(value, field)) {
 			return value, field
 		}
 	}
@@ -217,10 +244,30 @@ func publicArticleTitle(fields []publicArticleField, language string, translate 
 			if field.meta.HideFalseNull && (value == "false" || value == "null") {
 				continue
 			}
+			if mustShow && !articleHeadingIsShown(value, field) {
+				continue
+			}
 			return value, field
 		}
 	}
 	return "", nil
+}
+
+// articleValueIsNoTitle reports a stored value the app never takes a title
+// from: a list, or an object that is not a language map (candidate in
+// record_title_resolver.js). Without this the raw JSON text would be printed.
+func articleValueIsNoTitle(field *publicArticleField) bool {
+	value := bytes.TrimSpace(field.raw)
+	return len(value) > 0 && (value[0] == '[' || value[0] == '{') &&
+		articleValueLanguages(field.raw, field.meta.IsMultilingual) == nil
+}
+
+// articleHeadingIsShown reports whether the app would show a stored title as a
+// heading: its readable text has words, and is not a "false" or "null" that
+// the field hides. The app tests the readable text without regard to letter case.
+func articleHeadingIsShown(stored string, field *publicArticleField) bool {
+	readable := strings.ToLower(publicArticleHeadingText(stored))
+	return readable != "" && !(field.meta.HideFalseNull && (readable == "false" || readable == "null"))
 }
 
 func roleExcludedFromInferredTitle(roles string) bool {

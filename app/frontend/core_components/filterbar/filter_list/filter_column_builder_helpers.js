@@ -282,7 +282,7 @@ export function getFilterableColumns(columns = [], dataTypes = {}) {
 export function withoutHiddenColumnFilters(tableName, filters = {}, columns, dataTypes) {
     if (!Array.isArray(columns) || !dataTypes || typeof dataTypes !== "object") return filters;
     const known = column => columns.includes(column) || Object.hasOwn(dataTypes, column);
-    const controls = new Set(["search", "sort_column", "sort_order", "offset", "view", "chart_x", "chart_y", "row_group", "row_group_mode"]);
+    const controls = new Set(["search", "sort_column", "sort_order", "offset", "view", "lang", "chart_x", "chart_y", "row_group", "row_group_mode"]);
     const entries = Object.entries(filters).filter(([key]) => {
         if (controls.has(key)) return true;
         let column = key.startsWith(`${tableName}_`) ? key.slice(tableName.length + 1) : key;

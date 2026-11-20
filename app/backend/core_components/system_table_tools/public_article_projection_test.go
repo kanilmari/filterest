@@ -165,3 +165,105 @@ func TestProjectPublicArticleTranslatesALanguageKeyHeader(t *testing.T) {
 		t.Fatalf("language-key title: %+v", article)
 	}
 }
+
+// A heading stored with markup, as fintravel.fi's "<h1>...</h1>" blog title, reads
+// as its words in page heads and lists; its address words stay the browser's,
+// built from the stored text. How markup reads is pinned by the examples in
+// app/testing/shared_contracts/heading_text_examples.json.
+func TestProjectPublicArticleReadsAMarkedUpHeadingAsText(t *testing.T) {
+	result := projectionResult(
+		[]string{"id", "title"},
+		map[string]string{"id": `{"card_element":"details"}`, "title": `{"card_element":"header"}`},
+		map[string]string{"id": `"3"`, "title": `"<h1>An unexpected payment request? Check &amp; pay</h1>"`},
+	)
+	article := projectPublicArticle(result, "en", []string{"en"}, noTranslations)
+	if article.Title != "An unexpected payment request? Check & pay" {
+		t.Fatalf("title = %q", article.Title)
+	}
+	if article.Slugs["en"] != "h1an-unexpected-payment-request-check-amp-payh1" {
+		t.Fatalf("address words = %q, want the browser's buildSlug of the stored text", article.Slugs["en"])
+	}
+}
+
+// The app passes over a heading whose markup has no words to show, or reads as
+// a hidden false or null, and names the record by the next title. The address
+// words still come from the first stored heading, so published addresses stay.
+func TestProjectPublicArticleSkipsAHeadingWithNoWordsButKeepsItsAddress(t *testing.T) {
+	types := map[string]string{
+		"id":     `{"card_element":"details"}`,
+		"kicker": `{"card_element":"header","hide_false_null_on_big_crd":true}`,
+		"title":  `{"card_element":"header"}`,
+		"name":   `{"card_element":"details","data_type":"text"}`,
+	}
+	for _, c := range []struct{ kicker, title, wantTitle, wantWords string }{
+		{"<h2> </h2>", "<h1>Hotel <em>news</em></h1>", "Hotel news", "h2-h2"},
+		{"<style>ignored</style>", "Plain title", "Plain title", "styleignoredstyle"},
+		{"<b>False</b>", "Plain title", "Plain title", "bfalseb"},
+		{"<h2> </h2>", "<br>", "Inferred name", "h2-h2"},
+		{"Vector<T>", "Plain title", "Vector<T>", "vectort"},
+	} {
+		kicker, _ := json.Marshal(c.kicker)
+		title, _ := json.Marshal(c.title)
+		result := projectionResult([]string{"id", "kicker", "title", "name"}, types,
+			map[string]string{"id": `"4"`, "kicker": string(kicker), "title": string(title), "name": `"Inferred name"`})
+		article := projectPublicArticle(result, "en", []string{"en"}, noTranslations)
+		if article.Title != c.wantTitle || article.Slugs["en"] != c.wantWords {
+			t.Errorf("headers %q, %q: title = %q, address words = %q; want %q, %q",
+				c.kicker, c.title, article.Title, article.Slugs["en"], c.wantTitle, c.wantWords)
+		}
+	}
+}
+
+// A stored text can begin with a byte-order mark, as the first cell of an
+// imported file does. The app's trim takes the mark away before it looks for a
+// language map or for markup, so the server must not print the raw map as the
+// title, nor read "<b" plus the mark as the start of a tag. The titles and
+// address words are what the app's resolveRecordTitle and buildSlug return.
+func TestProjectPublicArticleReadsATitleBehindAByteOrderMark(t *testing.T) {
+	types := map[string]string{"id": `{"card_element":"details"}`, "title": `{"card_element":"header","data_type":"text"}`}
+	for _, c := range []struct{ stored, language, wantTitle, wantWords string }{
+		{"\ufeff{\"en\":\"Helsinki\",\"fi\":\"Helsingfors\"}", "en", "Helsinki", "helsinki"},
+		{"\ufeff{\"en\":\"Helsinki\",\"fi\":\"Helsingfors\"}", "fi", "Helsingfors", "helsingfors"},
+		{"{\"en\":\"Helsinki\",\"fi\":\"Helsingfors\"}\ufeff", "en", "Helsinki", "helsinki"},
+		{"\ufeff<h1>Title</h1>", "en", "Title", "h1titleh1"},
+		{"Price <b\ufeff", "en", "Price <b", "price-b"},
+	} {
+		stored, _ := json.Marshal(c.stored)
+		result := projectionResult([]string{"id", "title"}, types, map[string]string{"id": `"5"`, "title": string(stored)})
+		article := projectPublicArticle(result, c.language, []string{"en", "fi"}, noTranslations)
+		if article.Title != c.wantTitle || article.Slugs[c.language] != c.wantWords {
+			t.Errorf("stored %q in %s: title = %q, address words = %q; want %q, %q",
+				c.stored, c.language, article.Title, article.Slugs[c.language], c.wantTitle, c.wantWords)
+		}
+		if strings.Contains(c.stored, "Helsingfors") && !reflect.DeepEqual(article.TitleLanguages, []string{"en", "fi"}) {
+			t.Errorf("stored %q: title languages = %v, want the map's two languages", c.stored, article.TitleLanguages)
+		}
+	}
+}
+
+// The app takes no title from a list or from an object that is not a language
+// map: it names the record by the next title. Printed as it is stored, such a
+// value would put JSON brackets into the page title and the address.
+func TestProjectPublicArticlePassesOverAListOrObjectHeader(t *testing.T) {
+	types := map[string]string{
+		"id":     `{"card_element":"details"}`,
+		"kicker": `{"card_element":"header","data_type":"text"}`,
+		"title":  `{"card_element":"header","data_type":"text"}`,
+	}
+	for _, c := range []struct{ kicker, wantTitle, wantWords string }{
+		{`["Title"]`, "Plain title", "plain-title"},
+		{`["<b>x</b>"]`, "Plain title", "plain-title"},
+		{`[]`, "Plain title", "plain-title"},
+		{`{"a":1}`, "Plain title", "plain-title"},
+		{`{"en":"Kicker","fi":"Kiilto"}`, "Kicker", "kicker"},
+		{`5`, "5", "5"},
+	} {
+		result := projectionResult([]string{"id", "kicker", "title"}, types,
+			map[string]string{"id": `"6"`, "kicker": c.kicker, "title": `"Plain title"`})
+		article := projectPublicArticle(result, "en", []string{"en", "fi"}, noTranslations)
+		if article.Title != c.wantTitle || article.Slugs["en"] != c.wantWords {
+			t.Errorf("first header %s: title = %q, address words = %q; want %q, %q",
+				c.kicker, article.Title, article.Slugs["en"], c.wantTitle, c.wantWords)
+		}
+	}
+}

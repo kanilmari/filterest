@@ -7,7 +7,7 @@ import { resolveRowAddress, rowBackingCollection } from "../../navigation/nav_en
 import { recordApplicationAddressWrite, trackApplicationVisit } from "../../navigation/nav_engine/address_write_revision.js";
 import { canOpenArticleView, requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { isRenderableDatasetView, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
-import { getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
+import { claimImageFirstViewEntry, getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
 import { create_navigation_buttons } from '../../navigation/database_tree/nav_builder.js';
 import {
     custom_views,
@@ -125,6 +125,7 @@ export async function load_tables(options = {}) {
     const startAddress = window.location.href;
     const visit = trackApplicationVisit();
     let awaitingRecovery = false;
+    let releaseLanding = null;
     try {
         // Haetaan taululista palvelimelta
         const result_from_server = recoveredCatalogue || await endpoint_router('fetchContentTables');
@@ -250,6 +251,11 @@ export async function load_tables(options = {}) {
                         returnView: requestedArticleView !== "article_view" && isRenderableDatasetView(requestedArticleView) ? requestedArticleView : "card" }
                 });
             }
+            // A row its dataset opens image-first owns the entry it lands on, also
+            // when the address does not name that view (a shared link, a search
+            // result). The list behind it loads and settles as usual, but leaves
+            // this address alone until the article has opened or given up.
+            releaseLanding = opensImageFirst ? claimImageFirstViewEntry() : null;
             // The image-first route owns its row. The backing dataset must not
             // also auto-open the ordinary article or overwrite the IFAV URL.
             const targetURL = window.location.href;
@@ -302,6 +308,8 @@ export async function load_tables(options = {}) {
         console.warn("Error in load_tables:", error);
         return null;
     } finally {
+        // An opened article owns its entry by being open; nothing else keeps the claim.
+        releaseLanding?.();
         if (!awaitingRecovery) visit.abort();
     }
 }

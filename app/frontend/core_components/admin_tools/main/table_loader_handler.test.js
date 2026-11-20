@@ -37,6 +37,8 @@ vi.mock("../../front_page/front_page_navigation.js", () => ({
 
 const ifav = vi.hoisted(() => ({ restore: vi.fn(async () => true) }));
 vi.mock("../../navigation/nav_engine/image_first_view_history.js", () => ({
+    // The loader claims the entry for an image-first landing; these cases only need it to be callable.
+    claimImageFirstViewEntry: () => () => {},
     isImageFirstViewURL: () => new URL(location.href).searchParams.get("view") === "image_first_view",
     getImageFirstViewBackingView: () => "card",
     handleImageFirstViewHistory: ifav.restore,

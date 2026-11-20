@@ -40,6 +40,8 @@ async function withoutJavaScript(browser: Browser, address: string, run: (page: 
     const context = await browser.newContext({ javaScriptEnabled: false, ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
     try {
         const page = await context.newPage();
+        // A new context does not take the project's size; this proof belongs to the phone.
+        await page.setViewportSize(test.info().project.use.viewport!);
         await page.goto(address);
         await run(page);
     } finally {
@@ -77,6 +79,7 @@ test('an article is readable without JavaScript, after a failed start, and from 
     const failing = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
     try {
         const broken = await failing.newPage();
+        await broken.setViewportSize(test.info().project.use.viewport!);
         await broken.route(/\/frontend\/(main\.js|dist\/main[^/]*\.js)(\?.*)?$/, route => route.abort());
         await broken.route(/^https?:\/\/localhost:5173\//, route => route.abort());
         await broken.goto(article);

@@ -68,6 +68,7 @@ vi.mock("../../../ui_config.js", () => ({
 }));
 
 import { openImageFirstView } from "./image_first_view_opener.js";
+import { IMAGE_FIRST_ARTICLE_CHANGED, findImageFirstArticle } from "../../navigation/nav_engine/image_first_article_presence.js";
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 import { resolveRowArticleDataTypes } from "./row_article_data_types_resolver.js";
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
@@ -94,6 +95,52 @@ test.each(['ownership', 'mismatched snapshot'])('image-first history restore dis
     expect(transitionImageFirstModalContentMock).not.toHaveBeenCalled();
     setAllSpecs({}); datasetAppearanceState.clear();
 });
+
+test.each(['a list reload', 'a denial'])('an image-first opening outlives %s answered while its row was loading', async event => {
+    // The list behind an article keeps loading (a saved sort, a further page). Its answer may
+    // arrive first; the article must still open. A denial in the same window must still close it.
+    const { fetchDatasetData } = await import('../../endpoints/endpoint_data_fetcher.js');
+    datasetAppearanceState.clear(); setAllSpecs({ examples: { table_uid: 11 } });
+    const snapshot = { dataset_uid: 11, schema_version: 1, version: '1', overrides: {}, effective: DEFAULT_DATASET_APPEARANCE };
+    datasetAppearanceState.accept('examples', snapshot);
+    document.body.innerHTML = "";
+    vi.mocked(loadRowArticleSectionDefaults).mockReset().mockResolvedValue({});
+    buildContentMock.mockReset().mockImplementation(async () => ({ rowArticleContentElement: buildArticleContent() }));
+    openImageModalContentMock.mockReset().mockImplementation(({ contentElement }) => {
+        document.body.appendChild(contentElement);
+        return { modal: document.createElement("div"), close: vi.fn() };
+    });
+    history.replaceState({ imageFirstView: { dataset: 'examples', rowId: '3' } }, '', '/examples/3?view=image_first_view');
+    let complete;
+    fetchDatasetData.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const pending = openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, restoringHistory: true,
+        imageRows: [{ filename: 'first.png' }] });
+    await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+    if (event === 'a list reload') {
+        expect(datasetAppearanceState.accept('examples', snapshot, { token: datasetAppearanceState.capture('examples') })).toBe(true);
+    } else {
+        expect(datasetAppearanceState.revoke('examples')).toBe(true);
+    }
+    complete({ data: [{ id: 3, title: 'Readable' }], types: {}, dataset_appearance: snapshot });
+    const opened = await pending;
+    if (event === 'a list reload') {
+        expect(opened).not.toBeNull();
+        expect(openImageModalContentMock).toHaveBeenCalled();
+        opened?.close?.();
+    } else {
+        expect(opened).toBeNull();
+        expect(openImageModalContentMock).not.toHaveBeenCalled();
+    }
+    setAllSpecs({}); datasetAppearanceState.clear();
+});
+
+/** Collects the datasets whose image-first article was announced until `stop()` is called. */
+function listenForArticleAnnouncements() {
+    const datasets = [];
+    const listen = event => datasets.push(event.detail.tableName);
+    document.addEventListener(IMAGE_FIRST_ARTICLE_CHANGED, listen);
+    return { stop() { document.removeEventListener(IMAGE_FIRST_ARTICLE_CHANGED, listen); return datasets; } };
+}
 
 /** Reads every stage image from the active one onwards through the stage's own Next control. */
 function readStageImageSources() {
@@ -361,8 +408,11 @@ describe("openImageFirstView", () => {
                 child_tables: [{ ...galleryRelation, relation_kind: "shared_asset", rows: [first, second] }] });
             // The article is still loading; the replaced picture must not wait for it.
             await vi.waitFor(() => expect(shownSource()).toBe("/storage/second.png"));
+            // A view grown from a card photo has no heading yet: it is announced when its text arrives.
+            const announced = listenForArticleAnnouncements();
             finishArticle({ rowArticleContentElement: buildArticleContent() });
             expect(await pending).not.toBeNull();
+            expect(announced.stop()).toEqual(["examples"]);
         });
 
         test("closes instead of adding the article once the dataset's appearance changed", async () => {
@@ -713,6 +763,7 @@ describe("openImageFirstView", () => {
     });
 
     test("opens globally without dataset activation and keeps a one-image stage bounded", async () => {
+        const announced = listenForArticleAnnouncements();
         await openImageFirstView({
             imageSrc: "/storage/hero.png",
             imageRows: [{ id: 11, asset_kind: "image", filename: "hero.png" }],
@@ -725,6 +776,9 @@ describe("openImageFirstView", () => {
         const view = document.querySelector('[data-testid="image-first-view"]');
         const article = view.querySelector(".image_first_view_article_content");
         expect(view).not.toBeNull();
+        // The browser tab is named after this article: the view says whose it is and that its text is drawn.
+        expect(findImageFirstArticle("examples")).toBe(view);
+        expect(announced.stop()).toEqual(["examples"]);
         expect(view.querySelector('[data-testid="row-article-image-first-media"]')?.getAttribute("src"))
             .toBe("/storage/hero.png");
         expect(view.querySelector('[data-testid="row-article-image-previous"]').disabled).toBe(true);
@@ -919,6 +973,7 @@ describe('opt-in Page layout', () => {
         await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page', imageRows: [{ filename: 'page.png' }] });
         const shell = document.querySelector('.image_first_page_view');
         expect(shell).not.toBeNull();
+        expect(findImageFirstArticle('examples')).toBe(shell);
         expect(shell.querySelector('.image_first_view_article_content > .row_article_page_image img')).not.toBeNull();
         expect(shell.querySelector('.row_article_page_image figcaption').hidden).toBe(true);
         expect(shell.querySelector('.row_article_image_first_stage')).toBeNull();

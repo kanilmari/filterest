@@ -18,10 +18,11 @@ vi.mock("../../pipeline/navigation_pipeline.js", () => ({ runNavigationPipeline:
 import {
     authorizeImageFirstView, beginImageFirstViewOpen, attachImageFirstView,
     imageFirstViewDidClose, updateImageFirstViewImage, handleImageFirstViewHistory,
-    getImageFirstViewBackingView,
+    getImageFirstViewBackingView, claimImageFirstViewEntry, imageFirstViewOwnsEntry,
 } from "./image_first_view_history.js";
 import { clearDatasetAccessRegistry, beginDatasetAccessRefresh, primeDatasetAccessRegistry } from "./dataset_access_registry.js";
 import { HISTORY_ENTRY_ID } from "./history_entry_state.js";
+import { IMAGE_FIRST_ARTICLE_CHANGED } from "./image_first_article_presence.js";
 
 function openView({ restoring = false, rowId = 185, ready, viewKey } = {}) {
     const intent = beginImageFirstViewOpen({ tableName: "events", rowId, listPath: "/events", restoring, viewKey });
@@ -153,6 +154,129 @@ describe("image-first history", () => {
         expect(history.state.imageFirstView.scroll).toBe(420);
         expect(document.querySelector(".tab_parts_container").dataset.view).toBe("table");
         expect(history.state.imageFirstView.origin.url).toBe(opened.origin.url);
+    });
+});
+
+describe("who owns the history entry", () => {
+    beforeEach(() => {
+        clearDatasetAccessRegistry();
+        document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="card"></div></div>';
+        history.replaceState({ anotherOwner: true }, "", "/events/185-a-shared-link?lang=fi");
+    });
+
+    test("a landing claim owns a plain row address until it is released, and gives the entry its identity", () => {
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+        const release = claimImageFirstViewEntry();
+        expect(imageFirstViewOwnsEntry()).toBe(true);
+        // The address is untouched; the entry keeps what it held and gains an identity
+        // that the list's later controls cannot change under the opening.
+        expect(location.pathname + location.search).toBe("/events/185-a-shared-link?lang=fi");
+        expect(history.state.anotherOwner).toBe(true);
+        expect(history.state[HISTORY_ENTRY_ID]).toBeTypeOf("string");
+        release();
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+    });
+
+    test("a claim ends by itself when the address or the entry is no longer the claimed one", () => {
+        const release = claimImageFirstViewEntry();
+        const claimed = { state: history.state, url: location.href };
+        history.replaceState(history.state, "", "/events?view=card");
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+        history.replaceState({ ...claimed.state, [HISTORY_ENTRY_ID]: "another-entry" }, "", claimed.url);
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+        moveTo(claimed);
+        expect(imageFirstViewOwnsEntry()).toBe(true);
+        release();
+    });
+
+    test("releasing an older claim leaves a newer one in place", () => {
+        const releaseOlder = claimImageFirstViewEntry();
+        const releaseNewer = claimImageFirstViewEntry();
+        releaseOlder();
+        expect(imageFirstViewOwnsEntry()).toBe(true);
+        releaseNewer();
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+    });
+
+    test("an open article owns its entry without a claim; a closed one does not", () => {
+        const release = claimImageFirstViewEntry();
+        const opened = openView({ restoring: true });
+        release();
+        // The landing keeps the readable address it arrived on, and its language.
+        expect(location.pathname + location.search).toBe("/events/185-a-shared-link?lang=fi&view=image_first_view");
+        expect(imageFirstViewOwnsEntry()).toBe(true);
+        opened.close();
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+    });
+
+    test("only a landing on this very row keeps its address; a new opening and another row get the row's own", () => {
+        // Closing a view opened from a list steps Back; jsdom would carry that out during a later test.
+        const back = vi.spyOn(history, "back").mockImplementation(() => {});
+        // A fresh opening from the list builds the plain row address.
+        history.replaceState({}, "", "/events?view=card");
+        const fromList = openView({ rowId: 185 });
+        expect(location.pathname).toBe("/events/185");
+        fromList.close();
+        // So does a fresh opening from the row's own readable address (an ordinary article's photo):
+        // only a landing or a restored entry keeps the address it already has.
+        history.replaceState({}, "", "/events/185-a-readable-title?view=article_view");
+        const fromArticle = openView({ rowId: 185 });
+        expect(location.pathname).toBe("/events/185");
+        fromArticle.close();
+        // A landing whose path names another row, or only starts with the same digits, is not this row's address.
+        for (const [landed, rowId] of [["/events/1850-another-row", 185], ["/events/18-short", 185], ["/other/185-elsewhere", 185]]) {
+            history.replaceState({}, "", landed);
+            const opened = openView({ restoring: true, rowId });
+            expect(location.pathname).toBe("/events/185");
+            opened.close();
+        }
+        expect(back).toHaveBeenCalledTimes(2);
+        back.mockRestore();
+    });
+
+    test("a newer opening decides what is shown: a landing it replaced does not return to the list", async () => {
+        // On a slow start the list is usable before the landing's article has opened. A click on
+        // another card then begins a newer opening; the landing's own must not cancel it as "row unavailable".
+        let finishLanding;
+        mocks.open.mockImplementationOnce(({ tableName, rowItem, isCurrent }) => {
+            beginImageFirstViewOpen({ tableName, rowId: rowItem.id, listPath: "/events", restoring: true, isCurrent });
+            return new Promise(resolve => { finishLanding = resolve; });
+        });
+        const landing = handleImageFirstViewHistory({ tableName: "events", rowId: "185", viewKey: "image_first_page_view" });
+        await vi.waitFor(() => expect(finishLanding).toBeTypeOf("function"));
+        const clicked = beginImageFirstViewOpen({ tableName: "events", rowId: 7, listPath: "/events", viewKey: "image_first_page_view" });
+        finishLanding(null); // the landing's opener found itself replaced and opened nothing
+        expect(await landing).toBe(true);
+        expect(location.pathname + location.search).toBe("/events/185-a-shared-link?lang=fi");
+        expect(clicked.isCurrent()).toBe(true);
+
+        // Without a newer opening the same empty result still means "this row cannot be shown".
+        mocks.open.mockImplementationOnce(({ tableName, rowItem, isCurrent }) => {
+            beginImageFirstViewOpen({ tableName, rowId: rowItem.id, listPath: "/events", restoring: true, isCurrent });
+            return Promise.resolve(null);
+        });
+        expect(await handleImageFirstViewHistory({ tableName: "events", rowId: "185", viewKey: "image_first_page_view" })).toBe(true);
+        expect(location.pathname + location.search).toBe("/events?lang=fi&view=card");
+    });
+
+    test("a view taken off the screen without a history restoration is announced, so the tab is renamed", () => {
+        const announced = [];
+        const listen = event => announced.push(event.detail.tableName);
+        document.addEventListener(IMAGE_FIRST_ARTICLE_CHANGED, listen);
+        try {
+            openView({ restoring: true });
+            primeDatasetAccessRegistry({ datasets: [{ table_uid: 3, dataset_name: "other", names: ["other"], preferred_name: "other", can_read_rows: true }] });
+            expect(imageFirstViewOwnsEntry()).toBe(false);
+            expect(document.querySelector(".image_first_view")).toBeNull();
+            expect(announced).toEqual(["events"]);
+        } finally {
+            document.removeEventListener(IMAGE_FIRST_ARTICLE_CHANGED, listen);
+        }
+    });
+
+    test("an address that names the view is not owned by that alone", () => {
+        history.replaceState({}, "", "/events/185?view=image_first_page_view");
+        expect(imageFirstViewOwnsEntry()).toBe(false);
     });
 });
 

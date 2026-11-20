@@ -7,11 +7,12 @@
 // article or a permission fallback could leave view=article_view, and sometimes a row path,
 // in an address that no longer described the page.
 
-import { writeHistoryEntry, rememberHistoryDatasetView, isHistoryEntryAddressRetained, releaseHistoryEntryAddress } from "./history_entry_state.js";
+import { writeHistoryEntry, rememberHistoryDatasetView, isHistoryEntryAddressRetained, releaseHistoryEntryAddress, HISTORY_ENTRY_ID } from "./history_entry_state.js";
 import { buildDatasetPath, getInternalDatasetName } from "./dataset_aliases.js";
 import { getParams, setParams, normalizePath, DATASET_PREFIX } from "./query_params.js";
 import { getPrefixFromPathname, parseDeepLink } from "./history_navigation_handler_helpers.js";
-import { isImageFirstViewURL } from "./image_first_view_history.js";
+import { isAddressOfRow } from "./row_address_path.js";
+import { isImageFirstViewURL, imageFirstViewOwnsEntry } from "./image_first_view_history.js";
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import {
@@ -23,6 +24,8 @@ import {
 const ARTICLE_HISTORY_FIELDS = ["articleReturnAvailable", "articleOriginEntry"];
 
 let latestAddressRequest = null;
+// What a dataset's list put off while an image-first article owned its entry.
+const postponedListWork = new Map();
 
 /**
  * Serialises dataset query parameters exactly as every dataset URL has always
@@ -82,8 +85,33 @@ export function writeDatasetAddress(dataset, params = {}, prefix = DATASET_PREFI
     const currentUrl = window.location.pathname + window.location.search;
     const state = options.state === undefined ? {} : options.state;
     const replace = Boolean(options.replace || currentUrl === newUrl);
+    // An image-first article owns the entry it lands on or is open on. The list
+    // behind it keeps its own state (a sort, a restored search), and may still
+    // move on to a new entry, but it does not put its own address in place of
+    // the article's.
+    if (replace && imageFirstViewOwnsEntry()) return;
     if (!replace) rememberVisibleDatasetHistoryView();
     writeHistoryEntry(newUrl, state, { replace });
+}
+
+/**
+ * Keeps something a dataset's list may not do while an image-first article owns
+ * the entry, and does it once the list has settled on that same entry again.
+ * The saved default sort is such a thing: it writes the address and reloads the
+ * rows. Work whose entry the person has left is dropped, not moved elsewhere.
+ *
+ * @param {string} dataset Internal dataset name.
+ * @param {() => void} run Called at most once.
+ */
+export function postponeUntilDatasetOwnsAddress(dataset, run) {
+    postponedListWork.set(dataset, { entryId: history.state?.[HISTORY_ENTRY_ID] ?? null, run });
+}
+
+function runPostponedListWork(dataset) {
+    const postponed = postponedListWork.get(dataset);
+    if (!postponed) return;
+    postponedListWork.delete(dataset);
+    if (postponed.entryId === (history.state?.[HISTORY_ENTRY_ID] ?? null)) queueMicrotask(postponed.run);
 }
 
 /**
@@ -108,12 +136,6 @@ function readOpenArticleRowId(dataset) {
     if (articleState.collapsed !== true) return null;
     const rowId = articleState.expandedId;
     return rowId === null || rowId === undefined || rowId === "" ? null : String(rowId);
-}
-
-/** Tells whether a pathname is already this row's own address, slug included. */
-function isAddressOfRow(pathname, datasetPath, rowId) {
-    return pathname === `${datasetPath}/${rowId}`
-        || pathname.startsWith(`${datasetPath}/${rowId}-`);
 }
 
 /**
@@ -184,6 +206,9 @@ function getCurrentDatasetRoute(expectedDataset) {
 export function replaceDatasetAddressQuery(dataset, params) {
     if (isHistoryEntryAddressRetained()) return false;
     if (!getCurrentDatasetRoute(dataset)) return false;
+    // Cleanup belongs to the list. While an image-first article owns the entry it
+    // waits: the list's next answer on its own address finds the same filters again.
+    if (imageFirstViewOwnsEntry()) return false;
     setParams(dataset, params);
     writeHistoryEntry(`${window.location.pathname}${serializeDatasetQuery(params)}${window.location.hash}`,
         history.state || {}, { replace: true });
@@ -197,8 +222,9 @@ function writeSettledDatasetAddress(expectedDataset) {
     const route = getCurrentDatasetRoute(expectedDataset);
     if (!route) return false;
     const { pathname, prefix, dataset } = route;
-    // The image-first article owns its own address, its row and its image hash.
-    if (isImageFirstViewURL()) return false;
+    // The image-first article owns its own address, its row and its image hash:
+    // when the address names it, and when it is landing or open on this entry.
+    if (isImageFirstViewURL() || imageFirstViewOwnsEntry()) return false;
 
     const effectiveView = readEffectiveDatasetView(dataset);
     if (!effectiveView) return false;
@@ -219,11 +245,13 @@ function writeSettledDatasetAddress(expectedDataset) {
 
     const nextUrl = `${targetPath}${serializeDatasetQuery(params)}${readValidAddressHash()}`;
     const currentUrl = pathname + window.location.search + window.location.hash;
-    if (currentUrl === nextUrl && historyStateDescribes(dataset, openRowId)) return false;
+    const alreadyDescribed = currentUrl === nextUrl && historyStateDescribes(dataset, openRowId);
     // Replacing keeps the entry's identity, so reconciliation never adds a step
     // the person has to press Back through.
-    writeHistoryEntry(nextUrl, buildSettledHistoryState(dataset, openRowId), { replace: true });
-    return true;
+    if (!alreadyDescribed) writeHistoryEntry(nextUrl, buildSettledHistoryState(dataset, openRowId), { replace: true });
+    // The list has settled on its own address: what it put off can run now.
+    runPostponedListWork(dataset);
+    return !alreadyDescribed;
 }
 
 /**
@@ -254,5 +282,6 @@ export function updateDatasetAddress({ dataset = null, isCurrent = null } = {}) 
 /** Test-only reset of the coalescing state this module keeps between writes. */
 export function resetDatasetAddressOwnershipForTests() {
     latestAddressRequest = null;
+    postponedListWork.clear();
     releaseHistoryEntryAddress();
 }

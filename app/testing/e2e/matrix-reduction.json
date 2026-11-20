@@ -41,6 +41,7 @@
     "C_card_view/C24_cancel_changes.spec.ts",
     "C_card_view/C25_rich_text_links.spec.ts",
     "C_card_view/C2_open_big_card.spec.ts",
+    "C_card_view/C34_visitor_row_address_image_first.spec.ts",
     "C_card_view/C3_close_big_card.spec.ts",
     "C_card_view/C4_card_infinite_scroll.spec.ts",
     "C_card_view/C5_card_language_refresh.spec.ts",

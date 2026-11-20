@@ -68,7 +68,7 @@ export function mountDatasetSurface({
 
     function syncQueryState(params) {
         const filters = Object.fromEntries(Object.entries(params).filter(([key]) =>
-            !['search', 'sort_column', 'sort_order', 'offset', 'view'].includes(key)));
+            !['search', 'sort_column', 'sort_order', 'offset', 'view', 'lang'].includes(key)));
         const relevance = !params.sort_column && String(params.search || '').trim() !== '' && offersRelevance();
         const sort = relevance
             ? { column: null, direction: null }

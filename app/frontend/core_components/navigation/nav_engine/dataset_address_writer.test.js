@@ -36,9 +36,13 @@ import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/t
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { resolveDatasetDefaultView } from "../../table_views/dataset_default_view.js";
 import { getParams, setParams, updateURL, useUrlParams } from "./query_params.js";
-import { updateDatasetAddress, resetDatasetAddressOwnershipForTests } from "./dataset_address_writer.js";
+import {
+    updateDatasetAddress, resetDatasetAddressOwnershipForTests,
+    replaceDatasetAddressQuery, postponeUntilDatasetOwnsAddress,
+} from "./dataset_address_writer.js";
+import { claimImageFirstViewEntry, imageFirstViewOwnsEntry } from "./image_first_view_history.js";
 import { primeDatasetAccessRegistry } from './dataset_access_registry.js';
-import { ensureHistoryEntryId } from './history_entry_state.js';
+import { ensureHistoryEntryId, retainHistoryEntryAddress } from './history_entry_state.js';
 
 const DATASET = "travel_deals";
 const ROW_PATH = "/travel_deals/12-sunset-in-lapland";
@@ -313,6 +317,128 @@ describe("dataset address ownership", () => {
         expect(firstWrote).toBe(false);
         expect(secondWrote).toBe(true);
         expect(readAddressParams()).toEqual({ view: "card" });
+    });
+});
+
+describe("an image-first article owns the entry it lands on", () => {
+    // A row address need not name the view: a shared link or a search result is
+    // only "/{dataset}/{id}-{words}". The list behind the article used to put its
+    // own address there before the article could open (fintravel.fi, 9.6.12).
+    let release = null;
+    beforeEach(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        document.body.innerHTML = "";
+        resetDatasetAddressOwnershipForTests();
+        window.history.replaceState({}, "", "/");
+        primeDatasetAccessRegistry({ datasets: [{ table_uid: 11, dataset_name: DATASET, names: [DATASET], preferred_name: DATASET }] });
+        useUrlParams();
+        release = null;
+    });
+    afterEach(() => {
+        release?.();
+        resetDatasetAddressOwnershipForTests();
+    });
+
+    test("the list behind a claimed plain row address settles without replacing it", async () => {
+        landOn(`${ROW_PATH}?lang=fi`);
+        setChosenDatasetView(DATASET, "card");
+        release = claimImageFirstViewEntry();
+
+        expect(await updateDatasetAddress({ dataset: DATASET })).toBe(false);
+        expect(currentAddress()).toBe(`${ROW_PATH}?lang=fi`);
+
+        // Without the claim the same settle describes the list: this is the
+        // write that used to replace the row.
+        release();
+        expect(await updateDatasetAddress({ dataset: DATASET })).toBe(true);
+        expect(currentAddress()).toBe(`/${DATASET}?lang=fi&view=card`);
+    });
+
+    test("a replacing list write keeps its parameters but leaves the address and its state alone", () => {
+        landOn(`${ROW_PATH}?search=helsinki#image=3`, { anotherOwner: true });
+        release = claimImageFirstViewEntry();
+        const stateBefore = history.state;
+
+        // A saved sort and a restored search both arrive like this.
+        updateURL(DATASET, { search: "helsinki", sort_column: "__newest", sort_order: "DESC" }, undefined, { replace: true });
+
+        expect(currentAddress()).toBe(`${ROW_PATH}?search=helsinki#image=3`);
+        expect(history.state).toEqual(stateBefore);
+        expect(getParams(DATASET)).toEqual({ search: "helsinki", sort_column: "__newest", sort_order: "DESC" });
+    });
+
+    test("the list can still move on to an entry of its own", () => {
+        landOn(ROW_PATH);
+        release = claimImageFirstViewEntry();
+        const lengthBefore = window.history.length;
+
+        updateURL(DATASET, { search: "oulu" }, undefined, {});
+
+        expect(currentAddress()).toBe(`/${DATASET}?search=oulu`);
+        expect(window.history.length).toBe(lengthBefore + 1);
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+    });
+
+    test("filter cleanup waits for the list's own address", () => {
+        landOn(`${ROW_PATH}?retired_field=x`);
+        release = claimImageFirstViewEntry();
+
+        expect(replaceDatasetAddressQuery(DATASET, {})).toBe(false);
+        expect(currentAddress()).toBe(`${ROW_PATH}?retired_field=x`);
+
+        release();
+        expect(replaceDatasetAddressQuery(DATASET, {})).toBe(true);
+        expect(currentAddress()).toBe(ROW_PATH);
+    });
+
+    test("what the list put off runs once, when it settles on the same entry", async () => {
+        landOn(ROW_PATH);
+        setChosenDatasetView(DATASET, "card");
+        release = claimImageFirstViewEntry();
+        const run = vi.fn();
+        postponeUntilDatasetOwnsAddress(DATASET, run);
+
+        await updateDatasetAddress({ dataset: DATASET });
+        await settle();
+        expect(run).not.toHaveBeenCalled();
+
+        // The article closes onto the list's address in the same entry.
+        release();
+        window.history.replaceState(history.state, "", `/${DATASET}?view=card`);
+        useUrlParams();
+        await updateDatasetAddress({ dataset: DATASET });
+        await settle();
+        expect(run).toHaveBeenCalledTimes(1);
+
+        await updateDatasetAddress({ dataset: DATASET });
+        await settle();
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    test("work put off on an entry the person has left is dropped", async () => {
+        landOn(ROW_PATH);
+        setChosenDatasetView(DATASET, "card");
+        release = claimImageFirstViewEntry();
+        const run = vi.fn();
+        postponeUntilDatasetOwnsAddress(DATASET, run);
+
+        window.history.pushState({}, "", `/${DATASET}?view=card`);
+        useUrlParams();
+        await updateDatasetAddress({ dataset: DATASET });
+        await settle();
+
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    test("a kept, refused address that names the view is not owned: the reader's own sort still writes", () => {
+        landOn(`${ROW_PATH}?view=image_first_page_view`);
+        retainHistoryEntryAddress();
+
+        expect(imageFirstViewOwnsEntry()).toBe(false);
+        updateURL(DATASET, { view: "card", sort_column: "price", sort_order: "ASC" }, undefined, { replace: true });
+
+        expect(currentAddress()).toBe(`/${DATASET}?view=card&sort_column=price&sort_order=ASC`);
     });
 });
 

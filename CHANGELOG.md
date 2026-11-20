@@ -22,6 +22,12 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- A link to an article opens the article also on a dataset whose rows open as an image-first article. Such a link showed the dataset's list instead: the list loading behind the article replaced the article's address with its own before the article could open. This affected links that name only the row, as the All articles page, the sitemap and search engines give them, and on a dataset with a saved default sort also an address copied from an open image-first article. Ordinary articles were not affected. The list view or search such a link names stays behind the article, the readable address stays in the address bar, and the saved default sort is applied when the article is closed.
+- An open image-first article names the browser tab after itself, as an ordinary article does. Every such article kept the dataset's title, also in what a search engine reads after rendering the page.
+- An image-first article still opens when the list behind it is answered first, for example while further rows are loading.
+- A language address (`?lang=fi`) no longer shows the language as a filter above the list, and clearing the filters keeps the language in the address. The language such an address names belongs to that page only: it no longer comes back in the same dataset's address in other tabs or on later visits.
+- An article title stored with heading markup, such as `<h1>…</h1>`, reads as plain text in the page title, link previews, the readable article and the All articles list, exactly as the application shows it. A heading with no words to show is passed over for the next title, as in the application. The article's address keeps coming from the stored title; only a title the application never reads as stored text (a language map behind an invisible byte-order mark, or a list) now gives the same address words as the application.
+
 ## [9.6.12] - 2026-11-19
 
 - A card photo opens its image-first article at once: the view grows from the photo already on the card while the picture list, the full-size picture and the article load, instead of waiting about half a second for all of them. If the fresh list no longer offers the picture, the view closes again; another picture replaces the card's copy immediately. Logos, SVG pictures, Page view, galleries and restored views open as before, now with their picture and article loading in parallel.

@@ -21,7 +21,7 @@ vi.mock("../../state_stores/table_specs_reader.js", () => ({ getAllSpecs: () => 
 vi.mock("../admin_and_user_tools/custom_view_reader.js", () => ({ custom_views: [] }));
 vi.mock("../../front_page/custom_root_navigation.js", () => ({ loadCustomRootFromHistory: () => false }));
 vi.mock("../../front_page/front_page_navigation.js", () => ({ isSeparateFrontPageEnabled: () => false, openFrontPage: vi.fn() }));
-vi.mock("./image_first_view_history.js", () => ({ handleImageFirstViewHistory: () => false, isImageFirstViewURL: () => false }));
+vi.mock("./image_first_view_history.js", () => ({ imageFirstViewOwnsEntry: () => false, handleImageFirstViewHistory: () => false, isImageFirstViewURL: () => false }));
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", async () => ({
     ...await import("../../state_stores/table_state_store.js"),
     refreshTableUnified: mocks.refresh, invalidateTableRefresh: vi.fn(),

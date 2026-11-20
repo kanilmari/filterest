@@ -139,6 +139,19 @@ describe('buildParamsFromParsed', () => {
         });
     });
 
+    test('carries the language an address names, ahead of the filters', () => {
+        const parsed = {
+            lang: 'fi',
+            filters: { status: 'active' },
+            sort: { column: null, direction: null },
+            offset: 0,
+            view: 'card',
+        };
+        expect(Object.entries(buildParamsFromParsed(parsed))).toEqual([
+            ['lang', 'fi'], ['status', 'active'], ['view', 'card'],
+        ]);
+    });
+
     test('includes sort_column and sort_order when present', () => {
         const parsed = {
             filters: {},

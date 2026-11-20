@@ -14,8 +14,11 @@ function hyphenateFields(content) {
     }
 }
 
-/** Register on the disposable page shell, retaining no records after close. */
-export function bindPageArticleReading(shell, initialContent, rebuild, initialLanguage) {
+/**
+ * Register on the disposable page shell, retaining no records after close.
+ * `onRedraw` is told when the article has been drawn again in another language.
+ */
+export function bindPageArticleReading(shell, initialContent, rebuild, initialLanguage, onRedraw = null) {
     let content = initialContent;
     let renderedLanguage = initialLanguage;
     let revision = 0;
@@ -39,5 +42,6 @@ export function bindPageArticleReading(shell, initialContent, rebuild, initialLa
         disposeCardResources(content);
         content = next;
         renderedLanguage = language;
+        onRedraw?.();
     }, getLanguageWithBrowserFallback());
 }

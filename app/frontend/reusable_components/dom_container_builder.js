@@ -84,7 +84,16 @@ export function containsHeadingMarkup(text) {
         (text.includes('</') && /<[a-z][\w:-]*(?=[\s/>])/iu.test(text));
 }
 
-/** Text-only surfaces use the same inline heading the card and article draw. */
+/**
+ * Text-only surfaces use the same inline heading the card and article draw.
+ *
+ * The server reads a stored heading the same way for page titles, link previews and
+ * plain article pages: publicArticleHeadingText in
+ * app/backend/core_components/system_table_tools/public_article_heading_text.go.
+ * Both answer app/testing/shared_contracts/heading_text_examples.json; a change to
+ * this function, containsHeadingMarkup or the inline mode of renderAllowedHtml needs
+ * the same change there.
+ */
 export function readInlineHeadingText(value) {
     return containsHeadingMarkup(value)
         ? renderAllowedHtml(value, { inlineOnly: true }).textContent.trim()

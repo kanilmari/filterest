@@ -10,7 +10,7 @@ import { closeArticleToCardView, configureArticleFieldRoles, postJsonWithCsrf } 
 import { getActiveDatasetContainer } from '../helpers/active-dataset';
 import { closeActiveFilterbarIfOpen, revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { listRegisteredTestArtifacts } from '../helpers/test-artifact-run-registry';
-import { loadDatasetCardVisibility } from '../helpers/appearance-revisions';
+import { ROW_OPENING_PATH, saveSiteSortDefault, setRowOpeningOverride } from '../helpers/row-opening-override';
 import { solidPng } from '../helpers/solid-png';
 
 type Fixture = { dataset: string; listURL: string };
@@ -25,7 +25,7 @@ const option = (viewKey: string) => `[data-testid="row-presentation-menu-option-
 const test = base.extend<{ fixture: Fixture }>({
   fixture: async ({ page }, use, info) => {
     // Limit fixture creation to the intended viewport(s) for each proof.
-    const projects = /^R[67] /.test(info.title) ? ['desktop-card', 'mobile-card']
+    const projects = /^R[679] /.test(info.title) ? ['desktop-card', 'mobile-card']
       : info.title.startsWith('R2 ') ? ['mobile-card'] : ['desktop-card'];
     test.skip(!projects.includes(info.project.name), 'Only the requested projects create fixtures');
     await login(page, loadCredentials());
@@ -78,16 +78,6 @@ async function split(page: Page) {
   const toggle = parts.locator('[data-testid="row-presentation-toggle"]:visible').first();
   await expect(primary).toBeVisible(); await expect(toggle).toBeVisible();
   return { primary, toggle };
-}
-/** Only patch this disposable table, using its current UID and both revisions. */
-async function setRowOpeningOverride(page: Page, dataset: string, mode: string | null) {
-  const path = 'shared.row_article_default_presentation';
-  const { dataset_appearance: appearance } = await loadDatasetCardVisibility(page.request, dataset);
-  const response = await postJsonWithCsrf(page, '/api/admin/dataset-appearance', {
-    schema_version: 2, dataset_uid: appearance.dataset_uid, version: appearance.version,
-    shared_version: appearance.shared_version, tab_set: {}, set: mode ? { [path]: mode } : {}, unset: mode ? [] : [path],
-  });
-  expect(response.status, response.body).toBe(200);
 }
 async function press(locator: Locator, touch: boolean) {
   if (touch) await locator.tap(); else await locator.click();
@@ -221,7 +211,7 @@ test('R3 the open article row wins; a photo-less row opens text-only IFAV throug
 });
 
 test('R6 table default, per-tab choice, pinned link and reset all target the right row', async ({ page, fixture }) => {
-  const path = 'shared.row_article_default_presentation';
+  const path = ROW_OPENING_PATH;
   const publicSettings = await page.request.get('/api/site-presentation-settings', {
     headers: { 'X-Filterest-Appearance': 'row-presentation' },
   });
@@ -264,6 +254,68 @@ test('R6 table default, per-tab choice, pinned link and reset all target the rig
   await setRowOpeningOverride(page, fixture.dataset, null);
   await page.goto(fixture.listURL);
   await expect((await split(page)).primary).toHaveAttribute('data-presentation', siteDefault);
+});
+
+/** The card titles in the order the list shows them. */
+const listedTitles = (page: Page, dataset: string) => page
+  .locator(`#${dataset}_card_view_container [data-testid="card-item-header"]:visible`).allTextContents();
+
+test('R8 a plain row address opens the table default Page cold and keeps its row', async ({ page, fixture }, info) => {
+  test.skip(info.project.name !== 'desktop-card', 'Desktop proof');
+  // Links from the plain article index, the sitemap and search engines name only
+  // the row. The list loading behind the article used to replace that address
+  // with the list's own before the image-first article could open (9.6.12).
+  await setRowOpeningOverride(page, fixture.dataset, 'image_first_page_view');
+  const listPath = new URL(fixture.listURL).pathname;
+  await page.goto(`${listPath}/1-row-presentation-first`);
+  await expectOpen(page, PAGE, FIRST, 1, 'image_first_page_view');
+  // The browser tab, and what a search engine reads after rendering, name the article.
+  await expect(page).toHaveTitle(new RegExp(`^${FIRST}`));
+  await page.locator(CLOSE).click();
+  await expect(page).toHaveURL(new RegExp(`${listPath}\\?(?:.*&)?view=card`));
+  await expect(page).not.toHaveTitle(new RegExp(`^${FIRST}`));
+
+  // The sitemap's own form names a language; it opens the same way and keeps it.
+  await page.goto(`${listPath}/2-row-presentation-second?lang=en`);
+  await expectOpen(page, PAGE, SECOND, 2, 'image_first_page_view');
+  await expect(page).toHaveURL(/[?&]lang=en(?:&|$)/);
+});
+
+test('R9 a saved default sort neither replaces a plain row address nor is lost when its article closes', async ({ page, fixture }) => {
+  // Runs at desktop and phone widths: the list behind the article builds its sort control at both.
+  await setRowOpeningOverride(page, fixture.dataset, 'image_first_page_view');
+  // Newest first is the list's own order; only the saved default (oldest first) lists the first row first.
+  await saveSiteSortDefault(page, fixture.dataset, '__newest:ASC');
+  // A first visit: nothing this browser stored says a sort was already chosen.
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+  const listPath = new URL(fixture.listURL).pathname;
+  await page.goto(`${listPath}/1-row-presentation-first`);
+  await expectOpen(page, PAGE, FIRST, 1, 'image_first_page_view');
+  await page.locator(CLOSE).click();
+  await expect(page.locator(PAGE)).toHaveCount(0);
+  // The list has its entry back: the saved default arrives now, in the address and in the rows.
+  await expect(page).toHaveURL(new RegExp(`${listPath}\\?(?=.*view=card)(?=.*sort_column=__newest)(?=.*sort_order=ASC)`));
+  await expect.poll(() => listedTitles(page, fixture.dataset)).toEqual([FIRST, SECOND]);
+});
+
+test('R10 a row address keeps the list view and the search it names behind its article', async ({ page, fixture }, info) => {
+  test.skip(info.project.name !== 'desktop-card', 'Desktop proof');
+  await setRowOpeningOverride(page, fixture.dataset, 'image_first_page_view');
+  const listPath = new URL(fixture.listURL).pathname;
+  const parts = page.locator(`#${fixture.dataset}_container .tab_parts_container`);
+
+  await page.goto(`${listPath}/1-row-presentation-first?view=table`);
+  await expectOpen(page, PAGE, FIRST, 1, 'image_first_page_view');
+  await expect(parts).toHaveAttribute('data-view', 'table');
+  await page.locator(CLOSE).click();
+  await expect(page).toHaveURL(new RegExp(`${listPath}\\?(?:.*&)?view=table`));
+  await expect(parts).toHaveAttribute('data-view', 'table');
+
+  await page.goto(`${listPath}/2-row-presentation-second?search=presentation`);
+  await expectOpen(page, PAGE, SECOND, 2, 'image_first_page_view');
+  await expect(page).toHaveURL(/[?&]search=presentation(?:&|$)/);
+  await page.locator(CLOSE).click();
+  await expect(page).toHaveURL(new RegExp(`${listPath}\\?(?=.*search=presentation)(?=.*view=card)`));
 });
 
 test('R4 light and dark themes with the opposite system theme', async ({ page, fixture }, info) => {

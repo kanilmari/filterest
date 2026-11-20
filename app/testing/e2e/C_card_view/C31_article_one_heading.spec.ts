@@ -4,6 +4,7 @@
 // Covers FI/EN, opposite OS themes, desktop/phone, and cleans up even on failure.
 import { expect, test, type Page } from '@playwright/test';
 import { login, loadCredentials } from '../helpers/auth';
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest, openTempDatasetRowArticle } from '../helpers/temp-dataset';
 import { closeArticleToCardView, postJsonWithCsrf } from '../helpers/image-first-article';
 import { loadDatasetCardVisibility } from '../helpers/appearance-revisions';
@@ -58,6 +59,8 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
       await page.reload({ waitUntil: 'domcontentloaded' });
       for (const id of [1, 2]) {
         await openTempDatasetRowArticle(page, dataset, id);
+        // Article blocks start closed (#986); the picture list is drawn only in an open one.
+        await openArticleDisclosure(page, 'images');
         await page.locator('.big_card_image_gallery input[type="file"]').first().setInputFiles({
           name: `wo94-${id}.png`, mimeType: 'image/png', buffer: png,
         });

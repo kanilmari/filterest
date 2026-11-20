@@ -1,6 +1,6 @@
 // query_params.js
 // Manages per-dataset URL query parameters: the search, filter and sort parameters in
-// localStorage, shared by every browser tab, and view/axis parameters in page memory only.
+// localStorage, shared by every browser tab, and view, axis and language parameters in page memory only.
 // Bridges the URL bar and filter/sort state across navigation and popstate events.
 // Exists to centralise param read/write logic so every navigation path shares a consistent state model.
 
@@ -18,14 +18,16 @@ const AUTH_SHELL_QUERY_KEYS = new Set([
 ]);
 /**
  * The address's view parameter names the view this page shows, which is the
- * page's own choice (owner decision K143). Chart axes share that ownership.
+ * page's own choice (owner decision K143). Chart axes share that ownership, and
+ * so does the language an address names (?lang=xx): it opens that page in that
+ * language without becoming the reader's stored choice.
  * They are cached only in this page's
- * memory, so another tab's view never reaches this one's addresses, and a newly
- * loaded page starts from the view its own address names. A view that earlier
- * versions stored with the shared parameters is ignored and left out of the
- * next write.
+ * memory, so another tab's view or language never reaches this one's addresses,
+ * and a newly loaded page starts from what its own address names. A view or
+ * language that earlier versions stored with the shared parameters is ignored
+ * and left out of the next write.
  */
-const PAGE_OWN_PARAM_KEYS = new Set(['view', ...Object.values(CHART_AXIS_PARAMS)]);
+const PAGE_OWN_PARAM_KEYS = new Set(['view', 'lang', ...Object.values(CHART_AXIS_PARAMS)]);
 let datasetParams = {};
 let currentDataset = null;
 
@@ -206,7 +208,7 @@ export function updateURL(
 
 /**
  * Parses a URL search string into a structured table-query object.
- * Recognized keys: sort_column, sort_order, offset, search, view, chart_x, chart_y. All others → filters.
+ * Recognized keys: sort_column, sort_order, offset, search, view, lang, chart_x, chart_y. All others → filters.
  *
  * @param {string} searchString - e.g. "?sort_column=name&sort_order=ASC&offset=20&status=active"
  * @returns {{ sort: { column: string|null, direction: string|null }, offset: number, filters: Object }}
@@ -226,12 +228,16 @@ export function parseTableQueryString(searchString) {
     const offsetStr = sp.get('offset');
     const search = sp.get('search');
     const view = sp.get('view');
+    const lang = sp.get('lang');
 
     if (sortCol) result.sort.column = sortCol;
     if (sortDir) result.sort.direction = sortDir.toUpperCase();
     if (offsetStr) result.offset = parseInt(offsetStr, 10) || 0;
     if (search) result.search = search;
     if (view) result.view = view;
+    // The language an address names belongs to the page, not to the rows: the
+    // list carries it along in its addresses and never shows or sends it as a filter.
+    if (lang) result.lang = lang;
     for (const key of Object.values(CHART_AXIS_PARAMS)) {
         if (sp.has(key)) result[key] = sp.get(key);
     }
@@ -243,6 +249,7 @@ export function parseTableQueryString(searchString) {
         'table',
         'search',
         'view',
+        'lang',
         ...Object.values(CHART_AXIS_PARAMS),
         ...AUTH_SHELL_QUERY_KEYS,
     ]);

@@ -28,7 +28,8 @@ test('the latest language keeps the same photograph and raw word through a slow 
     let finish;
     const rebuild = vi.fn(language => language === 'sv' ? new Promise(resolve => { finish = resolve; })
         : Promise.resolve(article('en', 'internationalization')));
-    await bindPageArticleReading(shell, first, rebuild, 'fi');
+    const redrawn = vi.fn();
+    await bindPageArticleReading(shell, first, rebuild, 'fi', redrawn);
     await vi.waitFor(() => expect(first.querySelector('.reading-hyphen')).toBeTruthy());
     const slow = refreshLocalizedDatasetValues('sv');
     await refreshLocalizedDatasetValues('en');
@@ -38,6 +39,8 @@ test('the latest language keeps the same photograph and raw word through a slow 
     expect(shell.querySelector('h1').textContent).toBe('internationalization');
     expect(shell.querySelector('h1').lang).toBe('en');
     expect(shell.querySelector('figure')).toBe(photo);
+    // The article was drawn again once, in the latest language: whoever names it is told once.
+    expect(redrawn).toHaveBeenCalledTimes(1);
     shell.remove();
 });
 

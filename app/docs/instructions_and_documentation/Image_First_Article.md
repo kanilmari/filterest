@@ -194,6 +194,45 @@ decide whether the underlying rows appear as cards, a calendar or another list.
   opened from a photo whose photo is gone still returns to its origin, and a
   denied or failed record opens nothing. A copied address in a new tab has no
   history state and follows the photo-click rule. Page never needed a photo.
+- **Plain row address.** A link that names only the row
+  (`/{dataset}/{id}-{words}`, as the plain article index, the sitemap and search
+  engines give it) opens the row in its default presentation. When that is IFAV
+  or Page, the article owns the history entry it lands on, although the address
+  does not name the view. Ownership is a recorded fact, not a reading of the
+  address (`imageFirstViewOwnsEntry` in `image_first_view_history.js`): startup
+  claims the entry before the listing behind the article loads
+  (`claimImageFirstViewEntry`), and an open article owns its entry by being
+  open. A kept, refused address that names the view is not owned. When the
+  article commits, a landing or a restored entry keeps the readable path it
+  already has (`row_address_path.js`); its `view=` becomes the article's view,
+  the list view it named is remembered in the entry, and the picture is named
+  in the hash. A new opening builds the row's plain address as before.
+- **The listing behind an owned entry.** The listing loads, sorts and searches as
+  usual, but none of the three dataset address writers
+  (`dataset_address_writer.js`) replaces the article's address with the
+  listing's: not the settled view, not a restored search or a corrected sort,
+  not filter cleanup. The listing can still move on to an entry of its own. Its
+  saved default sort waits (`postponeUntilDatasetOwnsAddress`) and is applied
+  when the listing has settled on the same entry again, normally right after
+  Close; an entry the person has left drops it. The list view the address named
+  (`?view=table`) stays behind the article and is where Close returns. A change
+  the reader makes to the listing while the article owns the entry (a sort
+  picked before a slow article has appeared) shows in the listing but is not
+  written to the address.
+- **A newer opening decides.** When the person opens another record while a
+  landing's article is still loading, that newer opening is shown; the landing
+  it replaced does not return to the listing (`handleImageFirstViewHistory`).
+- **A listing answer that arrives first.** The listing may be answered while the
+  article's own row is still loading (a further page, a search). Its newer
+  authorized appearance then already stands; the article still opens, because
+  its row is a current, permitted read (`datasetAppearanceState.isSuperseded`).
+  A denial in the same window still closes it.
+- **Browser tab.** An open IFAV or Page names the browser tab after its article,
+  like an ordinary article. The view is mounted in the shared dialog, so it says
+  which dataset's article it shows and announces when its text is drawn, drawn
+  again in another language, or taken off the screen without a history
+  restoration (`image_first_article_presence.js`). Opened over an ordinary
+  article, the view on top names the tab once it has drawn its heading.
 
 The menu is portalled to `<body>` with fixed positioning and the shared
 `measureFloatingPanelPlacement` rule, so neither the viewport nor a transformed

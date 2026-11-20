@@ -58,6 +58,15 @@ describe('parseTableQueryString', () => {
     expect(result.filters).toEqual({ status: 'active' });
   });
 
+  test("reads the language an address names as the page's, never as a filter of the rows", () => {
+    // The sitemap and the language links name every page as ?lang=xx. As a filter the
+    // language showed a "Lang: fi" chip above the list and travelled twice to the server.
+    const result = parseTableQueryString('?lang=fi&status=active&view=card');
+    expect(result.lang).toBe('fi');
+    expect(result.filters).toEqual({ status: 'active' });
+    expect(parseTableQueryString('?status=active').lang).toBeUndefined();
+  });
+
   test('handles non-numeric offset gracefully', () => {
     const result = parseTableQueryString('?offset=abc');
     expect(result.offset).toBe(0);
@@ -245,6 +254,38 @@ describe('the cached view parameter belongs to this page', () => {
     expect(stored.travel_info).toEqual({ search: 'harbour' });
     expect(stored.demo).toEqual({ search: 'x' });
     expect(Object.values(stored).some((params) => Object.hasOwn(params, 'view'))).toBe(false);
+  });
+});
+
+describe('the language an address names belongs to this page', () => {
+  // A visitor who once followed a Finnish link (?lang=fi) kept getting ?lang=fi in that
+  // dataset's address on later visits and in other tabs, while the page itself was in
+  // their own language; a reload or a shared link then opened in Finnish (9.6.12).
+  test('a language address keeps its language in this page and stores none for other pages', () => {
+    localStorage.clear();
+    history.replaceState({}, '', '/service_catalog?lang=fi&status=open');
+    mod.useUrlParams(); // the page reads its own address, as on load
+
+    expect(mod.getParams('app_service_catalog')).toEqual({ lang: 'fi', status: 'open' });
+    expect(JSON.parse(localStorage.getItem('dataset_query_params')).app_service_catalog).toEqual({ status: 'open' });
+
+    // A navigation inside the page reads the shared parameters again and writes the same address.
+    mod.useStorageParams();
+    mod.updateURL('app_service_catalog', mod.getParams('app_service_catalog'));
+    expect(window.location.pathname + window.location.search).toBe('/service_catalog?lang=fi&status=open');
+  });
+
+  test("another page's stored language, as 9.6.12 wrote it, is ignored and left out of the next write", () => {
+    localStorage.clear();
+    mod.forgetPageDatasetParams(); // a newly loaded page holds nothing of its own
+    localStorage.setItem('dataset_query_params', JSON.stringify({ travel_info: { lang: 'fi', search: 'harbour' } }));
+
+    mod.useStorageParams();
+    expect(mod.getParams('travel_info')).toEqual({ search: 'harbour' });
+
+    mod.setParams('demo', { search: 'x' });
+    const stored = JSON.parse(localStorage.getItem('dataset_query_params'));
+    expect(Object.values(stored).some((params) => Object.hasOwn(params, 'lang'))).toBe(false);
   });
 });
 

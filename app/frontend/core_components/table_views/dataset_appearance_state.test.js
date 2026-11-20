@@ -510,6 +510,32 @@ describe('dataset appearance ownership', () => {
         expect(owner.accept('a', snapshot(22))).toBe(true);
     });
 
+    test('tells an answer that only lost the race from one that may not be used', () => {
+        const owner = createDatasetAppearanceState();
+        const row = owner.capture('a'), list = owner.capture('a');
+        const current = snapshot(11, {}, { version: '2' });
+        // The list behind an article was requested later and answered first.
+        expect(owner.accept('a', current, { token: list })).toBe(true);
+        expect(owner.accept('a', current, { token: row })).toBe(false);
+        expect(owner.isSuperseded('a', current, { token: row })).toBe(true);
+        expect(owner.isSuperseded('a', snapshot(11, {}, { version: '1' }), { token: row })).toBe(true);
+        // An answer that would be accepted lost nothing; another dataset's or a cancelled caller's is unusable.
+        expect(owner.isSuperseded('a', snapshot(11, {}, { version: '3' }), { token: owner.capture('a') })).toBe(false);
+        expect(owner.isSuperseded('a', snapshot(22), { token: row })).toBe(false);
+        expect(owner.isSuperseded('a', current, { token: row, isCurrent: () => false })).toBe(false);
+        // A denial that followed the request is never a lost race: its rows may no longer be shown.
+        const beforeDenial = owner.capture('a');
+        expect(owner.revoke('a')).toBe(true);
+        expect(owner.isSuperseded('a', current, { token: beforeDenial })).toBe(false);
+        // Not even once the list is authorized again: the denial still stands between that request and now.
+        expect(owner.accept('a', current, { token: owner.capture('a') })).toBe(true);
+        expect(owner.accept('a', current, { token: beforeDenial })).toBe(false);
+        expect(owner.isSuperseded('a', current, { token: beforeDenial })).toBe(false);
+        const forgotten = owner.capture('a'); owner.capture('a');
+        owner.forget('a');
+        expect(owner.isSuperseded('a', current, { token: forgotten })).toBe(false);
+    });
+
     test('rename preserves UID, retained surfaces read mutable state and disposal clears projections', async () => {
         const owner = createDatasetAppearanceState(); owner.accept('old', snapshot(11));
         const old = surface(owner, 'old'); await owner.accept('renamed', snapshot(11, { 'shared.card_image_width': 440 }, { version: '2' }));

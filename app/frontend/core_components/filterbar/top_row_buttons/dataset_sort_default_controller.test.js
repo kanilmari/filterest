@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
     showScopeModal: vi.fn(),
     showSuccessToast: vi.fn(),
     showErrorToast: vi.fn(),
+    imageFirstViewOwnsEntry: vi.fn(() => false),
+    postponeUntilDatasetOwnsAddress: vi.fn(),
 }));
 
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: mocks.endpointRouter }));
@@ -24,6 +26,13 @@ vi.mock("../../endpoints/stable_endpoint_router.js", () => ({
     savePersonalDatasetSortDefault: mocks.savePersonalDatasetSortDefault,
 }));
 vi.mock("../../navigation/nav_engine/query_params.js", () => ({ getParams: mocks.getParams }));
+// Who owns the entry, and what the list put off meanwhile, are decided by these two modules.
+vi.mock("../../navigation/nav_engine/image_first_view_history.js", () => ({
+    imageFirstViewOwnsEntry: mocks.imageFirstViewOwnsEntry,
+}));
+vi.mock("../../navigation/nav_engine/dataset_address_writer.js", () => ({
+    postponeUntilDatasetOwnsAddress: mocks.postponeUntilDatasetOwnsAddress,
+}));
 vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: mocks.hasRoutePermission }));
 vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
     fetchCurrentUserProfile: mocks.fetchCurrentUserProfile,
@@ -52,6 +61,7 @@ describe("dataset_sort_default_controller", () => {
         vi.clearAllMocks();
         mocks.endpointRouter.mockReset();
         mocks.getParams.mockReturnValue({});
+        mocks.imageFirstViewOwnsEntry.mockReturnValue(false);
         mocks.hasRoutePermission.mockReturnValue(true);
         mocks.fetchCurrentUserProfile.mockResolvedValue({ user_id: 42 });
         mocks.saveDatasetSortDefault.mockResolvedValue({ configured: true });
@@ -131,6 +141,49 @@ describe("dataset_sort_default_controller", () => {
         expect(mocks.showSuccessToast).toHaveBeenCalledWith(
             "Sorting was set as the default for everyone: Least recently updated."
         );
+    });
+
+    test("waits for the list while an image-first article owns the entry", async () => {
+        // A row address opens fintravel.fi's page-sized image-first article over its
+        // list. Applying the saved sort there wrote the list's address over the row
+        // and reloaded the rows under the opening article (9.6.12).
+        window.history.replaceState({}, "", "/travel_deals/302-a-shared-link");
+        mocks.imageFirstViewOwnsEntry.mockReturnValue(true);
+        mocks.endpointRouter.mockResolvedValue({ configured: true, value: "__newest:DESC", scope: "site" });
+        const dropdown = { setValue: vi.fn() };
+        const values = new Set(["", "__newest:DESC"]);
+
+        await applyDatasetSortDefault("image_first_default_fixture", dropdown, values);
+
+        expect(dropdown.setValue).not.toHaveBeenCalled();
+        expect(mocks.postponeUntilDatasetOwnsAddress).toHaveBeenCalledTimes(1);
+        expect(mocks.postponeUntilDatasetOwnsAddress).toHaveBeenCalledWith("image_first_default_fixture", expect.any(Function));
+
+        // The article has closed and the list has settled on the same entry.
+        mocks.imageFirstViewOwnsEntry.mockReturnValue(false);
+        mocks.postponeUntilDatasetOwnsAddress.mock.calls[0][1]();
+        await vi.waitFor(() => expect(dropdown.setValue).toHaveBeenCalledWith("__newest:DESC", true));
+        expect(dropdown.setValue).toHaveBeenCalledTimes(1);
+    });
+
+    test("a control rebuilt after the article closed applies the default once, and the postponed run adds nothing", async () => {
+        window.history.replaceState({}, "", "/travel_deals/302-a-shared-link");
+        mocks.imageFirstViewOwnsEntry.mockReturnValue(true);
+        mocks.endpointRouter.mockResolvedValue({ configured: true, value: "__newest:DESC", scope: "site" });
+        const first = { setValue: vi.fn() };
+        const rebuilt = { setValue: vi.fn() };
+        const values = new Set(["", "__newest:DESC"]);
+        await applyDatasetSortDefault("image_first_rebuilt_fixture", first, values);
+
+        mocks.imageFirstViewOwnsEntry.mockReturnValue(false);
+        await applyDatasetSortDefault("image_first_rebuilt_fixture", rebuilt, values);
+        expect(rebuilt.setValue).toHaveBeenCalledWith("__newest:DESC", true);
+
+        mocks.postponeUntilDatasetOwnsAddress.mock.calls[0][1]();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(first.setValue).not.toHaveBeenCalled();
+        expect(rebuilt.setValue).toHaveBeenCalledTimes(1);
     });
 
     test("applies a stored default only when the URL has no explicit sorting", async () => {

@@ -9,12 +9,18 @@ import { HISTORY_ENTRY_ID, ensureHistoryEntryId, writeHistoryEntry, retainHistor
 import { IMAGE_FIRST_VIEW_KEY, CARD_VIEW_KEY, ARTICLE_VIEW_KEY, isRenderableDatasetView } from "../../table_views/dataset_view_registry.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "./dataset_access_registry.js";
 import { acquire, release } from "../../../reusable_components/background_media_hold.js";
+import { isAddressOfRow } from "./row_address_path.js";
+import { announceImageFirstArticle } from "./image_first_article_presence.js";
 
 export const IMAGE_FIRST_HISTORY_KEY = "imageFirstView";
 let generation = 0;
+// The newest opening that has begun. A close also moves `generation` on, so that
+// alone cannot tell "a newer opening took over" from "this opening was closed".
+let latestOpening = 0;
 let activeView = null;
 let closingReturn = null;
 let pendingTableName = null;
+let landingClaim = null;
 
 export function isImageFirstViewURL() {
     return [IMAGE_FIRST_VIEW_KEY, "image_first_page_view"].includes(new URL(location.href).searchParams.get("view"));
@@ -27,6 +33,39 @@ function currentIdentity() {
 function identityMatches(identity) {
     return identity?.url === location.href
         && identity.entryId === (history.state?.[HISTORY_ENTRY_ID] ?? null);
+}
+
+/**
+ * Claims the entry an image-first article is about to open on, before the list
+ * behind it loads. A row address need not name the view (a shared link, a search
+ * result), so the address alone cannot say that the article owns it.
+ *
+ * The entry gets its identity here: the list's own controls would otherwise give
+ * it one later, and the opening compares the identity it started with.
+ * The claim ends when it is released, and by itself as soon as the entry or its
+ * address is no longer the claimed one.
+ *
+ * @returns {() => void} Releases this claim; a newer claim is left alone.
+ */
+export function claimImageFirstViewEntry() {
+    ensureHistoryEntryId();
+    const claim = currentIdentity();
+    landingClaim = claim;
+    return () => {
+        if (landingClaim === claim) landingClaim = null;
+    };
+}
+
+/**
+ * Tells whether an image-first article owns the current history entry: it is
+ * landing on it or is open on it. The dataset behind the article keeps working,
+ * but its address writers must not replace this entry's address with the list's.
+ * This is a recorded fact, not a reading of the address: a kept, refused address
+ * that names the view is not owned, and a plain row address being opened is.
+ */
+export function imageFirstViewOwnsEntry() {
+    return identityMatches(landingClaim)
+        || (activeView !== null && activeView.entryId === (history.state?.[HISTORY_ENTRY_ID] ?? null));
 }
 
 function validOrigin(origin) {
@@ -92,6 +131,7 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
     viewKey = IMAGE_FIRST_VIEW_KEY, presentationChoice = false, search }) {
     const initial = currentIdentity();
     const ownGeneration = ++generation;
+    latestOpening = ownGeneration;
     pendingTableName = tableName;
     const target = restoring ? readTarget(tableName, rowId, viewKey) : null;
     const chosen = Boolean(presentationChoice || target?.presentationChoice);
@@ -119,7 +159,12 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
             // Assign the source's identity only after authorization/media work
             // succeeds; even an ID-only replace would mutate a denied restore.
             if (origin && !origin.entryId && identityMatches(origin)) origin.entryId = ensureHistoryEntryId();
-            const url = new URL(listPath.replace(/\/$/, "") + "/" + rowId, location.origin);
+            // A landing or a restored entry keeps the readable address it already has
+            // ("/{dataset}/{id}-{words}"): that is the address the site publishes, and a
+            // reload of it needs no redirect. A new opening builds the row's plain address.
+            const datasetPath = listPath.replace(/\/$/, "");
+            const keepsOwnPath = restoring && isAddressOfRow(location.pathname, datasetPath, rowId);
+            const url = new URL(keepsOwnPath ? location.pathname : datasetPath + "/" + rowId, location.origin);
             url.search = search ?? location.search;
             url.searchParams.set("view", viewKey);
             if (image) url.hash = new URLSearchParams({ image }).toString();
@@ -243,6 +288,9 @@ function closeForNavigation() {
     previous?.cleanup?.();
     previous?.close?.({ immediate: true });
     previous?.modal?.querySelectorAll(".image_first_view").forEach(node => node.remove());
+    // Not every such close ends in a history restoration (access taken away, for one),
+    // so whoever names the article on screen is told here.
+    if (previous) announceImageFirstArticle(previous.tableName);
     return previous;
 }
 
@@ -288,8 +336,13 @@ export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentN
         const isCurrent = () => identityMatches(expected) && isCurrentNavigation();
         if (!isCurrent()) return true;
         let articleAccessDenied = false;
+        // Only this handler's own opening may conclude that the row cannot be shown.
+        // When the person opens another record while this one is loading (a click on
+        // a card behind a slow landing), that newer opening decides what is shown;
+        // returning to the list here would cancel it as well.
+        let isNewestOpening = () => true;
         try {
-            const result = await openImageFirstView({
+            const opening = openImageFirstView({
                 tableName, rowItem: { id: target.rowId }, restoringHistory: true, isCurrent, presentationChoice: target.presentationChoice,
                 ...(viewKey === "image_first_page_view" ? { layout: "page" } : {}),
                 onAccessDenied: () => {
@@ -298,10 +351,14 @@ export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentN
                     retainHistoryEntryAddress();
                 },
             });
+            // The opener begins its opening before its first wait.
+            const ownOpening = latestOpening;
+            isNewestOpening = () => latestOpening === ownOpening;
+            const result = await opening;
             if (articleAccessDenied) return { articleAccessDenied: true };
-            if (!result && isCurrent()) returnFromUnavailableImageFirstView(target);
+            if (!result && isNewestOpening() && isCurrent()) returnFromUnavailableImageFirstView(target);
         } catch (error) {
-            if (isCurrent()) returnFromUnavailableImageFirstView(target);
+            if (isNewestOpening() && isCurrent()) returnFromUnavailableImageFirstView(target);
             console.warn("image-first history restore unavailable", error?.message || error);
         }
         return true;

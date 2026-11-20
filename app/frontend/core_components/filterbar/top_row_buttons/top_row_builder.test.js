@@ -229,6 +229,20 @@ test("reset preserves explicit sorting and its control while clearing only query
 });
 
 
+test("reset keeps the language the address names: it is the page's, not a filter", async () => {
+    const { clearAllFilters } = await import("./top_row_builder.js");
+    const { getParams, setParams, updateURL } = await import("../../navigation/nav_engine/query_params.js");
+    const { getUnifiedTableState } = await import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js");
+    vi.mocked(getParams).mockReturnValue({ lang: "fi", status: "open", view: "card", sort_column: "name", sort_order: "ASC" });
+    vi.mocked(getUnifiedTableState).mockReturnValue({ sort: { column: "name", direction: "ASC" }, filters: { status: "open" }, offset: 0 });
+    clearAllFilters("orders", null);
+    const kept = { lang: "fi", sort_column: "name", sort_order: "ASC", view: "card" };
+    expect(setParams).toHaveBeenLastCalledWith("orders", kept);
+    expect(updateURL).toHaveBeenLastCalledWith("orders", kept);
+    // The language leads the address, where a language address has it.
+    expect(Object.keys(vi.mocked(updateURL).mock.lastCall[1])[0]).toBe("lang");
+});
+
 test("whole reset clears category, column and search state together, preserves view/sort and works without a mounted filter bar", async () => {
     const { clearAllFilters } = await import("./top_row_builder.js");
     const { getParams, setParams, updateURL } = await import("../../navigation/nav_engine/query_params.js");

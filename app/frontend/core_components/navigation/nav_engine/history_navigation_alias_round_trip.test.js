@@ -33,6 +33,8 @@ vi.mock("./card_article_return_state.js", () => ({
     refreshCardArticleReturnViewport: vi.fn(),
 }));
 vi.mock("./image_first_view_history.js", () => ({
+    // No image-first article lands or is open in these cases.
+    imageFirstViewOwnsEntry: () => false,
     handleImageFirstViewHistory: async () => false,
     isImageFirstViewURL: () => false,
 }));

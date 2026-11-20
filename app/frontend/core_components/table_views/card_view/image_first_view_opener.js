@@ -4,6 +4,7 @@
 // Exists so every real content image can lead into a full-height media view by default.
 
 import { bindPageArticleReading } from "./row_article_page_reading.js";
+import { announceImageFirstArticle, markImageFirstArticle } from "../../navigation/nav_engine/image_first_article_presence.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { buildRowArticlePageImage } from "./row_article_page_image.js";
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
@@ -257,8 +258,12 @@ export async function openImageFirstView({
             onRowUnavailable?.();
             return null;
         }
+        // The list behind (a reload, a further page) may be answered first: its newer
+        // authorized appearance then already stands, and this row is still a permitted read.
+        const appearance = { token: appearanceToken, isCurrent };
         if (response.dataset_appearance != null
-            && !datasetAppearanceState.accept(tableName, response.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
+            && !datasetAppearanceState.accept(tableName, response.dataset_appearance, appearance)
+            && !datasetAppearanceState.isSuperseded(tableName, response.dataset_appearance, appearance)) return null;
         dataTypes = response.types || {};
         Object.defineProperty(rowItem, '__articleTableMeta', { value: response.table_meta || {}, configurable: true });
         Object.defineProperty(rowItem, '__articleColumns', { value: response.columns || Object.keys(rowItem), configurable: true });
@@ -350,6 +355,9 @@ export async function openImageFirstView({
     shell.classList.add("image_first_view");
     datasetAppearanceState.bind(shell, tableName);
     shell.dataset.testid = "image-first-view";
+    // The browser tab is named after the article on screen (image_first_article_presence.js).
+    markImageFirstArticle(shell, tableName);
+    const announceArticle = () => announceImageFirstArticle(tableName);
     // Ownership belongs to this disposable dialog content, never the singleton
     // overlay. Close removes it; reuse replaces it, including photo transitions.
     if (presentationChoice) shell.dataset.rowPresentationOwner = tableName;
@@ -484,6 +492,7 @@ export async function openImageFirstView({
             }
             stage.setRowLabel(article.recordTitle.text);
             shell.append(content);
+            announceArticle();
 
             if (fullPicture) {
                 await fullPicture;
@@ -534,8 +543,10 @@ export async function openImageFirstView({
     }
     const modalResult = mount(currentImageRow?.filename || "");
     if (!historyEntryId) return null;
+    announceArticle();
     if (pageLayout && modalResult) {
-        void bindPageArticleReading(shell, rowArticleContentElement, article.buildContent, article.language);
+        // The article is drawn again when the reading language changes; its heading may differ.
+        void bindPageArticleReading(shell, rowArticleContentElement, article.buildContent, article.language, announceArticle);
     }
     // The stage builder performs its initial synchronization before returning.
     // Rebuilding the same media after the modal animation has started forces
