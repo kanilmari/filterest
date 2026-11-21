@@ -813,6 +813,15 @@ body.dark-mode .card--modern {
     max-width: var(--card_layout_bound_width);
 }
 
+/* The first title is a link to the row's article (card_element_builder.js).
+   It keeps the title's look: no underline, and the universal rule in base.css
+   already gives it the text colour. */
+a.card_header,
+a.card_header:hover,
+a.card_header:visited {
+    text-decoration: none;
+}
+
 .card_header > .key_value_wrapper {
     font-size: 1.6rem;
     flex: 1 1 0;

@@ -305,6 +305,46 @@ Page puts one contained image inside the text column, at most
 shared modal transitions retain reduced-motion handling. Ordinary IFAV still
 uses its full-height stage and its original Article projection on restoration.
 
+### Card links
+
+A card's first title, its description and keyword "Show more" links and its
+footer "Show more" are real links (`<a href>`) to the row's article at its
+readable address, `/{public dataset name}/{id}-{words}`
+(`rowArticleLinkAddress` in `default_row_affordance.js`). Search engines follow
+them and a person can open the article in a new tab or copy its link; an
+ordinary click still opens the article in place, and Ctrl, Cmd, Shift or Alt
+is left to the browser (`asksBrowserToOpenElsewhere`).
+
+- **Words.** The words come from the article's title, not the card's: the two
+  can come from different fields, because each surface hides its own. The
+  server accepts them without a redirect (`resolveArticleDocument`). Known
+  limit: the card builds the words from the fields the card list delivered; when
+  the article's title comes from a field the card list does not deliver (for
+  example one hidden on small cards), the words are the card title's and the
+  server redirects the link once, permanently, to the article's own words.
+- **Query.** The address carries no list filters or view. It names a
+  presentation (`?view=`) only when the reader chose one in this tab; a
+  dataset's or the site's default opens from the plain address
+  ([Image_First_Article.md](Image_First_Article.md), "Plain row address").
+  A page opened with an explicit language keeps it (`?lang=`).
+- **Kept current.** `live_link_address.js` rewrites registered links when the
+  dataset catalogue changes (an alias renamed) and when a person is about to
+  use one. The menu's dataset links and the dataset tabs above lists use the
+  same helper. Without a catalogue a link keeps the address it has, and a new
+  link waits without one until the catalogue arrives, so an internal dataset
+  name never reaches an address; an ordinary click still opens it in place.
+- **Exceptions.** A title whose own text holds a link or another control stays a
+  `div` (a link inside a link is invalid); that inner link keeps its own
+  destination. A reader who cannot open the row gets no link. Later titles of
+  the same card stay clickable blocks, so a card does not repeat one link. The
+  card photo stays a button: it opens the image-first article from that photo.
+- **Look.** `a.card_header` has no underline; the footer link takes the global
+  button rule through `.button-like-link` (`styles/form.css`), so the footer
+  looks as it did as a button.
+- **Proof.** C35 reads a signed-out visitor's card list: link addresses, the
+  server's 200 without redirect, Ctrl+click in a new tab, an in-place click in
+  the same document and `?lang=`.
+
 ### Card list edges and Show more
 
 Both result-card image sizes use square detail lists with no inline borders and

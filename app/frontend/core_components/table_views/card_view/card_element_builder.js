@@ -3,8 +3,8 @@
 // Bridges raw row objects and the card DOM structure, including avatars, maps, and modals.
 // Exists to centralise card element construction so card layout logic stays out of the view printer.
 
-import { buildCardUrl } from "./row_article_opener_helpers.js";
-import { bindRowActivation, createRowOpenerElement, bindRowOpeningHref } from "./default_row_affordance.js";
+import { bindRowActivation, canActivateRow, createRowOpenerElement, bindRowOpeningHref, rowArticleLinkAddress } from "./default_row_affordance.js";
+import { asksBrowserToOpenElsewhere } from "../../navigation/nav_engine/live_link_address.js";
 import { createImageElement, create_seeded_avatar, updateCardImageFrame } from "./card_avatar_builder.js";
 import { cardImageFrameFollowsStoredShape } from "./card_image_presentation.js";
 import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
@@ -33,6 +33,15 @@ function generateGoogleMapsEmbedSrcFromRow(rowItem) {
     return buildGoogleMapsEmbedUrl(rowItem);
 }
 
+// A link, button or editor inside a card's text keeps its own action; the card
+// does not open the row from it.
+const NESTED_CONTROL_SELECTOR = 'a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"]';
+
+function isNestedControlEvent(event, container) {
+    const nested = event.target?.closest?.(NESTED_CONTROL_SELECTOR);
+    return Boolean(nested && nested !== container && container.contains(nested));
+}
+
 function addHeaderElement(
     val_str,
     label,
@@ -43,12 +52,9 @@ function addHeaderElement(
     container,
     storedRawValue = val_str,
     columnMeta = {},
-    sourceText = val_str
+    sourceText = val_str,
+    { rowAddress = null } = {}
 ) {
-    const headerDiv = document.createElement("div");
-    headerDiv.classList.add("card_header");
-    headerDiv.dataset.testid = 'card-item-header';
-
     const kvElem = createKeyValueElement(
         label, // näkyy vain jos show_key_on_card === true
         storedRawValue, // tallennetaan muokkausta varten
@@ -58,6 +64,16 @@ function addHeaderElement(
         sourceText,
         columnMeta
     );
+
+    // The title is a real link to the row's article when this reader can open
+    // it: search engines follow it, and a person can open it in a new tab or
+    // copy it. A title whose own text holds a link or another control stays a
+    // block, because a link inside a link is invalid HTML.
+    const asLink = Boolean(rowAddress) && canActivateRow(table_name)
+        && !kvElem.querySelector(NESTED_CONTROL_SELECTOR);
+    const headerDiv = document.createElement(asLink ? "a" : "div");
+    headerDiv.classList.add("card_header");
+    headerDiv.dataset.testid = 'card-item-header';
 
     // Header needs the value wrapper directly so title width is governed by
     // the header container, not by an extra generic card_pair layer.
@@ -69,11 +85,14 @@ function addHeaderElement(
     headerDiv.appendChild(kvElem);
     headerDiv.title = val_str;
 
-    // --- klikillä isompi kortti ----------------
+    if (asLink) bindRowOpeningHref(headerDiv, rowAddress, table_name);
+    // An ordinary click opens the row in place; Ctrl, Cmd, Shift or Alt on the
+    // link is left to the browser (a new tab or window).
     bindRowActivation(headerDiv, table_name, (e) => {
+        if (asLink && asksBrowserToOpenElsewhere(e)) return;
         e.preventDefault();
         openDefaultRowPresentation(row_item, table_name, headerDiv.closest(".card"));
-    });
+    }, { ignoreEvent: event => isNestedControlEvent(event, headerDiv) });
 
     // liitetään korttiin ja palautetaan ref, jotta username voidaan liittää
     container.appendChild(headerDiv);
@@ -230,7 +249,8 @@ function addDescriptionSection(
     description_entries,
     row_item,
     table_name,
-    container
+    container,
+    { rowAddress = null } = {}
 ) {
     count_this_function("addDescriptionSection");
 
@@ -256,8 +276,7 @@ function addDescriptionSection(
 
     // Rich-text links and editors keep their own action. A drag selects text.
     const ignoreEvent = event => {
-        const nested = event.target.closest?.('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"]');
-        if (nested && desc_container.contains(nested)) return true;
+        if (isNestedControlEvent(event, desc_container)) return true;
         if (event.type !== "click") return false;
         const selection = window.getSelection();
         return event.defaultPrevented || Boolean(selection?.rangeCount && !selection.isCollapsed
@@ -315,7 +334,7 @@ function addDescriptionSection(
             valueDiv.style.whiteSpace = "pre-wrap";
             if (show_more_button_on_cards) {
                 valueDiv.appendChild(document.createTextNode(" "));
-                const showMoreLink = createShowMoreLink(row_item, table_name);
+                const showMoreLink = createShowMoreLink(row_item, table_name, rowAddress);
                 showMoreLink.style.display = "none";
                 valueDiv.appendChild(showMoreLink);
             }
@@ -343,13 +362,20 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
-function createShowMoreLink(row_item, table_name) {
+/**
+ * A "show more" link to the row's article. rowAddress reads the row's readable
+ * address (card_row_builder.js); without it the address has no words, which
+ * the server redirects to the worded address.
+ */
+function createShowMoreLink(row_item, table_name, rowAddress = null, className = "show_more_link") {
     const link = createRowOpenerElement("a", table_name);
-    if (row_item?.id != null) bindRowOpeningHref(link, buildCardUrl("/", table_name, row_item.id, "") + location.search, table_name);
-    link.classList.add("show_more_link");
+    if (link instanceof HTMLAnchorElement && row_item?.id != null) {
+        bindRowOpeningHref(link, rowAddress || (() => rowArticleLinkAddress(table_name, row_item.id, "")), table_name);
+    }
+    link.classList.add(className);
     link.dataset.langKey = "show_more";
     bindRowActivation(link, table_name, (e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (asksBrowserToOpenElsewhere(e)) return;
         e.preventDefault();
         openDefaultRowPresentation(row_item, table_name, link.closest(".card"));
     });

@@ -19,6 +19,13 @@ const {
     resolveCardMediaFolderMock: vi.fn((width) => (width <= 360 ? '300' : '1000')),
 }));
 
+// The dataset catalogue has loaded, as it has before any card is drawn; links
+// get their addresses only then (live_link_address.js).
+vi.mock('../../navigation/nav_engine/dataset_access_registry.js', async importOriginal => ({
+    ...await importOriginal(),
+    hasDatasetAccessSnapshot: () => true,
+}));
+
 vi.mock('./card_avatar_builder.js', () => ({
     createImageElement: createImageElementMock,
     create_seeded_avatar: createSeededAvatarMock,
@@ -63,6 +70,7 @@ vi.mock('../../../icons/icon_loader.js', () => ({
 
 vi.mock('../../state_stores/lang_preference_reader.js', () => ({
     getLanguageWithBrowserFallback: vi.fn(() => 'en'),
+    getAddressLanguageParameter: vi.fn(() => ''),
 }));
 
 import {
@@ -371,9 +379,12 @@ describe('classic article title and show-more access', () => {
         setRowPresentationChoice('news', 'image_first_page_view');
         sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/image_first_page_view']));
         const { createShowMoreLink } = await import('./card_element_builder.js');
-        const link = createShowMoreLink({ id: 7 }, 'news');
+        const link = createShowMoreLink({ id: 7 }, 'news', () => '/news/7-seven-words');
         expect(link.tagName).toBe('A');
-        expect(new URL(link.href).searchParams.get('view')).toBe('image_first_page_view');
+        // The reader's own choice in this tab is pinned; list filters never travel.
+        expect(link.getAttribute('href')).toBe('/news/7-seven-words?view=image_first_page_view');
+        // Without the card's address the link still names the row, without words.
+        expect(new URL(createShowMoreLink({ id: 7 }, 'news').href).pathname).toBe('/news/7');
         openImageFirstViewMock.mockClear();
         link.click();
         await vi.waitFor(() => expect(openImageFirstViewMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -388,8 +399,12 @@ describe('classic article title and show-more access', () => {
         sessionStorage.setItem('user_permissions', JSON.stringify(allowed ? ['/ui/view/article_view'] : []));
         const card = document.createElement('div'); card.className = 'card'; document.body.append(card);
         const row = { id: 1, title: 'Article' };
-        const title = addHeaderElement('Article', 'Title', 'title', false, row, 'news', card);
-        const more = createShowMoreLink(row, 'news'); card.append(more);
+        const rowAddress = () => '/news/1-article';
+        const title = addHeaderElement('Article', 'Title', 'title', false, row, 'news', card,
+            'Article', {}, 'Article', { rowAddress });
+        const more = createShowMoreLink(row, 'news', rowAddress); card.append(more);
+        // A reader who cannot open the row gets no link, only the explanation.
+        expect(title.tagName).toBe(allowed ? 'A' : 'DIV');
         expect(title.dataset.articleAccess).toBe(allowed ? 'allowed' : 'denied');
         expect(more.hasAttribute('href')).toBe(allowed);
         title.click();
@@ -405,5 +420,60 @@ describe('classic article title and show-more access', () => {
             expect(title.hasAttribute('tabindex')).toBe(false);
             expect(openRowArticleView).not.toHaveBeenCalled();
         }
+    });
+    test('the title link opens in place on an ordinary click and leaves a modified click to the browser', async () => {
+        const { addHeaderElement } = await import('./card_element_builder.js');
+        const { openRowArticleView } = await import('./row_article_opener.js');
+        vi.mocked(openRowArticleView).mockClear();
+        setRowPresentationChoice('news', 'article_view');
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
+        const card = document.createElement('div'); card.className = 'card'; document.body.append(card);
+        const title = addHeaderElement('Lapin mökit', '', 'title', false, { id: 12 }, 'news', card,
+            'Lapin mökit', {}, 'Lapin mökit', { rowAddress: () => '/news/12-lapin-mokit' });
+        expect(title.tagName).toBe('A');
+        expect(title.dataset.testid).toBe('card-item-header');
+        expect(title.getAttribute('href')).toBe('/news/12-lapin-mokit?view=article_view');
+        for (const modifier of ['ctrlKey', 'metaKey', 'shiftKey', 'altKey']) {
+            const modified = new MouseEvent('click', { bubbles: true, cancelable: true, [modifier]: true });
+            title.dispatchEvent(modified);
+            expect(modified.defaultPrevented).toBe(false);
+        }
+        expect(openRowArticleView).not.toHaveBeenCalled();
+        const ordinary = new MouseEvent('click', { bubbles: true, cancelable: true });
+        title.dispatchEvent(ordinary);
+        expect(ordinary.defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(openRowArticleView).toHaveBeenCalledTimes(1));
+    });
+    test('a title holding its own link stays a block, and that link keeps its destination', async () => {
+        const { addHeaderElement } = await import('./card_element_builder.js');
+        const { createKeyValueElement } = await import('./card_field_formatter.js');
+        const { openRowArticleView } = await import('./row_article_opener.js');
+        vi.mocked(openRowArticleView).mockClear();
+        setRowPresentationChoice('news', 'article_view');
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
+        vi.mocked(createKeyValueElement).mockImplementationOnce(() => {
+            const pair = document.createElement('div');
+            const value = document.createElement('div');
+            value.className = 'header_value';
+            value.append('See ');
+            const web = document.createElement('a');
+            web.href = 'https://example.com/';
+            web.textContent = 'example.com';
+            value.append(web);
+            pair.append(value);
+            return pair;
+        });
+        const card = document.createElement('div'); card.className = 'card'; document.body.append(card);
+        const title = addHeaderElement('See example.com', '', 'title', false, { id: 3 }, 'news', card,
+            'See example.com', {}, 'See example.com', { rowAddress: () => '/news/3-see-examplecom' });
+        // A link inside a link is invalid HTML.
+        expect(title.tagName).toBe('DIV');
+        const ownLink = new MouseEvent('click', { bubbles: true, cancelable: true });
+        title.querySelector('a').dispatchEvent(ownLink);
+        expect(ownLink.defaultPrevented).toBe(false);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(openRowArticleView).not.toHaveBeenCalled();
+        title.querySelector('.header_value').click();
+        await vi.waitFor(() => expect(openRowArticleView).toHaveBeenCalledTimes(1));
     });
 });

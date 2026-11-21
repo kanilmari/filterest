@@ -27,7 +27,15 @@
        with a border, pseudo-element, or child overlay. Right-opening rounded
        SVG tabs intentionally cross this visual edge so their outline can blend
        seamlessly with card content; a real border would paint over that shape.
-       The navbar intentionally has only this right structural edge. */
+       The navbar intentionally has only this right structural edge.
+       Edge rule for everything inside the menu: a child paints over this
+       shadow wherever its own background reaches the last 2px, at rest, on
+       hover, when active or focused. Every child that can paint a background
+       stops 2px short of the right edge (margin-right: 2px), or paints the
+       edge itself with border-right: 2px solid var(--border_color), as the
+       top row and the rectangular button tabs do. Only the rounded SVG tabs
+       cross it, by design. testing/e2e/G_navigation/G24_menu_edge_stays_visible.spec.ts
+       hovers every menu control and fails when anything covers the edge. */
     box-shadow: inset -2px 0 0 0 var(--border_color);
     grid-auto-rows: min-content;
     /* padding: var(--navbar_padding); */

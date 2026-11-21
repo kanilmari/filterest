@@ -3,7 +3,7 @@
 // Reuses the real Home policy helper, shared thumbnails and native application CSS.
 // Keeps owner settings, datasets and language keys untouched in every viewport/theme.
 import { expect, test, type Page } from '@playwright/test';
-import { installHomePolicy } from '../helpers/home-policy-fixture';
+import { installHomePolicy, openHomeProbeDataset } from '../helpers/home-policy-fixture';
 import { datasetAppearanceDefaultsForPlace } from '../../../frontend/shared/dataset_appearance/validator.js';
 import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
@@ -467,6 +467,15 @@ for (const width of [1440, 1000, 390] as const) {
         await expect(showAll).toBeFocused();
         await expect(showAll).toHaveCSS('min-height', '44px');
         expect((await showAll.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        // Filter results follows Show all on the same row, with the same touch height.
+        await page.keyboard.press('Tab');
+        const filterResults = group.locator('.supplemental-dataset-filter-results');
+        await expect(filterResults).toBeFocused();
+        await expect(filterResults).toHaveText('Suodata tuloksia');
+        await expect(filterResults).toHaveCSS('min-height', '44px');
+        const [allBox, filterBox] = [(await showAll.boundingBox())!, (await filterResults.boundingBox())!];
+        expect(Math.abs(allBox.y - filterBox.y)).toBeLessThanOrEqual(1);
+        expect(filterBox.x).toBeGreaterThan(allBox.x + allBox.width);
         await group.screenshot({ path: info.outputPath(`home-box-${groupIndex + 1}-${width}-${theme}.png`), animations: 'disabled' });
         await page.keyboard.press('Tab');
       }
@@ -545,6 +554,115 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const)
       });
       expect(bottomSpace).toBeGreaterThanOrEqual(40);
       await page.screenshot({ path: info.outputPath(`home-bottom-${layout}-${width}-${theme}.png`), animations: 'disabled' });
+      expect(writes).toEqual([]);
+    });
+  }
+}
+
+// Filter results: the same listing as Show all, arriving with the filter bar and its filters open.
+// A real readable dataset receives the visitor; Home itself stays a response-only fixture.
+const FILTER_DATASET = 'app_service_catalog';
+const FILTER_PANEL = `#${FILTER_DATASET}_filterBar_panel`;
+
+/** The visitor's saved filter-bar and section choices, which the arrival must leave as they were. */
+async function savedFilterChoices(page: Page) {
+  return page.evaluate(() => ({
+    local: Object.fromEntries(Object.keys(localStorage).filter(key => /filterbar/i.test(key)).sort()
+      .map(key => [key, localStorage.getItem(key)])),
+    session: Object.fromEntries(Object.keys(sessionStorage).filter(key => /disclosure/i.test(key)).sort()
+      .map(key => [key, sessionStorage.getItem(key)])),
+  }));
+}
+
+async function expectFiltersOpen(page: Page) {
+  const panel = page.locator(FILTER_PANEL);
+  await expect(panel).toBeVisible();
+  await expect(panel).not.toHaveClass(/(?:^|\s)filterbar-panel--hidden(?:\s|$)/);
+  const filters = panel.locator('.filterbar-filters-section');
+  await expect(filters).toHaveClass(/(?:^|\s)is-expanded(?:\s|$)/);
+  await expect(filters).toBeVisible();
+  // The address names the listing only; the one-time request is gone from it.
+  expect(new URL(page.url()).searchParams.has('open-filters')).toBe(false);
+  expect(new URL(page.url()).searchParams.get('sort_column')).toBe('__newest');
+}
+
+for (const width of [1440, 390] as const) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`Home Filter results opens the dataset with its filters at ${width}px in ${theme}`, async ({ page }, info) => {
+      await installHomePolicy(page.context(), theme, {
+        site_name: 'WO95', show_blocks: true,
+        presentation: { ...presentationDefinition.default, max_width_px: 750 },
+        hero: { title: { fi: 'Matkailijan etusivu', en: 'Traveller home' } },
+        blocks: [{ dataset: FILTER_DATASET, result_limit: 3, columns: ['title'],
+          types: { title: { card_element: 'header', show_value_on_card: true, is_multilingual: true } },
+          data: [1, 2].map(id => ({ id, title: { fi: `Palvelu ${id}`, en: `Service ${id}` } })) }],
+      });
+      const writes: string[] = [];
+      await page.context().route(/\/api\/(?:admin\/)?front-page(?:[/?]|$)/, async route => {
+        if (route.request().method() === 'GET') return route.fallback();
+        writes.push(route.request().url());
+        await route.abort();
+      });
+      const markedRequests: string[] = [];
+      page.context().on('request', request => {
+        const url = new URL(request.url());
+        if (url.pathname.startsWith('/api/') && request.url().includes('open-filters')) markedRequests.push(request.url());
+      });
+      await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'reduce' });
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(({ theme }) => {
+        localStorage.setItem('theme', theme);
+        localStorage.setItem('chosen_language', 'fi');
+      }, { theme });
+      // The visitor last closed this dataset's filter bar; that choice is saved.
+      await openHomeProbeDataset(page, false);
+      await expect(page.locator(FILTER_PANEL)).toHaveClass(/(?:^|\s)filterbar-panel--hidden(?:\s|$)/);
+      const before = await savedFilterChoices(page);
+
+      // The site root opens Home when a separate Home is enabled.
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
+      await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+      const group = page.locator('.front-page-blocks > .supplemental-dataset-group');
+      await expect(group).toHaveCount(1);
+      const showAll = group.locator('.supplemental-dataset-show-all');
+      const filterResults = group.locator('.supplemental-dataset-filter-results');
+      await expect(showAll).toHaveText('Näytä kaikki');
+      await expect(filterResults).toHaveText('Suodata tuloksia');
+      const allHref = (await showAll.getAttribute('href'))!;
+      const filterHref = (await filterResults.getAttribute('href'))!;
+      const marked = new URL(filterHref, page.url());
+      expect(marked.searchParams.get('open-filters')).toBe('1');
+      marked.searchParams.delete('open-filters');
+      expect(marked.pathname + marked.search).toBe(allHref);
+      // The icon is drawn in the link's own colour, so it follows the theme.
+      // The icon and label are drawn in the link's own ink, so both follow the theme.
+      const ink = await filterResults.evaluate(link => ({ link: getComputedStyle(link).color,
+        icon: getComputedStyle(link.querySelector('.supplemental-dataset-filter-results__icon')!).backgroundColor,
+        label: getComputedStyle(link.lastElementChild!).color,
+        showAll: getComputedStyle(link.parentElement!.querySelector('.supplemental-dataset-show-all')!).color }));
+      expect(ink.icon).toBe(ink.link);
+      expect(ink.label).toBe(ink.link);
+      expect(ink.showAll).toBe(ink.link);
+      await group.screenshot({ path: info.outputPath(`home-filter-results-box-${width}-${theme}.png`), animations: 'disabled' });
+
+      // An ordinary click opens the listing in place, with the filters open.
+      await filterResults.click();
+      await expectFiltersOpen(page);
+      expect(await savedFilterChoices(page)).toEqual(before);
+      await page.screenshot({ path: info.outputPath(`home-filter-results-arrival-${width}-${theme}.png`), animations: 'disabled' });
+
+      // A new tab or a copied link opens the filters too, from the address alone.
+      const copied = await page.context().newPage();
+      await copied.setViewportSize({ width, height: 900 });
+      await copied.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'reduce' });
+      await copied.goto(new URL(filterHref, page.url()).href, { waitUntil: 'domcontentloaded' });
+      await expectFiltersOpen(copied);
+      expect((await savedFilterChoices(copied)).local).toEqual(before.local);
+      await copied.screenshot({ path: info.outputPath(`home-filter-results-copied-link-${width}-${theme}.png`), animations: 'disabled' });
+      await copied.close();
+
+      expect(markedRequests).toEqual([]);
       expect(writes).toEqual([]);
     });
   }

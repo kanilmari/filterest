@@ -45,7 +45,7 @@ function addKeywordsSection(keywords_list, row_item, table_name, container, user
     count_this_function("addKeywordsSection");
     const CARD_MOUNT_EVENT = "easelect:card-mounted";
 
-    const { deferResponsiveLayoutMs = 0 } = userOptions;
+    const { deferResponsiveLayoutMs = 0, rowAddress = null } = userOptions;
 
     if (keywords_list.length === 0) return;
 
@@ -93,7 +93,7 @@ function addKeywordsSection(keywords_list, row_item, table_name, container, user
             );
             if (v && show_more_button_on_cards) {
                 v.appendChild(document.createTextNode(" "));
-                v.appendChild(createShowMoreLink(row_item, table_name));
+                v.appendChild(createShowMoreLink(row_item, table_name, rowAddress));
             }
         } else {
             contentElement = createKeyValueElement(

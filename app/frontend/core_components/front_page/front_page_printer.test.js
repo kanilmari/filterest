@@ -27,7 +27,8 @@ vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.reque
 vi.mock('../lang/translation_handler.js', () => ({
     getTranslationForKey: (key) => ({ front_page: 'Etusivu', front_page_show_all: 'Näytä kaikki',
         front_page_no_results: 'Ei tuloksia', front_page_load_failed: 'Lataus epäonnistui',
-        shell_boot_reload: 'Lataa sivu uudelleen', news: localStorage.getItem('chosen_language') === 'en' ? 'News' : 'Uutiset' })[key] || key,
+        shell_boot_reload: 'Lataa sivu uudelleen', news: localStorage.getItem('chosen_language') === 'en' ? 'News' : 'Uutiset',
+        filterbar_filter_results: localStorage.getItem('chosen_language') === 'en' ? 'Filter results' : 'Suodata tuloksia' })[key] || key,
 }));
 
 function response(title = 'Current account') {
@@ -212,8 +213,17 @@ test('renders localized blocks, empty blocks and newest-first collection/article
     expect(all.searchParams.get('sort_column')).toBe('__newest');
     expect(all.searchParams.get('sort_order')).toBe('DESC');
     expect(new URL(page.querySelector('li a').href).pathname).toBe('/news/42');
+    // Filter results opens the same newest-first cards and asks for the filters.
+    const filterLink = page.querySelector('.supplemental-dataset-filter-results');
+    const filtered = new URL(filterLink.href);
+    expect(filtered.searchParams.get('open-filters')).toBe('1');
+    filtered.searchParams.delete('open-filters');
+    expect(filtered.href).toBe(all.href);
+    expect(filterLink.textContent).toBe('Suodata tuloksia');
+    expect(filterLink.querySelector('.supplemental-dataset-filter-results__icon').getAttribute('aria-hidden')).toBe('true');
     localStorage.setItem('chosen_language', 'en');
     await refreshLocalizedDatasetValues('en');
+    expect(filterLink.textContent).toBe('Filter results');
     expect(page.textContent).toContain('English title');
     expect(page.querySelector('.supplemental-dataset-group h2 > a').textContent).toBe('News');
     expect(page.querySelector('.supplemental-dataset-group p').textContent).toBe('Safe excerpt');
@@ -264,7 +274,10 @@ test('Home boxes follow tab order with shared images, letter fallbacks and one l
             expect(row.querySelector('p').textContent).toBe('Safe excerpt');
         }
         await vi.waitFor(() => expect(rows[1].querySelector('.card_small_image_inner')?.textContent).toBe('S'));
-        expect(group.lastElementChild.className).toBe('supplemental-dataset-show-all');
+        // The box ends with Show all, then Filter results, in that tab order.
+        expect(group.lastElementChild.className).toBe('supplemental-dataset-collection-links');
+        expect([...group.lastElementChild.children].map(link => link.className))
+            .toEqual(['supplemental-dataset-show-all', 'supplemental-dataset-filter-results']);
     }
 });
 

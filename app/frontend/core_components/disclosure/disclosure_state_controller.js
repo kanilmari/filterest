@@ -37,8 +37,11 @@ function project(binding, viewerID) {
     binding.viewerID = viewerID;
     for (const section of appearanceScopeElements(binding.root, SELECTOR)) {
         const choiceContext = context(binding, section, viewerID);
+        // A temporary Filters reveal owns its section until it ends; private
+        // state that arrives meanwhile is applied on the next projection after it.
         if (!choiceContext || typeof section.expand !== 'function' || typeof section.collapse !== 'function'
-            || section.dataset.filterbarTemporaryDisclosureOperation === 'true') continue;
+            || section.dataset.filterbarTemporaryDisclosureOperation === 'true'
+            || section.dataset.filterbarTemporaryDisclosureOwner === 'true') continue;
         const choice = readDisclosureChoice(choiceContext);
         const fallback = binding.config?.shared?.[choiceContext.key]
             ?? definition.shared_fields[choiceContext.key].default;

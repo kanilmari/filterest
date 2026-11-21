@@ -1,10 +1,15 @@
 // hero_dataset_tabs.js
 // Shows the accepted main dataset tabs inside the scrolling dataset hero.
 // Reads the shared main-tab model; it owns no permission, ordering or URL state.
-// Uses ordinary navigation buttons so navbar-only SVG geometry remains isolated.
+// Uses ordinary links so navbar-only SVG geometry remains isolated: search engines
+// follow them and a person can open a dataset in a new tab, while an ordinary
+// click still opens it in place.
 
 import { getMainDatasetTabs, subscribeMainDatasetTabs } from './main_dataset_tabs.js';
 import { openNavTab } from './main_tab_printer.js';
+import { buildDatasetPath } from '../nav_engine/dataset_aliases.js';
+import { DATASET_PREFIX } from '../nav_engine/query_params.js';
+import { asksBrowserToOpenElsewhere, bindLiveLinkAddress, withAddressLanguage } from '../nav_engine/live_link_address.js';
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
 import { createSymbolMaskElement } from '../../../reusable_components/symbol_asset_resolver.js';
@@ -37,11 +42,11 @@ export function createHeroDatasetTabs(activeDataset, { language } = {}) {
     function updateCopy() {
         if (destroyed) return;
         element.setAttribute('aria-label', navigationLabel(language));
-        for (const { button, label, tab } of entries.values()) {
+        for (const { link, label, tab } of entries.values()) {
             const fallback = String(tab.text || tab.dataset);
             const text = getTranslationForKey(tab.langKey, { fallback, countUsage: false, language });
             if (label.textContent !== text) label.textContent = text;
-            if (button.title !== text) button.title = text;
+            if (link.title !== text) link.title = text;
         }
         fit.sync();
     }
@@ -56,15 +61,16 @@ export function createHeroDatasetTabs(activeDataset, { language } = {}) {
             present.add(dataset);
             let entry = entries.get(dataset);
             if (!entry) {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'hero-dataset-tabs__button';
-                button.dataset.dataset = dataset;
-                button.dataset.testid = 'hero-dataset-tab';
+                const link = document.createElement('a');
+                link.className = 'hero-dataset-tabs__button';
+                link.dataset.dataset = dataset;
+                link.dataset.testid = 'hero-dataset-tab';
+                // The dataset's public address, kept current when its alias changes.
+                bindLiveLinkAddress(link, () => withAddressLanguage(buildDatasetPath(dataset, DATASET_PREFIX)));
                 const label = document.createElement('span');
                 label.className = 'hero-dataset-tabs__label';
-                button.appendChild(label);
-                entry = { button, label, tab, icon: null, iconKey: null };
+                link.appendChild(label);
+                entry = { link, label, tab, icon: null, iconKey: null };
                 entries.set(dataset, entry);
             }
             entry.tab = tab;
@@ -73,16 +79,16 @@ export function createHeroDatasetTabs(activeDataset, { language } = {}) {
                 entry.icon?.remove();
                 entry.icon = createSymbolMaskElement(iconKey, 'hero-dataset-tabs__icon');
                 entry.iconKey = iconKey;
-                entry.button.prepend(entry.icon);
+                entry.link.prepend(entry.icon);
             }
-            if (dataset === activeDataset) entry.button.setAttribute('aria-current', 'page');
-            else entry.button.removeAttribute('aria-current');
-            // Reuse existing buttons when order changes, including the focused one.
-            element.appendChild(entry.button);
+            if (dataset === activeDataset) entry.link.setAttribute('aria-current', 'page');
+            else entry.link.removeAttribute('aria-current');
+            // Reuse existing links when order changes, including the focused one.
+            element.appendChild(entry.link);
         }
         for (const [dataset, entry] of entries) {
             if (present.has(dataset)) continue;
-            entry.button.remove();
+            entry.link.remove();
             entries.delete(dataset);
         }
         element.hidden = entries.size === 0 && !element.querySelector('.top-nav-home-button');
@@ -93,11 +99,16 @@ export function createHeroDatasetTabs(activeDataset, { language } = {}) {
     }
 
     async function navigate(event) {
-        const button = event.target.closest?.('.hero-dataset-tabs__button');
-        if (destroyed || navigating || !button || !element.contains(button)) return;
-        const entry = entries.get(button.dataset.dataset);
-        if (entry?.button !== button) return;
+        const link = event.target.closest?.('.hero-dataset-tabs__button[data-dataset]');
+        if (destroyed || !link || !element.contains(link)) return;
+        const entry = entries.get(link.dataset.dataset);
+        if (entry?.link !== link) return;
+        // Ctrl, Cmd, Shift or Alt asks the browser for a new tab or window.
+        if (asksBrowserToOpenElsewhere(event, link)) return;
+        // Every ordinary click stays in the application, also one made while
+        // an earlier one is still opening: the link must not load a new page.
         event.preventDefault();
+        if (navigating) return;
         navigating = true;
         element.setAttribute('aria-busy', 'true');
         try {

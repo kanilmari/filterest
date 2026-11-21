@@ -26,11 +26,14 @@ import {
 } from '../main_tabs/main_tab_active_state.js';
 import { ensure_private_custom_views_loaded } from '../admin_and_user_tools/custom_view_reader.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
+import { noteNavigationStarted, settleAddressFiltersArrivalRequest } from './filters_arrival_request.js';
 import { hasContentBesideLoadingIndicator } from '../../../reusable_components/loading/loading_indicator_printer.js';
 import { loadCustomRoot } from '../../front_page/custom_root_navigation.js';
 import { revealTreeNode } from '../../../reusable_components/vanilla_tree/vanilla_tree_builder.js';
 
 export async function handle_all_navigation(name, customViews, options = {}) {
+    // A Home open-filters request rides on the navigation that starts next; a later one ends it.
+    noteNavigationStarted();
     if (options.isCurrentNavigation?.() === false) return { abort: true, reason: 'stale_navigation' };
     if (name === 'front_page' && await loadCustomRoot({ replace: options.skipUrlUpdate === true,
         isCurrentNavigation: options.isCurrentNavigation })) {
@@ -101,6 +104,8 @@ export async function handle_all_navigation(name, customViews, options = {}) {
     } finally {
         // 4) Palautetaan URL-parametrien käyttö (runs even if pipeline aborts)
         useUrlParams();
+        // A cold start's open-filters request lives for its own navigation only.
+        settleAddressFiltersArrivalRequest();
     }
 }
 

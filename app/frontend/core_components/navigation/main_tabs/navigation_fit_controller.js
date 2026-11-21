@@ -19,7 +19,7 @@ export function countFittingNavigationButtons(widths, availableWidth, gap = 0) {
 }
 
 // Keep fitting against the original nav box. Only the painted buttons move.
-function navigationGroupOffset(element, groupWidth, allFit, observer) {
+function navigationGroupOffset(element, groupWidth, allFit, watch) {
     const homeRow = element.closest('.front-page > .front-page-top-row');
     const bar = homeRow || element.closest('.dataset-shared-topbar[data-topbar-mode="hero"]')
         ?.querySelector('.dataset-shared-topbar__inner');
@@ -29,12 +29,12 @@ function navigationGroupOffset(element, groupWidth, allFit, observer) {
     let leftLimit = navBox.left;
     let rightLimit = navBox.right;
     if (homeRow) {
-        observer?.observe(homeRow);
+        watch(homeRow);
         // Only occupied Home controls on this flex line need clearance. A wrapped
         // sibling leaves the original nav edge and the row's outer padding in place.
         for (const edge of homeRow.children) {
             if (edge === element) continue;
-            observer?.observe(edge);
+            watch(edge);
             const box = edge.getBoundingClientRect();
             if (!box.width || box.bottom <= navBox.top || box.top >= navBox.bottom) continue;
             if (box.right <= navBox.left) leftLimit = Math.max(leftLimit, box.right + NAVIGATION_EDGE_GAP);
@@ -45,8 +45,8 @@ function navigationGroupOffset(element, groupWidth, allFit, observer) {
         const end = bar.querySelector('.dataset-shared-topbar__slot--end');
         if (!start || !end) return 0;
         // Swapping equally wide edge controls can leave the nav width unchanged.
-        observer?.observe(start);
-        observer?.observe(end);
+        watch(start);
+        watch(end);
         leftLimit = start.getBoundingClientRect().right + NAVIGATION_EDGE_GAP;
         rightLimit = end.getBoundingClientRect().left - NAVIGATION_EDGE_GAP;
     }
@@ -69,7 +69,8 @@ export function createNavigationFitController(element) {
     const view = element.ownerDocument.defaultView;
     function sync() {
         if (destroyed) return;
-        const buttons = [...element.querySelectorAll(':scope > button')];
+        // Dataset destinations are links (hero_dataset_tabs.js); Home is measured on its own below.
+        const buttons = [...element.querySelectorAll(':scope > :is(button, a):not(.top-nav-home-button)')];
         // Only Home's phone layout restores every destination, including buttons
         // hidden before crossing 700px. Dataset projections keep their fit rule.
         if (element.closest('.front-page-scroller > .front-page-top-row')) {
@@ -119,15 +120,53 @@ export function createNavigationFitController(element) {
             const groupWidth = reserved + widths.reduce((sum, width) => sum + width, 0)
                 + Math.max(0, widths.length - 1) * gap;
             const allFit = count === buttons.length && !home?.classList.contains('top-nav-home-button--compact');
-            applyNavigationOffset(element, navigationGroupOffset(element, groupWidth, allFit, observer));
+            applyNavigationOffset(element, navigationGroupOffset(element, groupWidth, allFit, watch));
         }
     }
     function schedule() {
         if (frame || destroyed) return;
         frame = view.requestAnimationFrame(() => { frame = 0; sync(); });
     }
-    const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(schedule) : null;
-    observer?.observe(element);
+    // A resize callback runs after layout and before paint. Fitting there, not one
+    // frame later, keeps the previous offset from painting on the new row: Home's
+    // menu slot appears or disappears in a single frame (owner, 21.11.2026).
+    function syncBeforePaint() {
+        if (frame) view.cancelAnimationFrame(frame);
+        frame = 0;
+        const before = [...observed].map(target => [target, sizeOf(target)]);
+        sync();
+        // Hiding the last visible or a squeezed destination can resize this row or the
+        // Home row around it. The observer would skip that change and report a
+        // resize-loop error, so a resized element is observed afresh from the next
+        // frame, which refits once more (Codex review, 21.11.2026).
+        for (const [target, size] of before) {
+            if (sizeOf(target) === size) continue;
+            observer.unobserve(target);
+            observeNextFrame(target);
+        }
+    }
+    const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(syncBeforePaint) : null;
+    // Every element this controller observes: the row itself, then Home's row or the
+    // dataset bar's edges once fitting has found them.
+    const observed = new Set();
+    function sizeOf(target) {
+        const box = target.getBoundingClientRect();
+        return `${box.width}x${box.height}`;
+    }
+    function observeNextFrame(target) {
+        view.requestAnimationFrame(() => { if (!destroyed) observer.observe(target); });
+    }
+    if (observer) {
+        observer.observe(element);
+        observed.add(element);
+    }
+    // A bar or edge first observed inside that callback would also be skipped,
+    // so it starts being observed next frame.
+    function watch(target) {
+        if (!observer || observed.has(target)) return;
+        observed.add(target);
+        observeNextFrame(target);
+    }
     // Home can change hosts or its site-name label without resizing this row.
     // Refit after either change; fitting's style/hidden writes are not observed.
     const children = new view.MutationObserver(schedule);
@@ -139,6 +178,7 @@ export function createNavigationFitController(element) {
         destroy() {
             destroyed = true;
             observer?.disconnect();
+            observed.clear();
             children.disconnect();
             if (frame) view.cancelAnimationFrame(frame);
             view.removeEventListener('resize', schedule);

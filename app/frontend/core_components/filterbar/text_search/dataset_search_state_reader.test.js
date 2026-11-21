@@ -72,6 +72,7 @@ describe('RESERVED_PARAM_KEYS', () => {
       'view',
       'chart_x',
       'chart_y',
+      'open-filters',
     ]));
   });
 });

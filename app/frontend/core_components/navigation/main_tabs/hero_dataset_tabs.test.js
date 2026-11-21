@@ -18,6 +18,11 @@ vi.mock('./main_dataset_tabs.js', () => ({
     },
 }));
 vi.mock('./main_tab_printer.js', () => ({ openNavTab: mocks.open }));
+// The dataset catalogue has loaded; links get their addresses only then.
+vi.mock('../nav_engine/dataset_access_registry.js', async importOriginal => ({
+    ...await importOriginal(),
+    hasDatasetAccessSnapshot: () => true,
+}));
 vi.mock('../../lang/translation_handler.js', () => ({
     getTranslationForKey: (key, { fallback }) => {
         const copies = { fi: { places: 'Paikat', articles: 'Artikkelit' },
@@ -52,7 +57,8 @@ function mount(active = 'places') {
     const control = createHeroDatasetTabs(active);controls.push(control);
     document.body.appendChild(control.element);return control;
 }
-const buttons = (control) => [...control.element.querySelectorAll('button')];
+// The dataset destinations; they are links (search engines, new tabs).
+const buttons = (control) => [...control.element.querySelectorAll('.hero-dataset-tabs__button[data-dataset]')];
 
 describe('hero dataset tabs', () => {
     test('hero and Home buttons stay rounded with or without media while preserving selection and copy', () => {
@@ -126,7 +132,7 @@ describe('hero dataset tabs', () => {
         expect(buttons(control)[0].getAttribute('aria-current')).toBe('page');
         expect(buttons(control)[1].hasAttribute('aria-current')).toBe(false);
         expect(control.element.hasAttribute('aria-busy')).toBe(false);
-        expect(buttons(control).every(button => button.type === 'button')).toBe(true);
+        expect(buttons(control).map(link => [link.tagName, link.getAttribute('href')])).toEqual([['A', '/places'], ['A', '/articles']]);
     });
 
     test('does not duplicate navigation while the current dirty check is pending', async () => {
@@ -139,6 +145,27 @@ describe('hero dataset tabs', () => {
         finish({ abort: true });await Promise.resolve();
         buttons(control)[1].click();
         expect(mocks.open).toHaveBeenCalledTimes(2);
+    });
+
+    test('every ordinary click stays in the application, also while an earlier one is opening', () => {
+        mocks.open.mockReturnValue(new Promise(() => {}));
+        const control = mount();
+        const press = () => {
+            const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+            buttons(control)[1].dispatchEvent(event);
+            return event.defaultPrevented;
+        };
+        // Without preventDefault the second press would load the whole page.
+        expect([press(), press()]).toEqual([true, true]);
+        expect(mocks.open).toHaveBeenCalledTimes(1);
+    });
+
+    test.each(['ctrlKey', 'metaKey', 'shiftKey', 'altKey'])('a press with %s is left to the browser', modifier => {
+        const control = mount();
+        const event = new MouseEvent('click', { bubbles: true, cancelable: true, [modifier]: true });
+        buttons(control)[1].dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+        expect(mocks.open).not.toHaveBeenCalled();
     });
 
     test('handles empty snapshots and uses safe text and metadata icon fallback', () => {

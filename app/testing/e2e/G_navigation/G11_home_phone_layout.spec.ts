@@ -279,11 +279,11 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     expect(stageBox.x + stageBox.width - heroBox.x - heroBox.width).toBeCloseTo(16, 0);
     const tabs = page.locator('.front-page-top-row > .hero-dataset-tabs');
     await expect(page.getByRole('navigation').and(tabs)).toHaveCount(1);
-    const buttons = tabs.locator(':scope > button');
+    const buttons = tabs.locator(':scope > .hero-dataset-tabs__button[data-dataset]');
     await expect(buttons).toHaveCount(2);
     await expect.poll(() => buttons.evaluateAll(elements => elements.every(element =>
       !(element as HTMLButtonElement).hidden && getComputedStyle(element).display !== 'none'))).toBe(true);
-    const destinations = tabs.locator(':scope > :is(a.top-nav-home-button, button)');
+    const destinations = tabs.locator(':scope > :is(a.top-nav-home-button, .hero-dataset-tabs__button[data-dataset])');
     await expect(destinations).toHaveCount(2);
     const boxes = await destinations.evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect();
@@ -305,7 +305,7 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
       }), 'Closed-menu Home destinations must receive pointer input').toBe(true);
     }
     // Home has no selected dataset; its shared renderer preserves the current-page contract.
-    await expect(tabs.locator(':scope > button[aria-current]')).toHaveCount(0);
+    await expect(tabs.locator(':scope > .hero-dataset-tabs__button[data-dataset][aria-current]')).toHaveCount(0);
     // Batch 565: derive the open drawer's actual document tab order, including
     // search, rather than assuming its last control immediately precedes Home.
     let beforeTabs = menu;
@@ -436,7 +436,7 @@ async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedM
   }
   const menu = page.locator('#showMenuButton');
   const home = page.locator('.front-page-top-row .top-nav-home-button');
-  const firstDataset = page.locator('.front-page-top-row .hero-dataset-tabs > button:visible').first();
+  const firstDataset = page.locator('.front-page-top-row .hero-dataset-tabs > .hero-dataset-tabs__button[data-dataset]:visible').first();
   await menu.focus(); await menu.press('Tab');
   if (page.viewportSize()!.width <= 700) {
     const search = await expectPhoneSearchFocus(page);
@@ -499,7 +499,7 @@ test('Home response fixture keeps focus and restores every destination across 70
   const state = await openHome(page, 'light', 'fi', { name: 'Fintravel', width: 700, datasetCount: 12 });
   await setMenu(page, true);
   await proveHome(page, true, state.alignment, false);
-  const buttons = page.locator('.front-page-top-row > .hero-dataset-tabs > button');
+  const buttons = page.locator('.front-page-top-row > .hero-dataset-tabs > .hero-dataset-tabs__button[data-dataset]');
   const count = await buttons.count();
   const trailing = buttons.last();
   await trailing.focus();

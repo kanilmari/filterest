@@ -95,7 +95,9 @@ identifiers remain compatibility names unless a documented migration changes the
 
 ### Menu bar
 The navigation surface at the left of the viewport (`#navbar`). It may be
-shown beside the dataset content or opened over it on narrow screens.
+shown beside the dataset content or opened over it on narrow screens. Its right
+edge is a 2 px inset shadow that nothing inside it may cover
+([Frontend Coding Conventions §7.2](Frontend_Coding_Conventions.md#72-the-menu-bars-right-edge)).
 
 ### Dataset content area
 The primary working area inside `.tab_parts_container` containing the active

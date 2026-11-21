@@ -21,7 +21,7 @@ export async function proveContactButton(page: Page, theme: 'light' | 'dark', op
     const hero = page.locator('.front-page-hero'), nav = page.locator('.front-page-top-row > .hero-dataset-tabs');
     await expect(group).toHaveAttribute('data-alignment', alignment);
     await expect(group).toHaveAttribute('data-phone-alignment', phoneAlignment);
-    const tabs = nav.locator(':scope > button');
+    const tabs = nav.locator(':scope > .hero-dataset-tabs__button[data-dataset]');
     await expect(tabs).toHaveCount(4);
     for (const direction of ['ltr', 'rtl']) {
       await page.setViewportSize({ width: placement === 'top_row' && direction === 'ltr' ? 320 : 390, height: 800 });
@@ -90,8 +90,11 @@ export async function proveContactButton(page: Page, theme: 'light' | 'dark', op
   const state = await openHome(page, theme, 'fi', { name: 'Fintravel', width: 390, datasetLabels: [name],
     article: { placement: 'top_row', alignment: 'start', phoneAlignment: 'inherit', label: name } });
   const row = page.locator('.front-page-scroller > .front-page-top-row');
-  for (const role of ['button', 'link'] as const) {
-    const control = row.getByRole(role, { name, exact: true });
+  // The dataset tab and the Contact link share the long label; both are links.
+  const sameName = row.getByRole('link', { name, exact: true });
+  await expect(sameName).toHaveCount(2);
+  for (const index of [0, 1]) {
+    const control = sameName.nth(index);
     await expect(control).toBeVisible();
     const label = control.locator(':scope > span').last();
     const text = await label.evaluate(element => {

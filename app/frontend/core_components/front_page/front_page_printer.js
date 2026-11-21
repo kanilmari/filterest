@@ -111,6 +111,8 @@ function renderBlocks(container, data, visit, appearanceToken) {
             preselectArticle: true,
             includeThumbnails: true,
             showAllKey: 'front_page_show_all', emptyKey: 'front_page_no_results',
+            // Beside Show all: the same listing, arriving with the filters open.
+            filterResultsKey: 'filterbar_filter_results',
             replacementParams: { sort_column: '__newest', sort_order: 'DESC', view: 'card' },
         });
         group.render(block.data || [], block.columns || [], block.types || {});

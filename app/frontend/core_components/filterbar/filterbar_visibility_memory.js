@@ -58,6 +58,17 @@ export function bindFilterbarVisibilityMemory({ tableName, panel, host, containe
     let frame = 0;
     let instantFrame = 0;
     let lastMode = visibilityMemoryMode();
+    let settleWaiters = [];
+    function settle() {
+        const waiters = settleWaiters;
+        settleWaiters = [];
+        waiters.forEach(resolve => resolve());
+    }
+    function cancelTransitionFrame() {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+        settle();
+    }
     function setVisibility(next, animate) {
         if (!animate) container.classList.add('filterbar-visibility-instant');
         apply(next);
@@ -82,21 +93,27 @@ export function bindFilterbarVisibilityMemory({ tableName, panel, host, containe
         active = owner;
         departure = from;
         setVisibility(from, false);
+        // A replaced frame keeps its waiters for the frame that replaces it.
         if (frame) cancelAnimationFrame(frame);
+        frame = 0;
         if (from !== to) {
             frame = requestAnimationFrame(() => {
                 frame = 0;
-                if (signal.aborted || !isActive()) return;
+                if (signal.aborted || !isActive()) { settle(); return; }
                 const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
                 setVisibility(to, filterbarVisibilityTransition(from, to, mode, reduced));
                 if (mode === 'shared') localStorage.setItem(sharedKey(), String(to));
+                settle();
             });
-        } else if (mode === 'shared') localStorage.setItem(sharedKey(), String(to));
+        } else {
+            if (mode === 'shared') localStorage.setItem(sharedKey(), String(to));
+            settle();
+        }
     }
     host?.addEventListener(VIEW_DEACTIVATE_EVENT, () => {
         if (active === owner) { departure = visible(); active = null; }
         wasActive = false;
-        if (frame) cancelAnimationFrame(frame);
+        cancelTransitionFrame();
     }, { signal });
     const observer = new MutationObserver(sync);
     if (host) observer.observe(host, { attributes: true, attributeFilter: ['class'] });
@@ -118,10 +135,12 @@ export function bindFilterbarVisibilityMemory({ tableName, panel, host, containe
     const unsubscribeSession = subscribeToSessionGeneration(() => { wasActive = false; });
     signal.addEventListener('abort', () => {
         observer.disconnect(); unsubscribe(); unsubscribeSession();
-        cancelAnimationFrame(frame); cancelAnimationFrame(instantFrame);
+        cancelTransitionFrame(); cancelAnimationFrame(instantFrame);
         if (active === owner) { departure = visible(); active = null; }
     }, { once: true });
     sync();
+    /** Resolves once no remembered-state change is still waiting for its frame. */
+    sync.settled = () => frame ? new Promise(resolve => settleWaiters.push(resolve)) : Promise.resolve();
     return sync;
 }
 

@@ -215,6 +215,26 @@ it only shrinks, and the guard rejects both new deviations and stale entries.
 Migrations prove the old boundary at −1, exactly, and +1 px, plus phone/tablet/desktop in both themes.
 Moving a section also proves cascade order; changing an old 720 px boundary changes the 701–720 px layout.
 
+## 7.2. The menu bar's right edge
+
+The menu bar (`#navbar`) draws its visible right edge as its own 2 px inset
+shadow, not as a border. Anything inside the menu that paints a background
+covers that shadow wherever the background reaches the last 2 px — at rest, on
+hover, when active or when focused. So every menu child that can paint a
+background either stops 2 px short of the right edge (`margin-right: 2px`) or
+paints the edge itself with `border-right: 2px solid var(--border_color)`, as
+the top row and the rectangular button tabs do. Only the rounded SVG dataset
+tabs cross the edge, by design; `G4_svg_tab_alignment.spec.ts` holds their shape.
+
+[G24_menu_edge_stays_visible.spec.ts](../../testing/e2e/G_navigation/G24_menu_edge_stays_visible.spec.ts)
+hovers every control of a signed-in administrator's and a signed-out visitor's
+menu and fails when anything else covers the edge. A new menu control gets the
+rule in its stylesheet and stays inside that check; do not exempt it. The rule
+is also written at `#navbar` in
+[navbar_layout.css](../../frontend/core_components/navigation/navbar/navbar_layout.css).
+(Owner request 20.11.2026, after the All articles and Home links' hover
+backgrounds hid the edge.)
+
 ## 7. Languages and Translations (UI)
 
 Filterest uses `data-lang-key` attributes for menu and UI string localization.

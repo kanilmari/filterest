@@ -58,6 +58,13 @@ describe('parseTableQueryString', () => {
     expect(result.filters).toEqual({ status: 'active' });
   });
 
+  test('never reads Home\'s open-filters request as a row filter', () => {
+    const result = parseTableQueryString('?sort_column=__newest&open-filters=1&status=active');
+    expect(result.filters).toEqual({ status: 'active' });
+    expect(parseDatasetParamsFromSearch('?view=card&open-filters=1&status=active'))
+      .toEqual({ view: 'card', status: 'active' });
+  });
+
   test("reads the language an address names as the page's, never as a filter of the rows", () => {
     // The sitemap and the language links name every page as ?lang=xx. As a filter the
     // language showed a "Lang: fi" chip above the list and travelled twice to the server.

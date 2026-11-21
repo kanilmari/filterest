@@ -32,7 +32,7 @@ async function geometry(parts: Locator) {
       return { width: rect.width, height: rect.height };
     };
     return { rowHeight: size(row).height, home: size(home),
-      datasetHeights: [...row.querySelectorAll('button[data-dataset]')].map(button => size(button).height),
+      datasetHeights: [...row.querySelectorAll('.hero-dataset-tabs__button[data-dataset]')].map(button => size(button).height),
       compact: home.classList.contains('top-nav-home-button--compact'),
       labelVisible: getComputedStyle(label).display !== 'none' && label.getBoundingClientRect().width > 0 };
   });
@@ -105,7 +105,7 @@ async function expectEndPair(parts: Locator, width: number, compact = width <= 7
   } else {
     // Home retains its original first position and never overlaps the fitted tabs.
     expect(await home.evaluate(element => element === element.parentElement!.firstElementChild)).toBe(true);
-    for (const tab of await surface.locator('.hero-dataset-tabs > button:visible').all()) {
+    for (const tab of await surface.locator('.hero-dataset-tabs > .hero-dataset-tabs__button[data-dataset]:visible').all()) {
       const t = (await tab.boundingBox())!;
       expect(h.x + h.width).toBeLessThanOrEqual(t.x);
       expect(t.x + t.width).toBeLessThanOrEqual(p.x);
@@ -162,10 +162,10 @@ for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'
         try {
           // Leave room for compact Home and the first dataset; longer labels
           // must compact through the real ResizeObserver/fitter to retain both.
-          const first = tabs.locator('button[data-dataset]').first();
+          const first = tabs.locator('.hero-dataset-tabs__button[data-dataset]').first();
           await expect(first).toBeVisible();
           const crowdedWidth = await tabs.evaluate(element => Math.ceil(
-            element.querySelector('button[data-dataset]')!.getBoundingClientRect().width
+            element.querySelector('.hero-dataset-tabs__button[data-dataset]')!.getBoundingClientRect().width
             + 44 + (Number.parseFloat(getComputedStyle(element).columnGap) || 0) + 1));
           await tabs.evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; }, crowdedWidth);
           await settleFit(page);

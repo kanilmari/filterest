@@ -63,6 +63,8 @@
 .hero-dataset-tabs__button {
     flex: none;
     width: max-content;
+    /* A dataset tab is a link (hero_dataset_tabs.js); it keeps the button look. */
+    text-decoration: none;
 }
 .hero-dataset-tabs__icon {
     width: 18px;

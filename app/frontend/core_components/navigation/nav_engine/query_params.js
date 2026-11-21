@@ -8,6 +8,7 @@ import { writeDatasetAddress } from "./dataset_address_writer.js";
 import { getInternalDatasetName } from './dataset_aliases.js';
 import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
 import { CHART_AXIS_PARAMS } from '../../table_views/price_chart_view/price_chart_data_reader.js';
+import { OPEN_FILTERS_QUERY_KEY } from './filters_arrival_request.js';
 
 const STORAGE_KEY = 'dataset_query_params';
 export const DATASET_PREFIX = '/';
@@ -16,6 +17,12 @@ const AUTH_SHELL_QUERY_KEYS = new Set([
     'register-entry',
     'redirect',
 ]);
+/**
+ * Markers that ask the page to do something once and are never dataset state:
+ * the sign-in entries above and Home's request to open the filters
+ * (filters_arrival_request.js), which that module has already taken off the address.
+ */
+const NON_DATASET_QUERY_KEYS = new Set([...AUTH_SHELL_QUERY_KEYS, OPEN_FILTERS_QUERY_KEY]);
 /**
  * The address's view parameter names the view this page shows, which is the
  * page's own choice (owner decision K143). Chart axes share that ownership, and
@@ -93,13 +100,13 @@ function saveToStorage() {
 /**
  * Reads only dataset-owned query parameters from a browser search string.
  * Between authentication shell handoff URLs and per-dataset filter persistence.
- * Exists so transient login/register navigation markers cannot become row filters.
+ * Exists so transient sign-in and open-filters markers cannot become row filters.
  */
 export function parseDatasetParamsFromSearch(searchString) {
     const paramsObj = {};
     const searchParams = new URLSearchParams(searchString);
     searchParams.forEach((value, key) => {
-        if (!AUTH_SHELL_QUERY_KEYS.has(key.toLowerCase())) {
+        if (!NON_DATASET_QUERY_KEYS.has(key.toLowerCase())) {
             paramsObj[key] = value;
         }
     });
@@ -251,7 +258,7 @@ export function parseTableQueryString(searchString) {
         'view',
         'lang',
         ...Object.values(CHART_AXIS_PARAMS),
-        ...AUTH_SHELL_QUERY_KEYS,
+        ...NON_DATASET_QUERY_KEYS,
     ]);
     sp.forEach((value, key) => {
         if (!RESERVED_KEYS.has(key.toLowerCase())) {

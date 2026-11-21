@@ -245,3 +245,91 @@ test('a live Home site-name change refits the existing row without waiting for a
         expect(row.querySelector('button').hidden).toBe(false);
     } finally { fit.destroy(); }
 });
+
+// Owner 21.11.2026: Home's buttons flicked sideways for one frame whenever the menu
+// slot appeared or disappeared, because the refit waited for the next frame.
+test('a resize refits Home before paint and watches newly found edges only from the next frame', async () => {
+    vi.useFakeTimers();
+    const observers = [];
+    vi.stubGlobal('ResizeObserver', class {
+        constructor(callback) { this.callback = callback; this.targets = []; observers.push(this); }
+        observe(target) { this.targets.push(target); }
+        unobserve(target) { this.targets = this.targets.filter(observed => observed !== target); }
+        disconnect() { this.targets = []; }
+    });
+    document.body.innerHTML = '<div class="front-page"><div class="front-page-top-row">'
+        + '<div class="front-page-top-row__identity"></div>'
+        + '<nav class="hero-dataset-tabs"><a href="/info">Matkainfo</a><a href="/blogs">Blogit</a></nav>'
+        + '<div class="filterbar-inline-hero__actions"></div></div></div>';
+    const row = document.querySelector('.front-page-top-row');
+    const [identity, nav, actions] = row.children;
+    // The identity grows by the 44px menu slot and its 8px gap; the nav box gives way.
+    let identityWidth = 100;
+    const box = (left, right) => ({ left, right, width: right - left, top: 0, bottom: 40 });
+    vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => box(0, 1000));
+    vi.spyOn(identity, 'getBoundingClientRect').mockImplementation(() => box(0, identityWidth));
+    vi.spyOn(actions, 'getBoundingClientRect').mockImplementation(() => box(1000, 1000));
+    vi.spyOn(nav, 'getBoundingClientRect').mockImplementation(() => box(identityWidth + 8, 1000));
+    vi.spyOn(nav, 'clientWidth', 'get').mockImplementation(() => 1000 - identityWidth - 8);
+    for (const link of nav.children) vi.spyOn(link, 'getBoundingClientRect').mockReturnValue(box(0, 100));
+    const fit = createNavigationFitController(nav);
+    const [observer] = observers;
+    try {
+        observer.callback([]);
+        // Centred in the 1000px row: 400px, while the nav box alone would centre at 454px.
+        expect(nav.style.getPropertyValue('--dataset-navigation-offset')).toBe('-54px');
+        expect(observer.targets).toEqual([nav]);
+        await vi.advanceTimersByTimeAsync(20);
+        expect(observer.targets).toEqual([nav, row, identity, actions]);
+        identityWidth = 152;
+        observer.callback([]);
+        expect(nav.style.getPropertyValue('--dataset-navigation-offset')).toBe('-80px');
+        expect(nav.classList.contains('hero-dataset-tabs--centered')).toBe(true);
+        await vi.advanceTimersByTimeAsync(20);
+        expect(observer.targets).toHaveLength(4);
+    } finally { fit.destroy(); vi.unstubAllGlobals(); }
+});
+
+// Codex review 21.11.2026: hiding the last visible destination inside the resize
+// callback changes the row's own height, which the browser reports as a loop error.
+test('a refit that changes the row itself observes the row afresh from the next frame', async () => {
+    vi.useFakeTimers();
+    const observers = [];
+    vi.stubGlobal('ResizeObserver', class {
+        constructor(callback) { this.callback = callback; this.targets = []; observers.push(this); }
+        observe(target) { this.targets.push(target); }
+        unobserve(target) { this.targets = this.targets.filter(observed => observed !== target); }
+        disconnect() { this.targets = []; }
+    });
+    document.body.innerHTML = '<nav><a href="/info">Matkainfo</a></nav>';
+    const nav = document.querySelector('nav');
+    const [link] = nav.children;
+    let available = 150;
+    vi.spyOn(nav, 'clientWidth', 'get').mockImplementation(() => available);
+    // Without a visible destination the row has no height.
+    vi.spyOn(nav, 'getBoundingClientRect').mockImplementation(() => ({ width: available, height: link.hidden ? 0 : 36 }));
+    vi.spyOn(link, 'getBoundingClientRect').mockReturnValue({ width: 100 });
+    const fit = createNavigationFitController(nav);
+    const [observer] = observers;
+    try {
+        observer.callback([]);
+        expect(link.hidden).toBe(false);
+        expect(observer.targets).toEqual([nav]);
+        available = 90;
+        observer.callback([]);
+        expect(link.hidden).toBe(true);
+        expect(observer.targets).toEqual([]);
+        await vi.advanceTimersByTimeAsync(20);
+        expect(observer.targets).toEqual([nav]);
+        available = 150;
+        observer.callback([]);
+        expect(link.hidden).toBe(false);
+        expect(observer.targets).toEqual([]);
+        await vi.advanceTimersByTimeAsync(20);
+        expect(observer.targets).toEqual([nav]);
+        fit.destroy();
+        available = 90; observer.callback([]);
+        await vi.advanceTimersByTimeAsync(20);
+        expect(link.hidden).toBe(false);
+    } finally { fit.destroy(); vi.unstubAllGlobals(); }
+});

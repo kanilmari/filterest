@@ -110,6 +110,21 @@ describe('private disclosure choices', () => {
         delete inner.section.dataset.filterbarTemporaryDisclosureOperation; click(inner.section, true);
         expect(inner.choice()).toBe(true); expect(outer.choice()).toBeNull();
     });
+    it('a temporary reveal keeps its section open when private state arrives late, then yields to it', () => {
+        const mounted = make({ uid: 33, block: 'filters' });
+        click(mounted.section, false);
+        // Home's Filter results (or the Filters shortcut) owns the open section.
+        mounted.section.dataset.filterbarTemporaryDisclosureOwner = 'true';
+        mounted.section.dataset.open = 'true'; mounted.section.collapse.mockClear();
+        mounted.root.__syncDisclosureState({ shared: { filterbar_filters_initial_open: true } });
+        expect(mounted.section.collapse).not.toHaveBeenCalled();
+        expect(mounted.section.dataset.open).toBe('true');
+        expect(mounted.choice()).toBe(false);
+        // Once the reveal ends, the next changed projection applies the saved choice again.
+        delete mounted.section.dataset.filterbarTemporaryDisclosureOwner;
+        mounted.root.__syncDisclosureState({ shared: { filterbar_filters_initial_open: true } });
+        expect(mounted.section.dataset.open).toBe('false');
+    });
     it('restores a late hydrated block without storing a new choice', async () => {
         const mounted = make(); click(mounted.section, true);
         const late = document.createElement('section'); late.dataset.filterbarSectionKey = 'tools';

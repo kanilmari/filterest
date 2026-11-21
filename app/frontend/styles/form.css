@@ -42,7 +42,11 @@ form {
     font-weight: bold;
 }
 
-button {
+/* Native buttons, and links that must look like one (.button-like-link): a
+   result card's footer "show more" is a link, so search engines follow it and a
+   person can open it in a new tab, but it keeps the look of the card's buttons. */
+button,
+.button-like-link {
     /* padding: 5px; */
     background-color: var(--button_bg_color);
     color: var(--button_text_color);
@@ -55,6 +59,15 @@ button {
         color var(--interaction-duration-fast, 140ms) ease,
         box-shadow var(--interaction-duration-fast, 140ms) ease,
         filter var(--interaction-duration-fast, 140ms) ease;
+}
+
+/* What a browser gives a button by itself and not a link. */
+.button-like-link {
+    display: inline-block;
+    font-weight: normal;
+    line-height: normal;
+    text-align: center;
+    text-decoration: none;
 }
 
 .button {

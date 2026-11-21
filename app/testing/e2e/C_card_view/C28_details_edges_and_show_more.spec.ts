@@ -7,6 +7,7 @@ import { login, loadCredentials } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest, openTempDataset, openTempDatasetRowArticle } from '../helpers/temp-dataset';
 import { saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
 import { closeActiveFilterbarIfOpen } from '../helpers/filterbar';
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 
 // Expected frames read from 96478826: cards.css:297-310, 343-346, 436-437;
 // standard card_details_kv and cards_big.css have no outer border/radius declarations.
@@ -84,7 +85,7 @@ for (const width of [390, 1200, 1201, 1440, 1600, 1920]) for (const theme of ['l
           await expectEdges(list, PRE_563[style as 'standard' | 'modern']);
         }
         if (style === 'modern') await expectEdges(card.locator('.card_details_kv'), PRE_563.modernDetails);
-        const more = card.locator('button[data-lang-key="show_more"]');
+        const more = card.locator('.card_footer > a.card_footer_show_more[data-lang-key="show_more"]');
         await expect(more).toBeVisible();
         const radii = await more.evaluate(element => {
           const probe = document.createElement('span'); probe.style.borderRadius = 'var(--search_tools_radius)'; element.append(probe);
@@ -96,6 +97,8 @@ for (const width of [390, 1200, 1201, 1440, 1600, 1920]) for (const theme of ['l
       }
       await openTempDatasetRowArticle(page, dataset, 1);
       await expect(page.locator('body')).toHaveClass(new RegExp(`(^| )${theme}-mode( |$)`));
+      // Article blocks start closed (#986); the details list is measured open.
+      await openArticleDisclosure(page, 'details');
       await expectEdges(page.locator('.big_card_details_container:visible'), width <= 1200 ? STACKED : PRE_563.big);
       await expect(page.locator('.big_card_details_container > div').first()).toHaveCSS('border-bottom-width', '2px');
     } finally { if (created) await cleanupDatasetViaRequest(page.request, dataset); }

@@ -5,6 +5,7 @@
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { getUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { CHART_AXIS_PARAMS } from '../../table_views/price_chart_view/price_chart_data_reader.js';
+import { OPEN_FILTERS_QUERY_KEY } from "../../navigation/nav_engine/filters_arrival_request.js";
 
 export const tableMetaCache = {}; // { [tableName]: { rowCount, hasGeo } }
 
@@ -19,6 +20,8 @@ export const RESERVED_PARAM_KEYS = new Set([
     "lang",
     "view",
     ...Object.values(CHART_AXIS_PARAMS),
+    // Home's one-time request to open the filters is never a filter itself.
+    OPEN_FILTERS_QUERY_KEY,
 ]);
 
 export function getActiveFiltersSnapshot(tableName) {

@@ -56,7 +56,7 @@ test.each(['fi', 'en'])('cold %s Home mounts chosen labels before the later page
     const home = firstLabels[0].closest('a');
     expect(home.title).toBe(copy[language].front_page);
     expect(home.getAttribute('aria-label')).toBe(copy[language].front_page);
-    expect(firstLabels[1].closest('button').title).toBe(copy[language].news);
+    expect(firstLabels[1].closest('.hero-dataset-tabs__button').title).toBe(copy[language].news);
 
     const changes = [];
     const observer = new MutationObserver(records => changes.push(...records));

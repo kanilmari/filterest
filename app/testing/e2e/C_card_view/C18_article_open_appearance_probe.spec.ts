@@ -21,7 +21,7 @@ test('WO19 native article-open probe (reports performance without thresholds)', 
   const dataset = buildTempDatasetName('e2e_wo19_appearance');
   const articleSelector = '[data-testid="big-card-container"]';
   const openerSelector = `#${dataset}_card_view_container .card [data-testid="card-item-header"], `
-    + `#${dataset}_card_view_container .card button[data-lang-key="show_more"]`;
+    + `#${dataset}_card_view_container .card .card_footer > [data-lang-key="show_more"]`;
   let created = false;
   await login(page, loadCredentials());
   // Init script survives openTempDataset's navigation. It imports no application code.
@@ -67,7 +67,7 @@ test('WO19 native article-open probe (reports performance without thresholds)', 
     created = true;
     await openTempDataset(page, dataset, 'card');
     const firstCard = page.locator(`#${dataset}_card_view_container .card`).first();
-    await firstCard.locator('[data-testid="card-item-header"]:visible, button[data-lang-key="show_more"]:visible').first().click();
+    await firstCard.locator('[data-testid="card-item-header"]:visible, .card_footer > [data-lang-key="show_more"]:visible').first().click();
     await expect(page.locator(articleSelector).first()).toBeVisible({ timeout: 30_000 });
     await page.waitForFunction(() => window.__articleOpenAppearanceProbe.visibleAt > 0, null, { timeout: 30_000 });
     const metrics = await page.evaluate(() => {

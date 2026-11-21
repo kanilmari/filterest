@@ -40,6 +40,7 @@ import { datasetAppearanceState } from '../../table_views/dataset_appearance_sta
 import { beginRowPresentationRequest, setRowPresentationChoice } from '../../table_views/row_presentation/row_presentation_choice.js';
 import { writeHistoryEntry } from '../../navigation/nav_engine/history_entry_state.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
+import { claimFiltersArrivalRequest } from '../../navigation/nav_engine/filters_arrival_request.js';
 import { datasetAppearanceDefaultsForPlace } from '../../../shared/dataset_appearance/validator.js';
 const types = { title: { card_element: "header+lang_key", is_multilingual: true, show_value_on_card: true },
     description: { card_element: "description2", is_multilingual: true, show_value_on_card: true } };
@@ -324,6 +325,72 @@ test.each(["h2 > a", ".supplemental-dataset-show-all"])("Home collection link %s
     await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith("other", {
         forceReload: true, replacementParams: { sort_column: "__newest", sort_order: "DESC", view: "card" },
     }));
+});
+function mountHomeBox() {
+    const group = createSupplementalDatasetGroup({ dataset: "other", langKey: "other" }, "", {
+        rowCap: 5, headingTag: "h2", linkHeading: true, preselectArticle: true, emptyKey: "front_page_no_results",
+        showAllKey: "front_page_show_all", filterResultsKey: "filterbar_filter_results",
+        replacementParams: { sort_column: "__newest", sort_order: "DESC", view: "card" },
+    });
+    document.body.append(group.element);
+    group.render(rows, ["id", "title", "description"], types);
+    return group;
+}
+test("only a box that asks for it gets Filter results; search groups keep Show all last", () => {
+    expect(mount().element.querySelector(".supplemental-dataset-filter-results")).toBeNull();
+    expect(mount().element.lastElementChild.className).toBe("supplemental-dataset-show-all");
+    const links = mountHomeBox().element.lastElementChild;
+    expect(links.className).toBe("supplemental-dataset-collection-links");
+    const [showAll, filterResults] = links.children;
+    expect(showAll.className).toBe("supplemental-dataset-show-all");
+    const address = new URL(filterResults.href);
+    expect(address.searchParams.get("open-filters")).toBe("1");
+    address.searchParams.delete("open-filters");
+    expect(address.href).toBe(showAll.href);
+    expect(filterResults.querySelector("span[aria-hidden='true']")).not.toBeNull();
+    // The filter bar's own translated "Filter results" heading text, in every interface language.
+    expect(mocks.translate).toHaveBeenCalledWith("filterbar_filter_results",
+        expect.objectContaining({ fallback: "Filter results", countUsage: false }));
+    expect(filterResults.lastElementChild.textContent).not.toBe("");
+});
+test("Filter results opens the same listing and asks that dataset, during its navigation, to open its filters", async () => {
+    let claimed = null;
+    mocks.navigate.mockImplementation(async (dataset, options) => {
+        // The marker never becomes a dataset parameter or filter.
+        expect(options.replacementParams).toEqual({ sort_column: "__newest", sort_order: "DESC", view: "card" });
+        expect(claimFiltersArrivalRequest("elsewhere")).toBeNull();
+        claimed = claimFiltersArrivalRequest(dataset);
+        return { abort: false };
+    });
+    mountHomeBox().element.querySelector(".supplemental-dataset-filter-results").click();
+    await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith("other", {
+        forceReload: true, replacementParams: { sort_column: "__newest", sort_order: "DESC", view: "card" },
+    }));
+    await vi.waitFor(() => expect(claimed?.isCurrent()).toBe(true));
+    claimed.complete();
+});
+test.each([
+    ["refused", () => ({ abort: true })],
+    ["failed", () => { throw new Error("offline"); }],
+    ["arrived without a filter bar", () => ({ abort: false })],
+])("a navigation that is %s leaves no request for a later visit", async (_label, outcome) => {
+    let settled = false;
+    mocks.navigate.mockImplementation(async () => outcome());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mountHomeBox().element.querySelector(".supplemental-dataset-filter-results").click();
+    await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    settled = claimFiltersArrivalRequest("other") === null;
+    expect(settled).toBe(true);
+    warn.mockRestore();
+});
+test("modified-click on Filter results keeps the native href and asks nothing in page", () => {
+    const anchor = mountHomeBox().element.querySelector(".supplemental-dataset-filter-results");
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
+    anchor.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(claimFiltersArrivalRequest("other")).toBeNull();
 });
 test.each(["li a", "h2 > a"])("modified-click on %s keeps native href behavior without touching navigation state", selector => {
     const anchor = mount("other", { headingTag: "h2", linkHeading: true }).element.querySelector(selector);

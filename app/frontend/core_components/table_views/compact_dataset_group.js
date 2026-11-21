@@ -18,6 +18,11 @@ import { buildCardUrl } from "./card_view/row_article_opener_helpers.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView, forgetChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { getParams, setParams } from "../navigation/nav_engine/query_params.js";
+import { cancelFiltersArrivalRequest, requestFiltersOnArrival, settleFiltersArrivalRequest,
+    withOpenFiltersRequest } from "../navigation/nav_engine/filters_arrival_request.js";
+import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
+
+const FILTER_RESULTS_ICON = "/frontend/icons/general/filter-list-icon.svg";
 
 const COPY = Object.freeze({
     fi: { heading: "Muista aineistoista", showAll: "Näytä kaikki" },
@@ -137,7 +142,8 @@ function snippetColumns(columns, types, firstHeader) {
 
 /** Clear remembered article intent before loading, then explicitly open the
  * requested row under its ticket. Only the article opener writes a row entry.
- * Ordinary show-all links keep the collection's existing navigation behavior.
+ * Ordinary show-all links keep the collection's existing navigation behavior;
+ * options.openFilters also asks the arriving dataset to open its filters.
  */
 export function bindQueryNavigation(link, dataset, query, rowID = null, options = {}) {
     const replacementParams = options.replacementParams || { search: query };
@@ -158,6 +164,7 @@ export function bindQueryNavigation(link, dataset, query, rowID = null, options 
 
     async function openClassicOrCollection(request) {
         let restoreCollection = null;
+        let arrivalToken = null;
         try {
             const { openNavTab } = await import("../navigation/main_tabs/main_tab_printer.js");
             if (request && !request.isCurrent()) return;
@@ -186,6 +193,8 @@ export function bindQueryNavigation(link, dataset, query, rowID = null, options 
             const directArticle = options.preselectArticle && rowID !== null;
             // Home retains its root history entry until the article opens.
             if (directArticle) setParams(dataset, { ...replacementParams, view: targetView });
+            // Asked right before the navigation that delivers it, and ended with it.
+            if (rowID === null && options.openFilters) arrivalToken = requestFiltersOnArrival(dataset);
             const openListing = rowID === null ? openNavTab : openExplicitRowListingTab;
             const navigate = () => openListing(dataset, {
                 forceReload: true,
@@ -197,9 +206,13 @@ export function bindQueryNavigation(link, dataset, query, rowID = null, options 
             if (rowID !== null) {
                 await openArticleAfterListing({ id: rowID }, dataset, navigate, request);
             } else if ((await navigate())?.abort) {
+                if (arrivalToken !== null) cancelFiltersArrivalRequest(arrivalToken);
                 restoreCollection?.();
+            } else if (arrivalToken !== null) {
+                settleFiltersArrivalRequest(arrivalToken);
             }
         } catch (error) {
+            if (arrivalToken !== null) cancelFiltersArrivalRequest(arrivalToken);
             restoreCollection?.();
             console.warn("Compact result navigation failed:", error);
         }
@@ -273,7 +286,7 @@ function createSupplementalThumbnail(row, dataset, types, imageColumn) {
 /** One stable group per dataset; order comes solely from the accepted main-tab list. */
 export function createSupplementalDatasetGroup(tab, query, {
     rowCap = 3, headingTag = 'h3', showAllKey = null, emptyKey = null, replacementParams,
-    preselectArticle = false, includeThumbnails = false, linkHeading = false,
+    preselectArticle = false, includeThumbnails = false, linkHeading = false, filterResultsKey = null,
 } = {}) {
     const element = document.createElement("section");
     element.className = "supplemental-dataset-group";
@@ -283,10 +296,11 @@ export function createSupplementalDatasetGroup(tab, query, {
     const queryString = new URLSearchParams(linkParams).toString();
     const querySuffix = queryString ? "?" + queryString : "";
     const collectionHref = buildDatasetPath(tab.dataset) + querySuffix;
-    function createCollectionLink() {
+    function createCollectionLink(openFilters = false) {
         const link = document.createElement("a");
-        link.href = collectionHref;
-        bindQueryNavigation(link, tab.dataset, query, null, { replacementParams, preselectArticle });
+        // The address carries the request too, for a new tab or a copied link.
+        link.href = openFilters ? withOpenFiltersRequest(collectionHref) : collectionHref;
+        bindQueryNavigation(link, tab.dataset, query, null, { replacementParams, preselectArticle, openFilters });
         return link;
     }
 
@@ -311,7 +325,21 @@ export function createSupplementalDatasetGroup(tab, query, {
     if (emptyKey) bindDatasetLanguageRenderer(empty, () => {
         empty.textContent = getTranslationForKey(emptyKey, { countUsage: false });
     });
-    element.append(heading, list, ...(emptyKey ? [empty] : []), showAll);
+    let collectionLinks = showAll;
+    if (filterResultsKey) {
+        // Same listing as Show all, arriving with the filter bar and its filters open.
+        const filterResults = createCollectionLink(true);
+        filterResults.className = "supplemental-dataset-filter-results";
+        const label = document.createElement("span");
+        bindDatasetLanguageRenderer(label, () => {
+            label.textContent = getTranslationForKey(filterResultsKey, { fallback: "Filter results", countUsage: false });
+        });
+        filterResults.append(createMaskIconSpan(FILTER_RESULTS_ICON, ["supplemental-dataset-filter-results__icon"]), label);
+        collectionLinks = document.createElement("div");
+        collectionLinks.className = "supplemental-dataset-collection-links";
+        collectionLinks.append(showAll, filterResults);
+    }
+    element.append(heading, list, ...(emptyKey ? [empty] : []), collectionLinks);
 
     return {
         element,

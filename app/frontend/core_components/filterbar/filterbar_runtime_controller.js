@@ -17,6 +17,8 @@ import { createDatasetCornerControls } from "./dataset_corner_controls.js";
 import { createTemporaryFiltersOpenerAndCloser } from "./filters_opener_and_closer.js";
 import { FILTERBAR_PANEL_MODES } from "./filterbar_panel_mode_resolver.js";
 import { wireOutsidePanelClose } from "./filterbar_outside_panel_close.js";
+import { claimFiltersArrivalRequest } from "../navigation/nav_engine/filters_arrival_request.js";
+import { getInternalDatasetName } from "../navigation/nav_engine/dataset_aliases.js";
 const FILTERBAR_COLUMN_WIDTH_CSS = `${FILTERBAR_COLUMN_WIDTH_PX}px`;
 const FILTERBAR_PANEL_HIDE_CONTENT_DELAY_MS = 700;
 
@@ -455,6 +457,12 @@ export function wireFilterbarRuntime({
     // changes. Release their local controls before Home borrows the source;
     // the host observer below restores ownership when this dataset returns.
     mainTableContainer?.addEventListener(VIEW_DEACTIVATE_EVENT, () => syncCornerControls(false), { signal });
+    // A Home arrival that has not opened yet belongs to this visit only: leaving
+    // ends it, so a later ordinary visit never opens the filters by surprise.
+    mainTableContainer?.addEventListener(VIEW_DEACTIVATE_EVENT, () => {
+        arrivalClaim?.complete();
+        arrivalClaim = null;
+    }, { signal });
 
     // Re-attach when views change (table → card → etc.)
     let viewObserverRaf = 0;
@@ -476,6 +484,7 @@ export function wireFilterbarRuntime({
         mainTableContainer instanceof HTMLElement
             ? new MutationObserver(() => {
                 syncSharedTopBar();
+                deliverFiltersArrival();
             })
             : null;
     sharedTopBarHostObserver?.observe(mainTableContainer, {
@@ -556,6 +565,8 @@ export function wireFilterbarRuntime({
     });
 
     let destroyed = false;
+    // The Home arrival request this bar is opening the filters for, if any.
+    let arrivalClaim = null;
     const removalObserver = new MutationObserver(() => {
         if (!panel.isConnected) {
             destroyFilterBar();
@@ -571,6 +582,10 @@ export function wireFilterbarRuntime({
             return;
         }
         destroyed = true;
+        // Hand an undelivered arrival back now: a rebuilt bar for the same
+        // dataset is created right after this teardown and takes it over.
+        arrivalClaim?.release();
+        arrivalClaim = null;
         lifetimeController.abort();
         destroySharedTopBarController();
         clearCompactBodyHideTimer();
@@ -619,13 +634,37 @@ export function wireFilterbarRuntime({
             if (visible) showPanel(); else hidePanel();
         },
     });
-    panel.__syncSharedTopBar = () => { syncVisibilityMemory(); syncSharedTopBar(); };
+    /**
+     * Open the filters for a visitor who arrived through Home's Filter results
+     * (filters_arrival_request.js). Runs whenever this dataset may have become
+     * the one shown; only its active bar takes the request, and it opens once the
+     * section order, the private section state and the remembered panel state
+     * have all been applied, so none of them can close it afterwards.
+     */
+    function deliverFiltersArrival() {
+        if (destroyed || arrivalClaim || !isSharedTopBarHostActive(mainTableContainer)) return;
+        const claim = claimFiltersArrivalRequest(tableName, getInternalDatasetName);
+        if (!claim) return;
+        arrivalClaim = claim;
+        const finish = () => {
+            if (arrivalClaim === claim) arrivalClaim = null;
+            claim.complete();
+        };
+        void temporaryFiltersCoordinator.ensureOpenForArrival({
+            whenReady: () => Promise.all([panel.__sectionLayoutReady, panel.__disclosureStateReady])
+                .then(() => syncVisibilityMemory.settled()),
+            isCurrent: () => claim.isCurrent() && !destroyed && isSharedTopBarHostActive(mainTableContainer),
+        }).then(finish, finish);
+    }
+    panel.__syncSharedTopBar = () => { syncVisibilityMemory(); syncSharedTopBar(); deliverFiltersArrival(); };
     panel.__syncActiveView = () => {
         if (destroyed) return;
         syncVisibilityMemory();
         attachToActiveView();
         syncSharedTopBar();
+        deliverFiltersArrival();
     };
     panel.destroy = destroyFilterBar;
+    deliverFiltersArrival();
     return panel;
 }

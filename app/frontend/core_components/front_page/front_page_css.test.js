@@ -139,13 +139,14 @@ test('only side-anchored boxes above 700px follow the unchanged text inset less 
     expect(margins).toHaveLength(4);
 });
 
-test('only Show all gets the 44px link target; the existing title stretches over the row', () => {
+test('only Show all and Filter results get the 44px link target; the existing title stretches over the row', () => {
     const root = postcss.parse(css);
     root.walkRules(rule => {
         if (!rule.selector.includes('.front-page-blocks')) return;
         expect(rule.selectors).not.toContain('.front-page-blocks a');
         rule.walkDecls('min-height', declaration => {
             expect(rule.selectors).toContain('.front-page-blocks .supplemental-dataset-show-all');
+            expect(rule.selectors).toContain('.front-page-blocks .supplemental-dataset-filter-results');
             expect(declaration.value).toBe('44px');
         });
     });
@@ -169,6 +170,44 @@ test('only Show all gets the 44px link target; the existing title stretches over
         expect(title.minHeight).not.toBe('44px');
         expect(getComputedStyle(fixture.querySelector('p')).getPropertyValue('-webkit-line-clamp')).toBe('2');
         expect(getComputedStyle(fixture.querySelector('.supplemental-dataset-show-all')).minHeight).toBe('44px');
+    } finally { fixture.remove(); style.remove(); }
+});
+
+test('a Home box ends with Show all and Filter results on one wrapping row in the same link ink', () => {
+    const style = document.createElement('style');
+    // The application's global reset gives every element the text colour (styles/base.css).
+    style.textContent = '* { color: rgb(1, 2, 3); }'
+        + readFileSync(resolve(currentDirectory, '../filterbar/text_search/supplemental_dataset_results.css'), 'utf8') + css;
+    const fixture = document.createElement('div');
+    fixture.className = 'front-page-blocks';
+    fixture.innerHTML = '<section class="supplemental-dataset-group"><ul><li>Rivi</li></ul>'
+        + '<div class="supplemental-dataset-collection-links"><a class="supplemental-dataset-show-all" href="/news">Näytä kaikki</a>'
+        + '<a class="supplemental-dataset-filter-results" href="/news?open-filters=1">'
+        + '<span class="supplemental-dataset-filter-results__icon" aria-hidden="true"></span><span>Suodata tuloksia</span></a></div></section>';
+    document.head.append(style); document.body.append(fixture);
+    try {
+        const row = getComputedStyle(fixture.querySelector('.supplemental-dataset-collection-links'));
+        expect(row.display).toBe('flex');
+        expect(row.flexWrap).toBe('wrap');
+        // The row keeps Show all's former distance from the list; its links add none of their own.
+        expect(row.marginTop).toBe('0.25rem');
+        for (const link of fixture.querySelectorAll('.supplemental-dataset-collection-links > a')) {
+            const linkStyle = getComputedStyle(link);
+            expect(linkStyle.display).toBe('flex');
+            expect(linkStyle.minHeight).toBe('44px');
+            expect(linkStyle.marginTop).toMatch(/^0(?:px)?$/);
+            expect(linkStyle.textDecoration).toBe('underline');
+        }
+        const filterLink = fixture.querySelector('.supplemental-dataset-filter-results');
+        const linkInk = getComputedStyle(filterLink).color;
+        expect(linkInk).not.toBe('rgb(1, 2, 3)');
+        const icon = getComputedStyle(fixture.querySelector('.supplemental-dataset-filter-results__icon'));
+        expect(icon.color).toBe(linkInk);
+        expect(icon.backgroundColor).toBe(linkInk);
+        expect(getComputedStyle(filterLink.lastElementChild).color).toBe(linkInk);
+        const linkRule = postcss.parse(css).nodes.find(node => node.nodes?.some(decl => decl.prop === 'color' && decl.value.includes('light-dark(')));
+        expect([...fixture.querySelectorAll('.supplemental-dataset-collection-links > a')]
+            .map(link => link.matches(linkRule.selector))).toEqual([true, true]);
     } finally { fixture.remove(); style.remove(); }
 });
 

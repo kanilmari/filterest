@@ -680,11 +680,11 @@ export async function openTempDatasetRowArticle(
 ): Promise<void> {
   await openTempDataset(page, datasetName, 'card');
   // A card opens its article from its header when a field has the header role,
-  // and from its "Show more" button otherwise; both open the same article.
+  // and from its footer "Show more" link otherwise; both open the same article.
   const card = `#${datasetName}_card_view_container .card[data-id="${rowId}"]`;
   const articleOpener = page
     .locator(
-      `${card} [data-testid="card-item-header"]:visible, ${card} button[data-lang-key="show_more"]:visible`,
+      `${card} [data-testid="card-item-header"]:visible, ${card} .card_footer > [data-lang-key="show_more"]:visible`,
     )
     .first();
   await expect(articleOpener).toBeVisible({ timeout: TEMP_DATASET_LOAD_TIMEOUT_MS });

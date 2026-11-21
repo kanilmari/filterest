@@ -102,3 +102,43 @@ test('choosing shared memory uses the bar currently in use, and account choices 
     expect(localStorage.getItem('filterbar_shared_visible:guest')).toBe('false');
     controllers.forEach(controller=>controller.abort());
 });
+
+// Home's Filter results opens the filters only after the remembered state has
+// been applied, so that state can never close them again (filters_arrival_request.js).
+test('settled() waits for a pending per-dataset transition and resolves at once without one', async () => {
+    localStorage.setItem('filterbar_visibility_memory','dataset');
+    const memory=await import('./filterbar_visibility_memory.js');
+    bind(memory,'first',true); flushFrame();
+    localStorage.setItem('second_filterbar_visible','false');
+    let shown=false;
+    const container=document.createElement('div'); const panel=document.createElement('div'); container.append(panel); document.body.append(container);
+    const controller=new AbortController(); controllers.push(controller);
+    const sync=memory.bindFilterbarVisibilityMemory({ tableName:'second', panel, host:container, container,
+        visible:()=>shown, apply:visible=>{ shown=visible; }, isActive:()=>true, signal:controller.signal });
+    let settled=false;
+    void sync.settled().then(() => { settled=true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(shown).toBe(true);
+    flushFrame();
+    await Promise.resolve();
+    expect(settled).toBe(true);
+    expect(shown).toBe(false);
+    await expect(sync.settled()).resolves.toBeUndefined();
+    controllers.forEach(controller=>controller.abort());
+});
+
+test('settled() also resolves when the visit ends before the transition frame', async () => {
+    localStorage.setItem('filterbar_visibility_memory','dataset');
+    const memory=await import('./filterbar_visibility_memory.js');
+    bind(memory,'first',true); flushFrame();
+    localStorage.setItem('second_filterbar_visible','false');
+    const container=document.createElement('div'); const panel=document.createElement('div'); container.append(panel); document.body.append(container);
+    const controller=new AbortController(); controllers.push(controller);
+    const sync=memory.bindFilterbarVisibilityMemory({ tableName:'second', panel, host:container, container,
+        visible:()=>true, apply:()=>{}, isActive:()=>true, signal:controller.signal });
+    const settled=sync.settled();
+    controller.abort();
+    await expect(settled).resolves.toBeUndefined();
+    controllers.forEach(controller=>controller.abort());
+});

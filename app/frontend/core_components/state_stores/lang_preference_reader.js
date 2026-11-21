@@ -74,6 +74,19 @@ function getAddressLanguage() {
 }
 
 /**
+ * Returns the ?lang= value exactly as the page address gave it, when it names
+ * one of the site's enabled interface languages, or ''. Links the application
+ * writes carry it on (live_link_address.js), so a page opened from one of them
+ * in a new tab, or by a search engine, is in the same language and gets the
+ * same server-written head (explicitAddressLanguage). An explicit choice in the
+ * language selector ends it, as it ends the address language itself.
+ * @returns {string}
+ */
+export function getAddressLanguageParameter() {
+    return getAddressLanguage() ? addressLanguageRequest : '';
+}
+
+/**
  * Returns browser language candidates in preference order as supported codes.
  * @returns {string[]}
  */

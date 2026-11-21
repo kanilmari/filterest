@@ -7,11 +7,10 @@ import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { readAppearanceAttribute } from '../../../reusable_components/appearance_scope_reader.js';
 import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { create_seeded_avatar } from "./card_avatar_builder.js";
-import { bindRowActivation, createRowOpenerElement, canActivateRow } from "./default_row_affordance.js";
-import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
+import { canActivateRow, rowArticleLinkAddress } from "./default_row_affordance.js";
 import { addKeywordsSection } from "./card_keyword_builder.js";
 import { addCardResourceListener, disposeCardResources } from './card_resource_lifecycle.js';
-import { generateGoogleMapsEmbedSrcFromRow, addHeaderElement, addUsernameElement, addImageOrAvatar, addDescriptionSection } from "./card_element_builder.js";
+import { generateGoogleMapsEmbedSrcFromRow, addHeaderElement, addUsernameElement, addImageOrAvatar, addDescriptionSection, createShowMoreLink } from "./card_element_builder.js";
 import { parseRoleString, createKeyValueElement, format_column_name, createTicketStatusBadge } from "./card_field_formatter.js";
 import { isTicketStatusField, resolveCardFieldDisplayValue } from "./card_field_formatter_helpers.js";
 import { expandForeignKeyDetailEntries } from "./relation_detail_helpers.js";
@@ -145,6 +144,15 @@ count_this_function("createSingleCard");
     let hasLocalizedRowData = false;
 const recordTitle = resolveRecordTitle({ rowItem: row_item, columns, tableName: table_name,
         dataTypes: data_types, preferredLanguage: chosenLang });
+    // The card's links name the row's article by the article's own title, which
+    // can come from another field than the card's (each surface hides its own
+    // fields). Ownership is not known here, so a field shown only to the row's
+    // owner is left out, as the server's address check reads the page as a
+    // signed-out visitor does (resolveArticleDocument).
+    const articleAddressTitle = row_item?.id == null ? null : resolveRecordTitle({ rowItem: row_item, columns,
+        tableName: table_name, dataTypes: data_types, preferredLanguage: chosenLang, surface: 'article' });
+    const rowAddress = articleAddressTitle
+        ? () => rowArticleLinkAddress(table_name, row_item.id, articleAddressTitle.slugSourceText) : null;
     const header_first_letter = recordTitle.initial;
 
     let preferred_image_alt_username = "";
@@ -188,12 +196,15 @@ columns.forEach((col) => {
         recordTitle.text || preferred_image_alt_username;
 let usernameElement = null;
     let headerElement = null;
-    for (const heading of recordTitle.headers.length ? recordTitle.headers : [recordTitle]) {
+    const headings = recordTitle.headers.length ? recordTitle.headers : [recordTitle];
+    for (const [index, heading] of headings.entries()) {
         const column = heading.column || '';
         const meta = data_types[column] || {};
+        // Only the first title is a link, so a card does not repeat one link.
         headerElement = addHeaderElement(heading.text,
             heading.configured && meta.show_key_on_card === true ? format_column_name(column) : '', column, false,
-            row_item, table_name, card_content_div, heading.editValue, meta, heading.sourceText);
+            row_item, table_name, card_content_div, heading.editValue, meta, heading.sourceText,
+            { rowAddress: index === 0 ? rowAddress : null });
         if (column) headerElement.classList.add(makeColumnClass(table_name, column));
         else headerElement.querySelectorAll('[data-column]').forEach(element => element.removeAttribute('data-column'));
         setFieldHideAttribute(headerElement);
@@ -500,11 +511,11 @@ for (const role of baseRoles) {
         }
         addDescriptionSection(
             selectCardFieldEntries(description_entries, showAll, data_types),
-            row_item, table_name, cardInfoSectionContainer
+            row_item, table_name, cardInfoSectionContainer, { rowAddress }
         );
         const disposeKeywords = addKeywordsSection(
             selectCardFieldEntries(keywords_list, showAll, data_types),
-            row_item, table_name, cardInfoSectionContainer, { deferResponsiveLayoutMs }
+            row_item, table_name, cardInfoSectionContainer, { deferResponsiveLayoutMs, rowAddress }
         );
         let disposeDetails;
         try {
@@ -569,14 +580,12 @@ for (const role of baseRoles) {
     }
 
     if (show_more_button_on_cards) {
-        const moreBtn = createRowOpenerElement("button", table_name);
-        moreBtn.dataset.langKey = "show_more";
-        bindRowActivation(moreBtn, table_name, (e) => {
-            e.preventDefault();
-            openDefaultRowPresentation(row_item, table_name, card);
-        });
-        setFieldHideAttribute(moreBtn);
-        footer_div.appendChild(moreBtn);
+        // A link to the row's article that looks like the card's other buttons
+        // (styles/form.css). A reader who cannot open the row gets plain text.
+        const moreLink = createShowMoreLink(row_item, table_name, rowAddress, "card_footer_show_more");
+        if (moreLink instanceof HTMLAnchorElement) moreLink.classList.add("button-like-link");
+        setFieldHideAttribute(moreLink);
+        footer_div.appendChild(moreLink);
     }
 card_text_content.appendChild(footer_div);
     card_body_div.appendChild(card_image_content);

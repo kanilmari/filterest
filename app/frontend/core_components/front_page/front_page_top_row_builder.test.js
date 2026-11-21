@@ -17,6 +17,12 @@ vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
     },
 }));
 vi.mock('../navigation/main_tabs/main_tab_printer.js', () => ({ openNavTab: vi.fn() }));
+// The dataset catalogue has loaded: the dataset tabs are links with addresses
+// (live_link_address.js), so they take keyboard focus as before.
+vi.mock('../navigation/nav_engine/dataset_access_registry.js', async importOriginal => ({
+    ...await importOriginal(),
+    hasDatasetAccessSnapshot: () => true,
+}));
 vi.mock('./front_page_navigation.js', () => ({ openFrontPage: vi.fn(), isSeparateFrontPageEnabled: () => true, isFrontPageShowing: () => true }));
 vi.mock('../admin_tools/front_page_settings_modal.js', () => ({ createFrontPageSettingsHeroButton: () => null }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (_key, options) => options.fallback }));
@@ -91,11 +97,11 @@ test('Home tabs have no active dataset, update from the shared model and unsubsc
     expect(home.getAttribute('aria-current')).toBe('page');
     expect(row.element.querySelector('.filterbar-inline-hero__actions > .top-nav-home-button')).toBeNull();
     expect(tabs.firstElementChild).toBe(home);
-    expect(home.nextElementSibling).toBe(tabs.querySelector('button'));
+    expect(home.nextElementSibling).toBe(tabs.querySelector('.hero-dataset-tabs__button[data-dataset]'));
     for (const listener of mocks.listeners) listener([{ dataset: 'events', text: 'Events', langKey: 'events' }]);
     expect(row.element.querySelector('.hero-dataset-tabs__button').dataset.dataset).toBe('events');
     expect(tabs.firstElementChild).toBe(home);
-    expect(home.nextElementSibling).toBe(tabs.querySelector('button'));
+    expect(home.nextElementSibling).toBe(tabs.querySelector('.hero-dataset-tabs__button[data-dataset]'));
     row.destroy();
     expect(mocks.listeners.size).toBe(0);
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();
@@ -235,7 +241,7 @@ test('Home centers its existing navigation in the full row with 20px clearance f
     row.mount();
     const nav = row.element.querySelector('.hero-dataset-tabs');
     const home = nav.querySelector('.top-nav-home-button');
-    const tab = nav.querySelector('button');
+    const tab = nav.querySelector('.hero-dataset-tabs__button[data-dataset]');
     // Give the row a visible, explicitly configured destination. A view-less URL
     // can remain hidden or be removed while the viewer's grants are resolved.
     const articleHref = '/guides/1?view=article_view';

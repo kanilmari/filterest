@@ -243,7 +243,7 @@ body.dark-mode .front-page {
   margin-block-start: max(var(--home-box-row-gap, 0.6rem), min(0.6rem, 30px));
 }
 
-:is(.front-page-blocks, .front-page-search-sheet__slot) :is(.supplemental-dataset-result-text > a, .supplemental-dataset-show-all):any-link:not([data-article-access="denied"]) {
+:is(.front-page-blocks, .front-page-search-sheet__slot) :is(.supplemental-dataset-result-text > a, .supplemental-dataset-show-all, .supplemental-dataset-filter-results):any-link:not([data-article-access="denied"]) {
   color: light-dark(
     color-mix(in srgb, var(--link_color, var(--primary_color)) 40%, black),
     var(--link_color, var(--primary_color))
@@ -255,10 +255,44 @@ body.dark-mode .front-page {
 }
 
 .front-page-blocks .supplemental-dataset-show-all,
+.front-page-blocks .supplemental-dataset-filter-results,
 .front-page-status button {
   display: flex;
   align-items: center;
   min-height: 44px;
+}
+
+/* A dataset box ends with Show all and Filter results on one row; a narrow
+   box wraps the second link below the first. The row keeps Show all's own
+   distance from the list, and each link keeps its 44px touch height. */
+.front-page-blocks .supplemental-dataset-collection-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1.5rem;
+  margin-top: 0.25rem;
+}
+
+.front-page-blocks .supplemental-dataset-collection-links > a {
+  margin-top: 0;
+}
+
+.front-page-blocks .supplemental-dataset-filter-results {
+  gap: 0.4em;
+}
+
+/* The global reset gives every element the text colour; the link's own icon
+   and label take the link's ink, as Show all's bare text does. */
+.front-page-blocks .supplemental-dataset-filter-results > * {
+  color: inherit;
+}
+
+/* The filter bar's own filters icon, drawn in the link's colour in both themes. */
+.front-page-blocks .supplemental-dataset-filter-results__icon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  background-color: currentColor;
 }
 
 /* Stretch the existing title link over its row without changing the shared
@@ -294,12 +328,14 @@ body.dark-mode .front-page {
   display: none;
 }
 
-/* Match the tabs' full-width region inside WL142's reserved grid area. */
+/* Fill WL142's reserved grid area, but stop 2px short of the menu's right
+   edge: the edge is the menu's own inset shadow, and a hovered Home link's
+   background painted over it (see the edge rule at #navbar in navbar_layout.css). */
 #navbar > #navbarFrontPage {
   box-sizing: border-box;
-  width: 100%;
+  width: auto;
   max-width: none;
-  margin: 0;
+  margin: 0 2px 0 0;
 }
 
 .navbar-front-page-link {

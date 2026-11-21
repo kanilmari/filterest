@@ -197,7 +197,7 @@ test.describe('measured tablet and desktop navigation', () => {
     await page.goto(`/${DATASET}?view=card`);
     await waitForActiveFilterbarLayout(page);
     const tabs = page.locator(`[id="${DATASET}_tab_parts_container"] .filterbar-inline-hero__top-row .hero-dataset-tabs`);
-    await expect.poll(() => tabs.locator(':scope > button').count()).toBeGreaterThan(1);
+    await expect.poll(() => tabs.locator(':scope > .hero-dataset-tabs__button[data-dataset]').count()).toBeGreaterThan(1);
     await expect(tabs).toBeVisible();
     const home = tabs.locator(':scope > .top-nav-home-button');
     await expect(home).toBeVisible();
@@ -205,14 +205,14 @@ test.describe('measured tablet and desktop navigation', () => {
     await expect(home).toHaveCSS('height', '44px');
     await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
     const homeHref = await home.getAttribute('href');
-    const destinations = await tabs.locator(':scope > button').evaluateAll(buttons =>
+    const destinations = await tabs.locator(':scope > .hero-dataset-tabs__button[data-dataset]').evaluateAll(buttons =>
       buttons.map(button => (button as HTMLElement).dataset.dataset!));
     expect(destinations.length, 'The native dataset needs at least two main navigation destinations.').toBeGreaterThan(1);
     // Restrict the actual row at a fixed viewport: fitting must follow measured room, not a breakpoint.
     const { widths, gap, homeWidth } = await tabs.evaluate(element => ({
       gap: Number.parseFloat(getComputedStyle(element).columnGap) || 0,
       homeWidth: element.querySelector('.top-nav-home-button')!.getBoundingClientRect().width,
-      widths: [...element.querySelectorAll(':scope > button')].map(button => {
+      widths: [...element.querySelectorAll(':scope > .hero-dataset-tabs__button[data-dataset]')].map(button => {
         const target = button as HTMLElement, wasHidden = target.hidden, previousStyle = target.style.cssText;
         target.hidden = false;
         target.style.cssText += ';position:absolute;visibility:hidden;display:inline-flex;width:max-content;max-width:none;';
@@ -229,8 +229,8 @@ test.describe('measured tablet and desktop navigation', () => {
     try {
       for (const [available, count] of [[two + 1, 2], [reserved + widths[0] + 1, 1], [1, 0]]) {
         await tabs.evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; }, available);
-        await expect(tabs.locator(':scope > button:visible')).toHaveCount(count);
-        expect(await tabs.locator(':scope > button:visible').evaluateAll(buttons =>
+        await expect(tabs.locator(':scope > .hero-dataset-tabs__button[data-dataset]:visible')).toHaveCount(count);
+        expect(await tabs.locator(':scope > .hero-dataset-tabs__button[data-dataset]:visible').evaluateAll(buttons =>
           buttons.map(button => (button as HTMLElement).dataset.dataset))).toEqual(destinations.slice(0, count));
         expect(await home.evaluate(element => !(element as HTMLElement).hidden)).toBe(true);
       }
@@ -382,14 +382,14 @@ test('#999: a moved dataset tab opens by keyboard and pointer, and Back restores
   await page.goto(`/${dataset}?view=card`);
   const live = page.locator(`[id="${dataset}_tab_parts_container"] .dataset-shared-topbar[data-topbar-mode="hero"]`);
   const tabs = live.locator('.filterbar-inline-hero__top-row .hero-dataset-tabs');
-  const start = tabs.locator('button[data-dataset][aria-current="page"]');
+  const start = tabs.locator('.hero-dataset-tabs__button[data-dataset][aria-current="page"]');
   await expect(start).toHaveAttribute('data-dataset', dataset);
-  const target = tabs.locator('button[data-dataset]:not([aria-current="page"]):visible').first();
+  const target = tabs.locator('.hero-dataset-tabs__button[data-dataset]:not([aria-current="page"]):visible').first();
   await expect(target).toBeVisible();
   const other = await target.getAttribute('data-dataset');
   expect(other).toMatch(/^[a-z][a-z0-9_]*$/);
   const initialURL = page.url();
-  const reachableCurrent = () => page.locator('.hero-dataset-tabs button[aria-current="page"]').evaluateAll(buttons =>
+  const reachableCurrent = () => page.locator('.hero-dataset-tabs .hero-dataset-tabs__button[data-dataset][aria-current="page"]').evaluateAll(buttons =>
     buttons.filter(button => {
       const r = button.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
@@ -475,7 +475,7 @@ test('#1017: dataset navigation centers on the toolbar and clears either limitin
   await page.goto(`/${dataset}?view=card`);
   const inner = page.locator(`[id="${dataset}_tab_parts_container"] .dataset-shared-topbar[data-topbar-mode="hero"] .dataset-shared-topbar__inner`);
   const tabs = inner.locator('.hero-dataset-tabs');
-  await expect(tabs.locator('button[aria-current="page"]')).toBeVisible();
+  await expect(tabs.locator('.hero-dataset-tabs__button[data-dataset][aria-current="page"]')).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const measure = () => inner.evaluate(bar => {
     const box = bar.getBoundingClientRect();

@@ -95,7 +95,7 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
     renderNavbarFrontPage({ isLoggedIn: true });
     const menuHome = document.querySelector('#navbarFrontPage a');
     const tabs = createHeroDatasetTabs('demo');
-    const tab = tabs.element.querySelector('button');
+    const tab = tabs.element.querySelector('.hero-dataset-tabs__button[data-dataset]');
     document.getElementById('hero').append(home, tabs.element);
     const changed = vi.fn();
     const writes = vi.spyOn(Storage.prototype, 'setItem');

@@ -377,6 +377,19 @@ so one Back returns to Home. Both the box heading and Show all open the
 card collection newest first (`__newest`). Boxes follow tab order in one centred
 800px column at every width, above the theme-aware image or video background.
 
+Beside Show all, each box has **Filter results** (the filter bar's own
+`filterbar_filter_results` text): the same newest-first cards, arriving with the
+filter bar and its filters section open. The link's address adds `open-filters=1`,
+so a new tab or a copied link opens the filters too.
+[`filters_arrival_request.js`](../../frontend/core_components/navigation/nav_engine/filters_arrival_request.js)
+owns that request: it takes the marker off the address when the page loads, keeps it
+out of dataset parameters and row filters, and lets it live only for the navigation
+that carries it (60 s at most). The dataset's filter bar opens it through the
+Filters shortcut's temporary reveal (`ensureOpenForArrival` in
+`filters_opener_and_closer.js`) after section order, private section state and the
+remembered panel state have settled, so the visitor's saved choices stay unchanged.
+Show all, the box heading and Home search results are unchanged.
+
 The `front_page_show_blocks` boolean defaults to **true even when absent**, retaining boxes. When false the
 public facade resolves no datasets and returns `show_blocks:false, blocks:[]`;
 the editor disables and greys its retained box list. The key is registered in
@@ -387,7 +400,7 @@ background and video remain siblings outside it and cover the viewport. Above
 The phone's own sticky bar stays 48px tall. The menu button and environment badge have flat surfaces. When the overlay menu slides closed,
 its right-hand inset edge travels with it while the outer shadow fades.
 Row caps stay in the shared compact renderer: 76px images follow [each dataset's card presentation](Card_Style_Presentation.md#card-image-presentation-and-compact-results), or keep search's letter fallback.
-Boxes use `--fw-radius-lg` (10px); one-line titles, two-line excerpts, one stretched title link and 44px Show all stay unchanged.
+Boxes use `--fw-radius-lg` (10px); one-line titles, two-line excerpts, one stretched title link and 44px Show all stay unchanged. Show all and Filter results share one wrapping row, each 44px tall, in the same link ink; the global colour reset would otherwise give the Filter results icon and label the text colour.
 
 `front_page_top_row_builder.js` owns the live dataset tabs, admin actions and
 borrowed shell menu button. It returns that button and destroys the tab

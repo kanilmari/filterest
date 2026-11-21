@@ -12,6 +12,7 @@
     "G_navigation/G17_home_phone_search.spec.ts": "mobile-card",
     "G_navigation/G18_media_tab_shape.spec.ts": "desktop-card",
     "G_navigation/G19_home_desktop_search.spec.ts": "desktop-card",
+    "G_navigation/G25_home_tabs_hold_still.spec.ts": "desktop-card",
     "I_inline_edit/I7_edit_during_rebuild.spec.ts": "desktop-card",
     "L_auth/L12_phone_form_edges.spec.ts": "mobile-card",
     "T_admin/T23_permissions_rights_fingerprint.spec.ts": "desktop-card"
@@ -42,6 +43,7 @@
     "C_card_view/C25_rich_text_links.spec.ts",
     "C_card_view/C2_open_big_card.spec.ts",
     "C_card_view/C34_visitor_row_address_image_first.spec.ts",
+    "C_card_view/C35_card_links.spec.ts",
     "C_card_view/C3_close_big_card.spec.ts",
     "C_card_view/C4_card_infinite_scroll.spec.ts",
     "C_card_view/C5_card_language_refresh.spec.ts",
@@ -74,6 +76,7 @@
     "G_navigation/G11_home_phone_layout.spec.ts",
     "G_navigation/G1_tree_table_select.spec.ts",
     "G_navigation/G2_tab_click.spec.ts",
+    "G_navigation/G24_menu_edge_stays_visible.spec.ts",
     "G_navigation/G4_history_back.spec.ts",
     "G_navigation/G4_svg_tab_alignment.spec.ts",
     "G_navigation/G5_history_forward.spec.ts",

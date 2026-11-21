@@ -217,7 +217,7 @@ for (const theme of ['light', 'dark'] as const) {
       { message: 'Home settles beside the docked menu', timeout: 5000 }).toBeGreaterThanOrEqual(menu.x + menu.width - 1);
     await noTabOverlap(page);
     expect(await tabs.evaluateAll(nodes => nodes.filter(node => (node as HTMLElement).hidden).length)).toBeGreaterThanOrEqual(hiddenBefore);
-    for (const dataset of datasets) await expect(navbar.locator(`button[data-id="${dataset}"]`)).toHaveCount(1);
+    for (const dataset of datasets) await expect(navbar.locator(`.navtablinks[data-id="${dataset}"]`)).toHaveCount(1);
     const { panel } = await openSearch(page, docked);
     expect((await panel.boundingBox())!.x).toBeGreaterThanOrEqual(menu.x + menu.width + 15);
   });
