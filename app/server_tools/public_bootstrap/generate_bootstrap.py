@@ -94,6 +94,7 @@ language_seed_migrations = (
     "20261029000002_replace_legacy_finnish_sort_labels.sql",
     "20261105000986_seed_row_presentation_default_language_keys.sql",
     "20261119000175_seed_public_article_language_keys.sql",
+    "20261121000175_seed_bar_surface_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -197,6 +198,7 @@ release_record_migrations = (
     "20261105000999_record_database_release_row_article_default.sql",
     "20261106000199_record_database_release_disclosure_defaults.sql",
     "20261119000199_record_database_release_public_articles.sql",
+    "20261121000199_record_database_release_bar_surface.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

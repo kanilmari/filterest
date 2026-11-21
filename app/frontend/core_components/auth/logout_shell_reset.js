@@ -16,6 +16,7 @@ import { destroy_chat } from "../ai_features/table_chat/table_chat_printer.js";
 import { publishAuthLogout } from "./auth_broadcast.js";
 import { invalidateSessionGeneration } from "./session_generation_store.js";
 import { stopAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
+import { BAR_SURFACE_STORAGE_KEY } from "../bar_surface/bar_surface_experiment.js";
 
 // These settings describe the browser/device, not the authenticated user or
 // the datasets they were allowed to inspect. Everything else remains subject
@@ -27,6 +28,7 @@ const LOGOUT_SAFE_LOCAL_STORAGE_KEYS = Object.freeze([
     "navVisibleNarrow",
     "filterest_public_presentation_v1", // Old public cache may survive a cutover.
     "filterest_public_presentation_v2", // Public site appearance only; no user or authorization state.
+    BAR_SURFACE_STORAGE_KEY, // This browser's frosted-bars choice survives sign-out (WL182).
 ]);
 
 export function resolvePostLogoutPath(responseUrl, currentOrigin = window.location.origin) {

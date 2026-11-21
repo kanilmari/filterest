@@ -14,7 +14,7 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    background: var(--fw-color-surface);
+    background: var(--bar-panel-layer-background, var(--fw-color-surface));
     /* border: 1px solid var(--fw-color-border); */
     border-radius: var(--fw-radius-lg);
     box-shadow: var(--fw-shadow-raised);
@@ -57,7 +57,7 @@
 .favefox-filterbar .filter-section {
     --filter-section-bg: transparent;
 
-    background: var(--filter-section-bg);
+    background: var(--bar-panel-row-background, var(--filter-section-bg));
     border: none;
     border-radius: 0;
     overflow: visible;

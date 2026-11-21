@@ -20,6 +20,7 @@ import {
 } from "../navigation/database_tree/navbar_admin_tools_section.js";
 import { NAVBAR_FAVORITES_SECTION_ID, ensureNavbarFavoritesSection } from "../navigation/favorites/navbar_favorites_section.js";
 import { syncAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
+import { mountBarSurfaceSwitch } from "../bar_surface/bar_surface_experiment.js";
 
 /**
  * Ensures post-login nav containers exist exactly once before admin nav builders run.
@@ -61,6 +62,9 @@ function ensureNavShellElements() {
 
     if (!adminToolsContent) {
         document.getElementById(NAVBAR_ADMIN_TOOLS_SECTION_ID)?.remove();
+    } else {
+        // The frosted-bars experiment switch (WL182); it appears only for a server-confirmed administrator.
+        void mountBarSurfaceSwitch(adminToolsContent);
     }
 }
 

@@ -6,6 +6,10 @@
 const TAB_ICON_SVG_PREFIX =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path fill="black" d="';
 const TAB_ICON_SVG_SUFFIX = '"/></svg>';
+// SVG tab fills read the bar-surface variables; the fallbacks are the solid look.
+// bar_surface_frosted.css sets the variables while the frosted-bars experiment is on.
+export const NAVTAB_ACTIVE_FILL = "var(--bar-tab-fill-active, var(--bg_color_2))";
+export const NAVTAB_INACTIVE_FILL = "var(--bar-tab-fill-inactive, var(--bg_color_1_5))";
 
 const NAVTAB_DEFAULT_NAVBAR_WIDTH = 300;
 const NAVTAB_ROUNDED_WIDTH = 244;
@@ -144,14 +148,14 @@ export function buildTabOutlinePresentation({
     if (state === "tab-active") {
         return {
             ...basePresentation,
-            fill: "var(--bg_color_2)",
+            fill: NAVTAB_ACTIVE_FILL,
         };
     }
 
     if (state === "tab-inactive") {
         return {
             ...basePresentation,
-            fill: "var(--bg_color_1_5)",
+            fill: NAVTAB_INACTIVE_FILL,
         };
     }
 

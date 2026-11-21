@@ -137,3 +137,6 @@
 @import url("../custom_views/embedding_status_panel.css");
 
 @import url("../core_components/filterbar/dataset_surface_provider/dataset_surface_host.css");
+
+/* Experimental frosted bars (WL182); reads the bar-surface variables, removable with its folder. */
+@import url("../core_components/bar_surface/bar_surface_frosted.css");

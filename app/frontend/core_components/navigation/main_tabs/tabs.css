@@ -137,7 +137,7 @@ a.navtablinks {
 }
 
 .navtablinks[data-tab-presentation^="button"] {
-    background-color: var(--bg_color_1_5);
+    background-color: var(--bar-tab-fill-inactive, var(--bg_color_1_5));
     border-radius: 0;
     justify-self: left;
     width: calc(100% - 2px);

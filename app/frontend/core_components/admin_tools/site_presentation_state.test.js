@@ -323,6 +323,19 @@ describe('public presentation state', () => {
         state.paint();
         expect(hue()).toBe('316.76');
     });
+
+    test('startup paints the site brand on a first visit, where Home mounts no palette', async () => {
+        // Empty browser cache: the first-paint script has nothing to apply.
+        boot();
+        expect(hue()).toBe('');
+        const state = getSitePresentationState(async () => settings());
+        await state.loadSettings();
+        state.paint();
+        expect(hue()).toBe('316.76');
+        const main = readFileSync('frontend/main.js', 'utf8');
+        expect(main.indexOf('getSitePresentationState().paint()'))
+            .toBeGreaterThan(main.indexOf('await getSitePresentationState().loadSettings()'));
+    });
 });
 
 describe('early public-brand paint', () => {

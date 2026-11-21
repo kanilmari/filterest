@@ -168,7 +168,7 @@ describe("initTabs", () => {
         expect(activeTab?.dataset.tabPresentation).toBe("button-active");
         expect(outlinePath?.getAttribute("d")).toContain("A 0 0");
         expect(outlinePath?.getAttribute("fill")).toBe("none");
-        expect(fillPath?.getAttribute("fill")).toBe("var(--bg_color_2)");
+        expect(fillPath?.getAttribute("fill")).toBe("var(--bar-tab-fill-active, var(--bg_color_2))");
         expect(activeTab?.querySelector(".navtab-cover-layer")).toBeNull();
         expect(glowPath?.getAttribute("stroke")).toMatch(/^url\(#navtab-\d+-glow\)$/);
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");

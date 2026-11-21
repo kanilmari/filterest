@@ -137,7 +137,7 @@
 
 .dataset-filter-primary-actions,
 .dataset-filter-secondary-row {
-    background: var(--bg_color_extreme);
+    background: var(--bar-panel-layer-background, var(--bg_color_extreme));
     /* border: 1px solid var(--fw-color-border); */
     border-radius: var(--fw-radius-lg);
     padding: 15px;
@@ -157,12 +157,12 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
     gap: 8px 10px;
-    background:
+    background: var(--bar-panel-layer-background,
         linear-gradient(
             180deg,
             color-mix(in srgb, var(--bg_color_extreme) 92%, var(--bg_color_2) 8%),
             var(--bg_color_extreme)
-        );
+        ));
 }
 
 .dataset-filter-primary-actions--tools {
@@ -242,7 +242,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    background: var(--bg_color_extreme);
+    background: var(--bar-panel-layer-background, var(--bg_color_extreme));
     border-radius: var(--fw-radius-lg);
     padding: 15px;
 }
@@ -337,7 +337,7 @@
     --filterbar-disclosure-heading-bg: hsl(var(--brand-hue) 70% 92%);
     --filterbar-disclosure-heading-hover-bg: hsl(var(--brand-hue) 66% 89%);
     --filterbar-disclosure-heading-border: hsl(var(--brand-hue) 58% 74%);
-    background: var(--bg_color_extreme);
+    background: var(--bar-panel-layer-background, var(--bg_color_extreme));
     border-block: 2px solid var(--fw-color-border);
     border-radius: 0;
     flex: 0 0 auto;
@@ -353,12 +353,12 @@
     padding: 0 14px 0 22px;
     border: 0;
     border-radius: 0;
-    background: var(--filterbar-disclosure-heading-bg);
+    background: var(--bar-panel-heading-background, var(--filterbar-disclosure-heading-bg));
     border-bottom: 1px solid var(--filterbar-disclosure-heading-border);
 }
 
 .filterbar-disclosure-section > .filterbar-section-heading:hover {
-    background: var(--filterbar-disclosure-heading-hover-bg);
+    background: var(--bar-panel-heading-hover-background, var(--filterbar-disclosure-heading-hover-bg));
 }
 
 .filterbar-disclosure-section > .filterbar-section-heading .animated-disclosure-chevron {

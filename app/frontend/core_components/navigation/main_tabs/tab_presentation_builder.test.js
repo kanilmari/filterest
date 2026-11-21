@@ -172,7 +172,7 @@ describe("buildTabOutlinePresentation", () => {
         expect(activeOutline.pathD).toContain("A 7 7 0 0 0 63 57");
         expect(activeOutline.pathD).toContain("A 7 7 0 0 1 297 64");
         expect(activeOutline.pathD).toContain("L 300 64");
-        expect(activeOutline.fill).toBe("var(--bg_color_2)");
+        expect(activeOutline.fill).toBe("var(--bar-tab-fill-active, var(--bg_color_2))");
         expect(activeOutline.strokeWidth).toBe("2");
         expect(activeOutline.viewBox).toBe("0 0 300 65");
         expect(activeOutline.width).toBe(300);
@@ -182,7 +182,7 @@ describe("buildTabOutlinePresentation", () => {
         expect(inactiveOutline.pathD.startsWith("M 297 1")).toBe(true);
         expect(inactiveOutline.pathD).toContain("A 7 7 0 0 1 290 8");
         expect(inactiveOutline.pathD).not.toContain("L 300 64");
-        expect(inactiveOutline.fill).toBe("var(--bg_color_1_5)");
+        expect(inactiveOutline.fill).toBe("var(--bar-tab-fill-inactive, var(--bg_color_1_5))");
         expect(inactiveOutline.strokeWidth).toBe("2");
     });
 

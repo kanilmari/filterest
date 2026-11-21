@@ -299,8 +299,8 @@ export async function saveAdminSymbolAssignment(request) {
  *
  * @returns {Promise<{ view_admin_cover_image_test_palette: boolean }>}
  */
-export async function fetchAdminUIFeatureFlags() {
-    return stable_candidate_endpoint_router('adminUiFeatureFlags');
+export async function fetchAdminUIFeatureFlags(options = {}) {
+    return stable_candidate_endpoint_router('adminUiFeatureFlags', options);
 }
 
 /** Returns public site values, defaults and the article timestamp setting.

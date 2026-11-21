@@ -228,7 +228,9 @@ test('sticky Home bar, drawer lock and measured offsets are confined to the phon
         display: 'grid', 'grid-template-columns': '52px minmax(0, 1fr) 44px',
         padding: '0', height: '48px', 'grid-template-rows': '47px',
         'border-bottom': '1px solid var(--border_color)' });
-    expect(css).toContain('background: color-mix(in srgb, var(--bg_color) 92%, transparent)');
+    // WL182: the bar reads the bar-surface variables; the fallbacks are today's half-frosted look.
+    expect(css).toContain('background: var(--bar-home-topbar-background, color-mix(in srgb, var(--bg_color) 92%, transparent))');
+    expect(css).toContain('backdrop-filter: var(--bar-home-topbar-backdrop, blur(10px))');
     expect(css).toContain('@supports not (backdrop-filter: blur(1px))');
     expect(phone['.front-page-phone-topbar'].background).toBe('var(--bg_color)');
     expect(phone['.front-page-phone-topbar > .dataset-shared-topbar__menu-slot']['grid-column']).toBe('1');

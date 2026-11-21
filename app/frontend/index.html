@@ -76,6 +76,15 @@
             root.style.setProperty('--brand-light', `${brand.lightness}%`);
         } catch { /* Missing, blocked or corrupt storage keeps the normal first-visit fallback. */ }
     })();
+    (() => {
+        // Frosted-bars experiment (WL182): bar_surface_experiment.js owns the key; marking the
+        // root here, before the stylesheet, keeps the first paint from flashing solid bars.
+        try {
+            if (localStorage.getItem('filterest_experimental_bar_surface_v1') === 'frosted') {
+                document.documentElement.setAttribute('data-bar-surface', 'frosted');
+            }
+        } catch { /* Blocked storage keeps the solid bars. */ }
+    })();
     </script>
     {{if .UseMinifiedAssets}}
     <link rel="stylesheet" id="imports-css" data-shell-boot-required data-shell-boot-probe-link href="{{.ImportsCSSPath}}">

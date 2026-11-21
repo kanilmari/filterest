@@ -431,9 +431,10 @@ body.dark-mode .front-page {
     height: 48px;
     grid-template-rows: 47px;
     padding: 0;
-    background: color-mix(in srgb, var(--bg_color) 92%, transparent);
+    /* Bar surface: see bar_surface_frosted.css for the --bar-home-topbar-* values. */
+    background: var(--bar-home-topbar-background, color-mix(in srgb, var(--bg_color) 92%, transparent));
     border-bottom: 1px solid var(--border_color);
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--bar-home-topbar-backdrop, blur(10px));
   }
 
   @supports not (backdrop-filter: blur(1px)) {

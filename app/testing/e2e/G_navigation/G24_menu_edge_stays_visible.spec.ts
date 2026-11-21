@@ -67,6 +67,15 @@ test.describe('G24 — The menu keeps its right edge', () => {
     expect(await coversWhileHovering(page)).toEqual([]);
   });
 
+  test('with frosted bars (WL182) the administrator\'s menu still keeps the edge', async ({ page }) => {
+    // Frosted mode makes the menu's inner layers transparent and adds the experiment switch row.
+    await page.addInitScript(() => localStorage.setItem('filterest_experimental_bar_surface_v1', 'frosted'));
+    await openMenuOnHome(page);
+    await expect(page.locator('html')).toHaveAttribute('data-bar-surface', 'frosted');
+    if (await page.locator('[data-testid="nav-group-admin_tools"]').count()) await ensureAdminToolsOpen(page);
+    expect(await coversWhileHovering(page)).toEqual([]);
+  });
+
   test('a signed-out visitor\'s menu: no control hides the edge', async ({ browser, page }, info) => {
     // Where browsing needs signing in, a visitor gets the sign-in page and no menu at all.
     const modes = await (await page.request.get('/api/auth-modes')).json();

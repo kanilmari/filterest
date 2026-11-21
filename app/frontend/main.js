@@ -32,8 +32,12 @@ ensureRootEntryIdentity();
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 
+// Frosted-bars experiment (WL182): re-applies this browser's choice and follows other tabs.
+initBarSurfaceExperiment();
+
 import "./core_components/table_views/table_view/table_column_resizer.js";
 import "./core_components/theme.js";
+import { initBarSurfaceExperiment } from "./core_components/bar_surface/bar_surface_experiment.js";
 import "./core_components/error_and_status_handling/error_monitor_handler.js";
 import { checkFingerprint } from "./core_components/auth/fingerprint_checker.js";
 
@@ -50,6 +54,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     observeReadingHyphenation(document.documentElement);
     await loadConfig();
     await getSitePresentationState().loadSettings();
+    // Paint the site's brand colour from the startup response. Dataset views repaint
+    // when their hero mounts, but Home mounts none, so without this a first visit
+    // (empty browser cache) kept the default hue until a reload or a dataset visit.
+    getSitePresentationState().paint();
     initDevToolbox();
     // Initialize the navbar before heavy dataset rendering so the content area
     // can animate with the sidebar instead of snapping to a new left edge later.

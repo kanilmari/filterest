@@ -10,6 +10,7 @@ import {
 import {
     buildNavTabsRightOffset,
     buildTabOutlinePresentation,
+    NAVTAB_ACTIVE_FILL,
 } from "./tab_presentation_builder.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { isHomeNavigationView, observeViewPresentationMedia, syncViewPresentationMediaFlag,
@@ -316,7 +317,7 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
         if (fillPath) {
             fillPath.setAttribute(
                 "fill",
-                isActive ? "var(--bg_color_2)" : presentation.fill
+                isActive ? NAVTAB_ACTIVE_FILL : presentation.fill
             );
         }
         if (outlinePath) {

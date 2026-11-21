@@ -235,6 +235,36 @@ is also written at `#navbar` in
 (Owner request 20.11.2026, after the All articles and Home links' hover
 backgrounds hid the edge.)
 
+## 7.3. Bar surfaces and the frosted-bars experiment
+
+The menu (`#navbar`), the dataset top bar, the filter panel and Home's phone top
+bar read their backgrounds from `--bar-*` variables, each with today's value as
+the fallback: `background: var(--bar-menu-background, var(--bg_color))`. Nothing
+defines those variables by default, so the bars look as they always have.
+[bar_surface_frosted.css](../../frontend/core_components/bar_surface/bar_surface_frosted.css)
+defines them only under `:root[data-bar-surface="frosted"]`, which an
+administrator turns on for one browser with the switch in the menu's
+administration tools ([bar_surface_experiment.js](../../frontend/core_components/bar_surface/bar_surface_experiment.js),
+WL182). Each bar then becomes one translucent, blurred pane: its plain inner
+layers turn transparent, meaningful colours (section headings, striped rows,
+the active rectangular tab) become tints, the rows that mask content scrolling
+beneath them (the menu's controls row, the panel's clock bar) are denser and
+blur that content once more, and buttons, fields and popovers stay solid.
+Article and image-first views keep the solid bars, and so do people who ask
+for less transparency, more contrast or forced colours.
+
+A new layer inside a bar reads the matching `--bar-*` variable with its own
+current value as the fallback; never write a `--bar-*` variable without one.
+[bar_surface_css.test.js](../../frontend/core_components/bar_surface/bar_surface_css.test.js)
+checks that rule, and
+[G26_frosted_bars.spec.ts](../../testing/e2e/G_navigation/G26_frosted_bars.spec.ts)
+proves the panes, the composed-pixel contrast of menu labels and that switching
+off restores today's computed styles. The filter panel keeps a
+`backdrop-filter` in both states, because it makes the panel the containing
+block of its fixed-position children. Removing the experiment means deleting
+`bar_surface_frosted.css`, `bar_surface_experiment.js`, their import and the
+switch; the fallbacks keep the solid bars.
+
 ## 7. Languages and Translations (UI)
 
 Filterest uses `data-lang-key` attributes for menu and UI string localization.

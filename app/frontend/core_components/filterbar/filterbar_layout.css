@@ -33,8 +33,12 @@
   right: 0;
   left: 0;
   z-index: var(--z-filterbar, 100001);
-  background: var(--filter_panel_bg);
-  backdrop-filter: blur(20px);
+  /* Bar surface: bar_surface_frosted.css sets the --bar-panel-* values while the
+     frosted-bars experiment is on; otherwise the fallbacks are the solid look.
+     Keep a backdrop-filter here in both states: it makes the panel the containing
+     block of its fixed-position children. */
+  background: var(--bar-panel-background, var(--filter_panel_bg));
+  backdrop-filter: var(--bar-panel-backdrop, blur(20px));
   border-bottom: 1px solid var(--filter_panel_border);
   padding: 0;
   box-sizing: border-box;
@@ -66,7 +70,7 @@
   box-sizing: border-box;
   padding: 0 72px 0 26px;
   color: var(--text_color);
-  background: var(--bg_color_extreme);
+  background: var(--bar-panel-layer-background, var(--bg_color_extreme));
   border-bottom: 2px solid var(--filter_panel_border);
 }
 
@@ -182,7 +186,7 @@
   margin: 0;
   padding: 12px;
   color: var(--text_color);
-  background: var(--filter_panel_bg);
+  background: var(--bar-panel-layer-background, var(--filter_panel_bg));
   border: 1px solid var(--filter_panel_border);
   border-radius: 8px;
 }
@@ -404,7 +408,9 @@
   z-index: 4;
   height: var(--filterbar-clock-bar-height, 34px);
   min-height: var(--filterbar-clock-bar-height, 34px);
-  background: color-mix(in srgb, var(--filter_panel_bg_color) 90%, var(--bg_color_extreme, #111) 10%);
+  /* Masks panel content scrolling underneath; see bar_surface_frosted.css. */
+  background: var(--bar-panel-cap-background, color-mix(in srgb, var(--filter_panel_bg_color) 90%, var(--bg_color_extreme, #111) 10%));
+  backdrop-filter: var(--bar-panel-cap-backdrop, none);
   border-top: 1px solid var(--filter_panel_border);
   display: flex;
   align-items: center;

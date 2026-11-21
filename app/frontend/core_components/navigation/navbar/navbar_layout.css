@@ -21,7 +21,10 @@
     grid-template-areas: "controls" "auth" "front-page" "tabs" "articles" "favorites" "admin";
     align-content: start;
     gap: 2px;
-    background-color: var(--bg_color);
+    /* Bar surface: bar_surface_frosted.css sets the --bar-menu-* values while the
+       frosted-bars experiment is on; otherwise the fallbacks are the solid look. */
+    background-color: var(--bar-menu-background, var(--bg_color));
+    backdrop-filter: var(--bar-menu-backdrop, none);
     /* Critical tab-edge contract:
        keep the navbar's visible edge as this inset shadow. Do not replace it
        with a border, pseudo-element, or child overlay. Right-opening rounded
@@ -286,7 +289,9 @@ body.light-mode #nav_tree .tree-current-project-badge {
     top: 0;
     left: 0;
     padding: 12px var(--navbar-controls-space, 12px);
-    background-color: var(--bg_color);
+    /* Masks menu rows scrolling underneath; see bar_surface_frosted.css. */
+    background-color: var(--bar-menu-cap-background, var(--bg_color));
+    backdrop-filter: var(--bar-menu-cap-backdrop, none);
     z-index: calc(var(--z-navbar) + 1);
     border-bottom: 2px solid var(--border_color);
     /* Keep the sticky row's own edge above dataset tabs that scroll underneath it. */
@@ -553,7 +558,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 .navbar-disclosure-section {
     --animated-disclosure-chevron-collapsed-rotation: -90deg;
     --animated-disclosure-chevron-expanded-rotation: 0deg;
-    background: var(--bg_color_extreme);
+    background: var(--bar-menu-layer-background, var(--bg_color_extreme));
     border-radius: 0;
     margin-top: 0;
     overflow: hidden;
@@ -571,7 +576,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     padding: 0 14px 0 22px;
     border: 0;
     border-radius: 0;
-    background: var(--bg_color_extreme);
+    background: var(--bar-menu-layer-background, var(--bg_color_extreme));
 }
 
 .navbar-disclosure-section > .navbar-section-heading .animated-disclosure-chevron {
@@ -637,7 +642,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     padding: 0 14px 0 22px;
     border-block: 2px solid var(--border_color);
     margin-top: -2px;
-    background: var(--bg_color_extreme);
+    background: var(--bar-menu-layer-background, var(--bg_color_extreme));
 }
 
 #nav_tree > .tree-container > .node:first-child > .node-row {

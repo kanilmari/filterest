@@ -1,0 +1,153 @@
+/* bar_surface_frosted.css
+ * Experimental frosted-glass bars (WL182): the menu, the dataset top bar, the
+ * filter panel and Home's phone top bar become translucent and blur what lies
+ * behind them, so the page's background picture tints them.
+ * Applies only under :root[data-bar-surface="frosted"], which
+ * bar_surface_experiment.js sets from an administrator's per-browser switch.
+ *
+ * Material model, one pane per bar:
+ *   - the pane itself is the only blurred, translucent surface;
+ *   - plain layers inside it turn transparent (the 2px lines keep them apart);
+ *   - meaningful colours (section headings, striped rows, the active
+ *     rectangular tab) stay as tints;
+ *   - rows that mask content scrolling beneath them (the menu's controls row,
+ *     the panel's clock bar) are denser and blur that content once more;
+ *   - buttons, fields, chips and popovers keep their solid surfaces.
+ * Every consumer reads its variable with today's value as the fallback, so
+ * without this file or with the switch off the bars are exactly as before.
+ * Bars stay solid while an article or an image-first article is open.
+ */
+
+/* The switch row in the menu's administration tools (bar_surface_experiment.js).
+   It paints no background, so the menu's right edge stays visible (G24). */
+.bar-surface-switch-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    box-sizing: border-box;
+    padding: 0 14px 0 22px;
+    border-bottom: 2px solid var(--border_color);
+    color: var(--text_color);
+    cursor: pointer;
+    direction: ltr;
+}
+
+.bar-surface-switch-row > input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--color-brand);
+    cursor: pointer;
+}
+
+/* Shared material values. Contrast is measured on composed pixels in
+   testing/e2e/G_navigation/G26_frosted_bars.spec.ts; raise the alpha rather
+   than dim the text if a fixture fails. */
+:root[data-bar-surface="frosted"] body {
+    --bar-alpha: 0.78;
+    --bar-cap-alpha: 0.6;
+    --bar-blur: 16px;
+    --bar-saturate: 1.4;
+    --bar-tint: 55%;
+}
+
+:root[data-bar-surface="frosted"] body.dark-mode {
+    --bar-alpha: 0.8;
+    --bar-saturate: 1.2;
+}
+
+/* The panes. The gate keeps the bars solid while an article view or an
+   image-first article is open (owner decision D4). */
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) #navbar {
+    --bar-menu-background: color-mix(in srgb, var(--bg_color) calc(var(--bar-alpha) * 100%), transparent);
+    --bar-menu-backdrop: blur(var(--bar-blur)) saturate(var(--bar-saturate));
+    --bar-menu-cap-background: color-mix(in srgb, var(--bg_color) calc(var(--bar-cap-alpha) * 100%), transparent);
+    --bar-menu-cap-backdrop: blur(8px);
+    --bar-menu-layer-background: transparent;
+    --bar-tab-fill-inactive: transparent;
+    --text-muted: var(--text_color);
+}
+
+/* The active rectangular tab keeps a tint; the active rounded tab keeps its
+   solid fill because it belongs to the content it opens into. */
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) #navbar .navtablinks[data-tab-presentation^="button"] {
+    --bar-tab-fill-active: color-mix(in srgb, var(--bg_color_2) var(--bar-tint), transparent);
+}
+
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .dataset-shared-topbar {
+    --bar-topbar-background: color-mix(in srgb, var(--filter_panel_bg_color) calc(var(--bar-alpha) * 100%), transparent);
+    --bar-topbar-backdrop: blur(var(--bar-blur)) saturate(var(--bar-saturate));
+    --text-muted: var(--text_color);
+}
+
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .front-page-phone-topbar {
+    --bar-home-topbar-background: color-mix(in srgb, var(--bg_color) calc(var(--bar-alpha) * 100%), transparent);
+    --bar-home-topbar-backdrop: blur(var(--bar-blur)) saturate(var(--bar-saturate));
+    --text-muted: var(--text_color);
+}
+
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .filterbar-panel {
+    --bar-panel-background: color-mix(in srgb, var(--filter_panel_bg_color) calc(var(--bar-alpha) * 100%), transparent);
+    --bar-panel-backdrop: blur(var(--bar-blur)) saturate(var(--bar-saturate));
+    --bar-panel-layer-background: transparent;
+    --bar-panel-cap-background: color-mix(in srgb, var(--filter_panel_bg_color) calc(var(--bar-cap-alpha) * 100%), transparent);
+    --bar-panel-cap-backdrop: blur(8px);
+    --text-muted: var(--text_color);
+}
+
+/* Tints read the section's own light or dark heading colour. */
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .filterbar-panel .filterbar-disclosure-section {
+    --bar-panel-heading-background: color-mix(in srgb, var(--filterbar-disclosure-heading-bg) var(--bar-tint), transparent);
+    --bar-panel-heading-hover-background: color-mix(in srgb, var(--filterbar-disclosure-heading-hover-bg) var(--bar-tint), transparent);
+}
+
+:root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .filterbar-panel .favefox-filterbar .filter-section:nth-child(even) {
+    --bar-panel-row-background: color-mix(in srgb, var(--filter-section-bg) var(--bar-tint), transparent);
+}
+
+/* Without backdrop blur a translucent pane would show sharp text behind it:
+   panes become nearly opaque and masking rows fully opaque. */
+@supports not (backdrop-filter: blur(1px)) {
+    /* Listed with the dark selector so it outranks the dark alpha above. */
+    :root[data-bar-surface="frosted"] body,
+    :root[data-bar-surface="frosted"] body.dark-mode {
+        --bar-alpha: 0.94;
+        --bar-cap-alpha: 1;
+    }
+}
+
+/* People who ask for less transparency, more contrast or forced colours get
+   the solid bars: an initial custom property makes every consumer use its
+   fallback, which is today's value. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+    :root[data-bar-surface="frosted"] * {
+        --bar-menu-background: initial !important;
+        --bar-menu-backdrop: initial !important;
+        --bar-menu-cap-background: initial !important;
+        --bar-menu-cap-backdrop: initial !important;
+        --bar-menu-layer-background: initial !important;
+        --bar-tab-fill-inactive: initial !important;
+        --bar-tab-fill-active: initial !important;
+        --bar-topbar-background: initial !important;
+        --bar-topbar-backdrop: initial !important;
+        --bar-home-topbar-background: initial !important;
+        --bar-home-topbar-backdrop: initial !important;
+        --bar-panel-background: initial !important;
+        --bar-panel-backdrop: initial !important;
+        --bar-panel-layer-background: initial !important;
+        --bar-panel-cap-background: initial !important;
+        --bar-panel-cap-backdrop: initial !important;
+        --bar-panel-heading-background: initial !important;
+        --bar-panel-heading-hover-background: initial !important;
+        --bar-panel-row-background: initial !important;
+    }
+}
+
+/* Phone (≤ 700px, K444) */
+/* A lighter blur for smaller, slower devices. */
+@media (width <= 700px) {
+    :root[data-bar-surface="frosted"] body {
+        --bar-blur: 12px;
+    }
+}
