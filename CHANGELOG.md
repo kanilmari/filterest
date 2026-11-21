@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.14] - 2026-11-21
+
 - A result card's title and its "Show more" links are real links to the row's article, at the article's readable address (`/travel/12-lapland-cabins`). Search engines can follow them, and a person can open an article in a new tab or copy its link; an ordinary click still opens the article in place. The card looks as before. A title whose own text holds a link stays plain, and that link now opens its own destination instead of the article.
 - The dataset tabs above a list and on Home's top row are real links to the datasets, as the menu's entries are.
 - Links to datasets and articles keep the page's language: a page opened with `?lang=en` writes `?lang=en` into the menu's, the tabs' and the cards' links, so such a link opened in a new tab, or followed by a search engine, is in the same language. A row link names a presentation (`?view=`) only when the reader chose one; the dataset's default opens from the plain address anyway.
