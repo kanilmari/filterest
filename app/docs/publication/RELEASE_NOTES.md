@@ -1,17 +1,21 @@
-# Filterest 9.6.13
+# Filterest 9.6.14
 
-## Article links open their article
+## Cards and tabs are real links
 
-A link that names one article, as the All articles page, the sitemap, search results and shared links give it, opens that article also on a dataset whose rows open as an image-first article (IFAV or Page). Such a link used to show the dataset's list: the list loading underneath the article replaced the article's address with its own before the article could open. The list view or search the link names stays behind the article, the readable address stays in the address bar, and the dataset's saved default sort is applied when the article is closed. An image-first article also opens when the list behind it happens to answer first, and a record opened while a slow article is still loading is the one shown.
+A result card's title and its "Show more" links are real links to the row's article at its readable address, and the dataset tabs above a list and on Home's top row link to their datasets. Search engines can follow them, and a person can open an article or a dataset in a new tab or copy its link; an ordinary click still opens it in place, and the card looks as before. Links to datasets and articles keep the page's language (`?lang=`).
 
-## Titles for readers and search engines
+## Filter results on Home
 
-An open image-first article names the browser tab after itself, as an ordinary article does; this is also the title a search engine reads after rendering the page. A title stored with heading markup, such as `<h1>…</h1>`, reads as plain text in page titles, link previews and the plain article pages, exactly as the application shows it.
+Home's dataset boxes have "Filter results" beside "Show all": the same list with the filter bar and its filters section open, also from a new tab or a copied link.
 
-## Menu and language addresses
+## Steadier Home and menu
 
-The menu's datasets are real links: search engines can follow them, and a person can open a dataset in a new tab or copy its link, while an ordinary click still opens it in place. Hovering All articles no longer hides the menu's right edge. A language address (`?lang=fi`) no longer shows the language as a filter above the list, keeps it when the filters are cleared, and no longer brings it back in other tabs or on later visits.
+Home's top-row dataset buttons no longer jump sideways while the side menu opens or closes, and hovering the menu's Home link no longer hides the menu's right edge. Home shows the site's own brand colour on a first visit; a new visitor used to see the default blue until they reloaded the page.
+
+## Experiment: frosted bars
+
+An administrator can turn on, for their own browser only, a frosted-glass look for the menu, the dataset top bar and the filter panel. The switch is in the menu's administration tools ("Frosted bars (experiment)"). Turned off, which is the default, the bars look exactly as before; articles and image-first articles keep solid bars.
 
 ## Database and rollback
 
-The database stays at 9.13.8; the upgrade from Filterest 9.6.12 runs no migrations. To roll back, install the previous application version; back up the database and media before upgrading, as always.
+The upgrade from Filterest 9.6.13 migrates database 9.13.8 to 9.13.9. The migration only adds the frosted-bars switch's label in every interface language; the schema does not change. Back up the database and media before upgrading. To roll back after migration, restore the matching pre-upgrade database backup and the previous application version together.
