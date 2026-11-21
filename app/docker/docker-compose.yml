@@ -8,6 +8,9 @@ include:
   - path: ${FILTEREST_DB_PORTS_FILE:-docker-compose.db-published.yml}
 services:
   app:
+    extends:
+      file: ${FILTEREST_ASSISTANT_FILE:-docker-compose.assistant-disabled.yml}
+      service: assistant
     build:
       context: ..
       dockerfile: docker/Dockerfile

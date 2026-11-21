@@ -22,6 +22,9 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.15] - 2026-11-21
+
+- Ordinary Docker installations can connect to the existing site assistant through its Unix socket and dedicated uploads directory. The connection is optional (WL99).
 - Frosted bars experiment on wide screens. Where the menu and the filter panel stand docked beside the content, the view's own background picture now shows beneath them as softly as in the view itself; before, the glass had only the plain page colour behind it. A Home video leaves the glass plain. Turned off, the bars look exactly as before.
 
 ## [9.6.14] - 2026-11-21

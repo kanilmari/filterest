@@ -17,6 +17,7 @@ import shutil
 import subprocess
 
 from server_tools.lib.docker_compose_contract import compose_options, edge_scheme
+from server_tools.lib.docker_site_assistant import ASSISTANT_KEYS, ASSISTANT_SELECTOR, DISABLED_FRAGMENT, ENABLED_FRAGMENT
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 ROOT = APP_ROOT.parent
@@ -25,7 +26,7 @@ PARAMETER_KEYS = {
     "APP_BIND_HOST", "DB_BIND_HOST", "FILTEREST_EDGE", "FILTEREST_PUBLISH_DB_PORT",
     "FILTEREST_NETWORK_SUBNET", "FILTEREST_NETWORK_GATEWAY", "BASE_URL",
     "SITE_NAME", "SITE_SLUG",
-}
+} | set(ASSISTANT_KEYS)
 REQUIRED_SECRETS = (
     "DB_ADMIN_PASSWORD", "DB_READONLY_PASSWORD", "DB_CONFIDENTIAL_PASSWORD",
     "DB_BASIC_PASSWORD", "DB_GUEST_PASSWORD", "SESSION_KEY", "SESSION_SECRET_KEY",
@@ -88,7 +89,8 @@ def validate_parameters(parameters: object) -> dict[str, str]:
         scheme = edge_scheme(settings.get("FILTEREST_EDGE", ""))
         selected = compose_options(settings.get("FILTEREST_PUBLISH_DB_PORT", ""),
                                    settings.get("FILTEREST_NETWORK_SUBNET", ""),
-                                   settings.get("FILTEREST_NETWORK_GATEWAY", ""))
+                                   settings.get("FILTEREST_NETWORK_GATEWAY", ""),
+                                   assistant=settings, installation_root=root)
     except ValueError as error:
         raise EvidenceError(str(error)) from None
     if scheme == "http" and settings["APP_BIND_HOST"] != "127.0.0.1":
@@ -121,6 +123,8 @@ def source_identity(settings: dict[str, str]) -> dict:
              APP_ROOT / "docker/docker-compose.db-base.yml",
              APP_ROOT / "docker" / settings.get("FILTEREST_DB_PORTS_FILE", "docker-compose.db-published.yml"),
              APP_ROOT / "docker" / settings.get("FILTEREST_NETWORK_FILE", "docker-compose.network-auto.yml")]
+    paths += [APP_ROOT / "docker" / settings.get(ASSISTANT_SELECTOR, DISABLED_FRAGMENT),
+              APP_ROOT / "server_tools/lib/docker_site_assistant.py"]
     paths += [Path(__file__), APP_ROOT / "server_tools/lib/docker_compose_contract.py",
               APP_ROOT / "server_tools/lib/docker_network_validator.py",
               Path(__file__).with_name("snapshot_facts.py"), Path(__file__).with_name("check_installation.py")]
@@ -153,6 +157,11 @@ def render_standard(settings: dict[str, str]) -> dict:
 
 def installation_path(source: str, settings: dict[str, str]) -> str:
     """Relocate only shipped local bind sources, preserving exact target identities."""
+    if settings.get(ASSISTANT_SELECTOR) == ENABLED_FRAGMENT and source in (
+            settings["FILTEREST_CODING_AGENT_SOCKET_DIR"], settings["FILTEREST_CODING_AGENT_UPLOAD_DIR"]):
+        # Only the two explicitly validated IPC paths may escape the installation.
+        # They are host resources, never relocated or traversed by this offline proof.
+        return source
     try:
         relative = Path(source).relative_to(ROOT)
     except ValueError:

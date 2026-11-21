@@ -346,6 +346,19 @@ responsibilities. The header boundary below is required before trusting an
 additional proxy peer; nginx/ACME provisioning and existing-site adoption are
 separate work.
 
+### Optional host site assistant
+
+A Docker installation can connect to a separately managed site-assistant
+runner through one read-only socket-directory mount, one IPC group and one
+shared attachment directory. The feature is absent by default. Configure the
+five settings in [the production runner guide](app/docs/instructions_and_documentation/Coding_Agent.md#ordinary-docker-installation),
+then run `./filterest docker setup` and `./filterest docker start` as the
+installation owner. No runner account or credentials are created or copied.
+The external socket, runner state and temporary attachments are outside the
+ordinary installation backup; recovery must reconnect the separately managed
+runner. Setup maintains its Compose selector, so ordinary `./filterest update`
+preserves the connection without a private Compose override.
+
 ### Reverse-proxy client identity
 
 When Filterest runs behind a host reverse proxy, client-IP headers are trusted

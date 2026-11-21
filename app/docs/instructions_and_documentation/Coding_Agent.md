@@ -201,6 +201,63 @@ configuration operator-owned and unwritable by the web account.
 6. Verify the administrator availability GET, non-administrator rejection and a
    read-only assistant question before enabling approvals.
 
+### Ordinary Docker installation
+
+The standard Docker stack has an optional connection to the separate runner
+above. Add all five settings to the installation's protected `keys/docker.env`:
+
+```dotenv
+FILTEREST_CODING_AGENT_SOCKET_DIR=/run/filterest-coding-agent-example
+FILTEREST_CODING_AGENT_IPC_GID=12345
+FILTEREST_CODING_AGENT_SITE_ID=example.invalid
+FILTEREST_SITE_ASSISTANT_BASE_URL=http://127.0.0.1:18123
+FILTEREST_CODING_AGENT_UPLOAD_DIR=/var/lib/filterest-coding-agent-uploads-example
+```
+
+Use the actual runner's numeric IPC group, site identity and host-reachable
+application URL; the port above is illustrative. The callback is an HTTP
+loopback or HTTPS origin, without credentials, path, query or fragment.
+The runner socket must be named `runner.sock` in the selected host directory.
+The container sees that directory read-only at `/run/filterest-coding-agent`;
+mounting the directory keeps a replaced socket visible after a runner restart.
+The supplementary IPC group permits connecting to it. The attachment directory
+is writable and has the **same absolute path on the host and in the container**;
+set the runner's `upload_dir` to that exact path too.
+
+Create dedicated socket and attachment directories before setup. Both must be
+real directories without symbolic-link components, outside the installation,
+and neither may contain the other. The upload mount cannot cover application,
+system or socket paths. Keep runner credentials and private jobs in a different
+directory that is never mounted into the web container. Setup validates paths
+and settings; it does not create runner users, change their permissions, start
+a runner, or prove that its socket accepts this web process.
+
+Run `./filterest docker setup` and `./filterest docker start` as the intended
+non-root installation owner. Setup builds the web image with **that owner's
+UID and primary GID**; give the runner that host-visible UID in
+`allowed_web_uids`, keep its own account distinct, and make the attachment
+directory writable by the web user and readable by the runner. Retain the
+availability, administrator-boundary and read-only question checks above;
+also test an attached image and reconnect after a runner restart.
+
+All five values are required together. Leaving all absent preserves the
+ordinary installation. To disconnect an existing connection, stop the stack,
+remove those five values, run setup and start again. Setup owns the internal
+`FILTEREST_ASSISTANT_FILE` selector; do not edit it or supply private Compose
+fragments. Ordinary `./filterest update` retains the settings and maintained
+fragment. Its backups contain the settings references, **not** the external
+socket, runner credentials, jobs or temporary attachments. Manage and recover
+the runner independently; a restored installation must reconnect to it before
+the assistant becomes available.
+
+The offline conformance command accepts the same five non-secret parameters
+and compares those exact external mounts without reading them. Its existing
+exclusions still apply: it does not establish host UID/group permissions,
+runner readiness or backup completeness. Maintenance-manager credentials and
+its trusted peer setting remain in `keys/filterest_runtime/runtime_environment.env`,
+which the application already loads; this connection does not expose them to
+the runner or broaden manager access.
+
 The earlier isolated source-copy variant (detached Git worktrees and fixed
 maintenance actions) was removed. A runner configuration that still names
 `repository`, `source_revision` or `maintenance_actions` is refused with a message

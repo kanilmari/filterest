@@ -197,7 +197,14 @@ prepare_docker_compose_options() {
         --subnet="$(compose_env_value FILTEREST_NETWORK_SUBNET)" \
         --gateway="$(compose_env_value FILTEREST_NETWORK_GATEWAY)" \
         --previous-ports="$(compose_env_value FILTEREST_DB_PORTS_FILE)" \
-        --previous-network="$(compose_env_value FILTEREST_NETWORK_FILE)")" || return $?
+        --previous-network="$(compose_env_value FILTEREST_NETWORK_FILE)" \
+        --installation-root="$PROJECT_ROOT" --check-assistant-paths \
+        --filterest-assistant-file="$(compose_env_value FILTEREST_ASSISTANT_FILE)" \
+        --filterest-coding-agent-socket-dir="$(compose_env_value FILTEREST_CODING_AGENT_SOCKET_DIR)" \
+        --filterest-coding-agent-ipc-gid="$(compose_env_value FILTEREST_CODING_AGENT_IPC_GID)" \
+        --filterest-coding-agent-site-id="$(compose_env_value FILTEREST_CODING_AGENT_SITE_ID)" \
+        --filterest-site-assistant-base-url="$(compose_env_value FILTEREST_SITE_ASSISTANT_BASE_URL)" \
+        --filterest-coding-agent-upload-dir="$(compose_env_value FILTEREST_CODING_AGENT_UPLOAD_DIR)")" || return $?
     while IFS='=' read -r key value; do
         [[ -z "$key" ]] || plan_docker_setting "$key" "$value"
     done <<< "$selection"
@@ -212,7 +219,10 @@ require_docker_option_environment() {
     for key in COMPOSE_PROJECT_NAME INSTANCE_NAME APP_PORT DB_PORT BASE_URL \
         APP_BIND_HOST DB_BIND_HOST FILTEREST_EDGE FILTEREST_PUBLISH_DB_PORT \
         FILTEREST_LOCAL_TLS FILTEREST_DB_PORTS_FILE FILTEREST_NETWORK_FILE \
-        FILTEREST_NETWORK_SUBNET FILTEREST_NETWORK_GATEWAY
+        FILTEREST_NETWORK_SUBNET FILTEREST_NETWORK_GATEWAY \
+        FILTEREST_ASSISTANT_FILE FILTEREST_CODING_AGENT_SOCKET_DIR \
+        FILTEREST_CODING_AGENT_IPC_GID FILTEREST_CODING_AGENT_SITE_ID \
+        FILTEREST_SITE_ASSISTANT_BASE_URL FILTEREST_CODING_AGENT_UPLOAD_DIR
     do
         printenv "$key" >/dev/null || continue
         expected="$(docker_deployment_value "$key")"
@@ -226,6 +236,7 @@ require_docker_option_environment() {
             FILTEREST_PUBLISH_DB_PORT|FILTEREST_LOCAL_TLS) expected="${expected:-true}" ;;
             FILTEREST_DB_PORTS_FILE) expected="${expected:-docker-compose.db-published.yml}" ;;
             FILTEREST_NETWORK_FILE) expected="${expected:-docker-compose.network-auto.yml}" ;;
+            FILTEREST_ASSISTANT_FILE) expected="${expected:-docker-compose.assistant-disabled.yml}" ;;
         esac
         [[ "${!key}" == "$expected" ]] || \
             die "Inherited $key from the shell would override the Docker deployment settings; unset it and retry"

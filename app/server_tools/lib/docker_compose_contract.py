@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from server_tools.lib.docker_network_validator import PRIVATE_NETWORKS, pinned_network
+from server_tools.lib.docker_site_assistant import ASSISTANT_KEYS, ASSISTANT_SELECTOR, assistant_options
 
 
 def edge_scheme(edge: str) -> str:
@@ -25,7 +26,9 @@ def edge_scheme(edge: str) -> str:
 
 
 def compose_options(publish_db: str = "", subnet: str = "", gateway: str = "",
-                    previous_ports: str = "", previous_network: str = "") -> dict[str, str]:
+                    previous_ports: str = "", previous_network: str = "", *,
+                    assistant: dict[str, str] | None = None, installation_root: str = "",
+                    check_assistant_paths: bool = False) -> dict[str, str]:
     """Plan selectors and a validated gateway, preserving default file contents.
 
     Previously stored selector presence causes an explicit reset to the default;
@@ -46,6 +49,7 @@ def compose_options(publish_db: str = "", subnet: str = "", gateway: str = "",
         raise ValueError("FILTEREST_NETWORK_GATEWAY requires FILTEREST_NETWORK_SUBNET")
     if subnet or previous_network:
         settings["FILTEREST_NETWORK_FILE"] = network_file
+    settings.update(assistant_options(assistant, installation_root, check_paths=check_assistant_paths))
     return settings
 
 
@@ -58,13 +62,20 @@ def main() -> int:
     parser.add_argument("--gateway", default="")
     parser.add_argument("--previous-ports", default="")
     parser.add_argument("--previous-network", default="")
+    parser.add_argument("--installation-root", default="")
+    parser.add_argument("--check-assistant-paths", action="store_true")
+    for key in (*ASSISTANT_KEYS, ASSISTANT_SELECTOR):
+        parser.add_argument("--" + key.lower().replace("_", "-"), default="")
     args = parser.parse_args()
     try:
         if args.action == "edge":
             print(edge_scheme(args.edge), end="")
         else:
             settings = compose_options(args.publish_db, args.subnet, args.gateway,
-                                       args.previous_ports, args.previous_network)
+                                       args.previous_ports, args.previous_network,
+                                       assistant={key: getattr(args, key.lower()) for key in (*ASSISTANT_KEYS, ASSISTANT_SELECTOR)},
+                                       installation_root=args.installation_root,
+                                       check_assistant_paths=args.check_assistant_paths)
             if args.subnet:
                 network, _ = pinned_network(args.subnet, args.gateway)
                 if not any(network.subnet_of(private) for private in PRIVATE_NETWORKS):

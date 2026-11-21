@@ -1,0 +1,24 @@
+# Connects the application to one separately managed host-side site assistant.
+# Setup validates all inputs together; no runner credentials enter the container.
+# The directory bind survives replacement of the runner's socket on restart.
+services:
+  assistant:
+    group_add:
+      - "${FILTEREST_CODING_AGENT_IPC_GID:?Set the dedicated runner IPC group}"
+    environment:
+      FILTEREST_CODING_AGENT_SOCKET: /run/filterest-coding-agent/runner.sock
+      FILTEREST_CODING_AGENT_SITE_ID: ${FILTEREST_CODING_AGENT_SITE_ID:?Set the runner site identity}
+      FILTEREST_SITE_ASSISTANT_BASE_URL: ${FILTEREST_SITE_ASSISTANT_BASE_URL:?Set the host runner callback URL}
+      FILTEREST_CODING_AGENT_UPLOAD_DIR: ${FILTEREST_CODING_AGENT_UPLOAD_DIR:?Set the shared attachment directory}
+    volumes:
+      - type: bind
+        source: ${FILTEREST_CODING_AGENT_SOCKET_DIR:?Set the host runner socket directory}
+        target: /run/filterest-coding-agent
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${FILTEREST_CODING_AGENT_UPLOAD_DIR:?Set the shared attachment directory}
+        target: ${FILTEREST_CODING_AGENT_UPLOAD_DIR:?Set the shared attachment directory}
+        bind:
+          create_host_path: false

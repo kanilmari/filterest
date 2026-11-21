@@ -1,0 +1,5 @@
+# Leaves the optional host site-assistant connection absent from ordinary installs.
+# The application extends this empty service unless setup selects the IPC fragment.
+# Keeps runner accounts, sockets and uploads outside the default Docker contract.
+services:
+  assistant: {}
