@@ -253,6 +253,18 @@ blur that content once more, and buttons, fields and popovers stay solid.
 Article and image-first views keep the solid bars, and so do people who ask
 for less transparency, more contrast or forced colours.
 
+On wide screens a docked menu (> 1850px) or filter rail (>= 1100px) stands on
+the bare page colour, where glass has nothing to show. While the look is
+frosted, [bar_surface_backdrop.js](../../frontend/core_components/bar_surface/bar_surface_backdrop.js)
+publishes the displayed view's picture on `.body_content` and the stylesheet
+draws it once, window-sized, beneath the shell. The picture is read from the
+view's own computed layers (`resolveViewPresentationBackdrop` in
+[view_presentation_media_resolver.js](../../frontend/core_components/navigation/main_tabs/view_presentation_media_resolver.js)),
+so it keeps the view's strength, focal point and Home's wash in each theme
+without restating them. Dataset content keeps its opaque surface above the
+layer and Home's page gets the page colour it already showed, so the picture
+appears only beneath docked bars. A Home video adds no second player.
+
 A new layer inside a bar reads the matching `--bar-*` variable with its own
 current value as the fallback; never write a `--bar-*` variable without one.
 [bar_surface_css.test.js](../../frontend/core_components/bar_surface/bar_surface_css.test.js)
@@ -262,8 +274,10 @@ proves the panes, the composed-pixel contrast of menu labels and that switching
 off restores today's computed styles. The filter panel keeps a
 `backdrop-filter` in both states, because it makes the panel the containing
 block of its fixed-position children. Removing the experiment means deleting
-`bar_surface_frosted.css`, `bar_surface_experiment.js`, their import and the
-switch; the fallbacks keep the solid bars.
+the `bar_surface/` folder, its stylesheet import, its uses in `main.js`,
+`post_auth_bootstrap.js` and `logout_shell_reset.js`, the first-paint lines in
+`index.html` and `resolveViewPresentationBackdrop`; the fallbacks keep the solid
+bars.
 
 ## 7. Languages and Translations (UI)
 

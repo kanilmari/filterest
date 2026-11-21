@@ -4,11 +4,12 @@
 // picture through, keeps their text readable, and restores today's look exactly when switched off.
 // Uses the GET-only media fixture (no settings are saved) and the default signed-in storageState.
 import { test, expect, type Page } from '@playwright/test';
-import { installMediaTabFixture, openMediaTabView } from '../helpers/media-tab-fixture';
+import { installMediaTabFixture, openMediaTabView, PLAIN_DATASET, MEDIA_DATASET, type MediaTabPolicy } from '../helpers/media-tab-fixture';
 import { ensureNavbarVisible } from '../helpers/navbar';
 import { openBigCard } from '../helpers/view-switch';
 
 const KEY = 'filterest_experimental_bar_surface_v1';
+const BACKDROP = '.body_content[data-bar-backdrop]';
 const PANES = ['#navbar', '#navbar > .top-button-bar', '.content_div:not(.hidden) .dataset-shared-topbar'];
 
 /** Computed paint values of the bar panes and of every element inside the menu. */
@@ -86,9 +87,10 @@ async function menuLabelContrast(page: Page) {
 
 for (const theme of ['light', 'dark'] as const) {
   test.describe(`G26 — Frosted bars (${theme})`, () => {
+    let policy: MediaTabPolicy;
     test.beforeEach(async ({ page, context }) => {
       await page.goto('/', { waitUntil: 'domcontentloaded' });
-      await installMediaTabFixture(page, context, 1600, theme);
+      policy = await installMediaTabFixture(page, context, 1600, theme);
       await page.addInitScript(key => { if (localStorage.getItem(key) === null) localStorage.setItem(key, 'solid'); }, KEY);
     });
 
@@ -147,6 +149,61 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await page.locator('#navbar').evaluate(element => getComputedStyle(element).backdropFilter)).toContain('blur');
       expect(await openBigCard(page)).toBe(true);
       await expect.poll(() => page.locator('#navbar').evaluate(element => getComputedStyle(element).backdropFilter)).toBe('none');
+    });
+
+    test('on a wide screen the docked bars show the view\'s picture, only while frosted and only with a picture', async ({ page }) => {
+      await page.setViewportSize({ width: 2200, height: 1000 });
+      await openMediaTabView(page, 'dataset_media');
+      await expect(page.locator(BACKDROP)).toHaveCount(0);
+      expect(await page.locator('.body_content').evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
+      // The application starts the picture layer with the stored choice, as after the switch or a reload.
+      await page.evaluate(key => localStorage.setItem(key, 'frosted'), KEY);
+      await openMediaTabView(page, 'dataset_media');
+      await expect(page.locator(BACKDROP)).toHaveCount(1);
+      const layer = await page.locator('.body_content').evaluate(element => {
+        const area = document.querySelector('.content_div:not(.hidden) .tab-content-area--has-dataset-background')!;
+        return { image: getComputedStyle(element, '::before').backgroundImage, position: getComputedStyle(element, '::before').position,
+          opacity: element.style.getPropertyValue('--bar-backdrop-opacity'), viewOpacity: getComputedStyle(area, '::before').opacity };
+      });
+      expect(layer.image).toContain('d572.png');
+      expect(layer.position).toBe('fixed');
+      expect(layer.opacity).toBe(layer.viewOpacity);
+      // The picture shows through the docked menu: removing only the layer changes the menu's pixels.
+      const menu = await page.locator('#navbar').boundingBox();
+      const clip = { x: menu!.x + 4, y: menu!.y + 4, width: menu!.width - 12, height: menu!.height - 8 };
+      const withPicture = await page.screenshot({ clip });
+      await page.locator('.body_content').evaluate(element => element.removeAttribute('data-bar-backdrop'));
+      const withoutPicture = await page.screenshot({ clip });
+      expect(withPicture.equals(withoutPicture), 'the picture shows beneath the docked menu').toBe(false);
+      await page.locator('.body_content').evaluate(element => element.setAttribute('data-bar-backdrop', ''));
+      // A view without a picture clears the layer; returning brings it back.
+      await page.locator(`#navbar .navtablinks[data-id="${PLAIN_DATASET}"]`).click();
+      await expect(page.locator(`#${PLAIN_DATASET}_tab_parts_container`)).toBeVisible();
+      await expect(page.locator(BACKDROP)).toHaveCount(0);
+      await page.locator(`#navbar .navtablinks[data-id="${MEDIA_DATASET}"]`).click();
+      await expect(page.locator(BACKDROP)).toHaveCount(1);
+      // Home: its image with the theme's own wash, and Home's page colour keeps the picture from showing twice.
+      // Opened narrow and then widened, the layer follows Home's switch to its wide image variant.
+      policy.home = 'image';
+      await page.setViewportSize({ width: 800, height: 1000 });
+      await openMediaTabView(page, 'home');
+      await expect(page.locator(BACKDROP)).toHaveCount(1);
+      const layerImage = () => page.locator('.body_content').evaluate(element => element.style.getPropertyValue('--bar-backdrop-image'));
+      expect(await layerImage()).toContain('/1000/');
+      await page.setViewportSize({ width: 2200, height: 1000 });
+      await expect.poll(layerImage).toContain('/2160/');
+      const home = await page.locator('.body_content').evaluate(element => {
+        const media = document.querySelector('.front-page-background')!;
+        return { wash: element.style.getPropertyValue('--bar-backdrop-wash'), viewWash: getComputedStyle(media, '::after').opacity,
+          page: getComputedStyle(document.querySelector('.front-page')!).backgroundColor, shell: getComputedStyle(element).backgroundColor };
+      });
+      expect(home.wash).toBe(String(Number.parseFloat(home.viewWash)));
+      expect(home.page).toBe(home.shell);
+      // A Home video adds no second player: the glass stays plain.
+      policy.home = 'video';
+      await openMediaTabView(page, 'home_video');
+      await expect(page.locator(BACKDROP)).toHaveCount(0);
+      await expect(page.locator('.body_content')).not.toHaveAttribute('style', /--bar-backdrop/);
     });
 
     test('forced colours and a request for more contrast keep the solid bars', async ({ page }) => {

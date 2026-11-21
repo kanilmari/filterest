@@ -52,7 +52,8 @@ describe('stored choice', () => {
 
     test('init applies the stored choice and follows another tab through the storage event', () => {
         localStorage.setItem(BAR_SURFACE_STORAGE_KEY, 'frosted');
-        initBarSurfaceExperiment({ storage: localStorage });
+        const followBackdrop = vi.fn();
+        initBarSurfaceExperiment({ storage: localStorage, followBackdrop });
         expect(root().getAttribute(BAR_SURFACE_ATTRIBUTE)).toBe('frosted');
         localStorage.setItem(BAR_SURFACE_STORAGE_KEY, 'solid');
         window.dispatchEvent(new StorageEvent('storage', { key: BAR_SURFACE_STORAGE_KEY }));
@@ -62,6 +63,8 @@ describe('stored choice', () => {
         expect(root().hasAttribute(BAR_SURFACE_ATTRIBUTE)).toBe(false);
         window.dispatchEvent(new StorageEvent('storage', { key: null }));
         expect(root().getAttribute(BAR_SURFACE_ATTRIBUTE)).toBe('frosted');
+        // The wide-screen picture layer runs only while the look is frosted.
+        expect(followBackdrop.mock.calls).toEqual([[true], [false], [true]]);
     });
 });
 
@@ -89,9 +92,10 @@ describe('administrator switch', () => {
         expect(translate).toHaveBeenCalled();
     });
 
-    test('turning it on and off stores an explicit choice and marks the root', async () => {
+    test('turning it on and off stores an explicit choice, marks the root and follows the picture layer', async () => {
         const storage = memoryStorage();
-        const row = await mountBarSurfaceSwitch(container(), { verifyAdministrator: async () => ({}), storage, ...quiet });
+        const followBackdrop = vi.fn();
+        const row = await mountBarSurfaceSwitch(container(), { verifyAdministrator: async () => ({}), storage, followBackdrop, ...quiet });
         const input = row.querySelector('input');
         expect(input.checked).toBe(false);
         input.click();
@@ -100,6 +104,7 @@ describe('administrator switch', () => {
         input.click();
         expect(storage.getItem(BAR_SURFACE_STORAGE_KEY)).toBe('solid');
         expect(root().hasAttribute(BAR_SURFACE_ATTRIBUTE)).toBe(false);
+        expect(followBackdrop.mock.calls).toEqual([[true], [false]]);
     });
 
     test('mounts once, and not into a container removed while the request was pending', async () => {

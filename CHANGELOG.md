@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Frosted bars experiment on wide screens. Where the menu and the filter panel stand docked beside the content, the view's own background picture now shows beneath them as softly as in the view itself; before, the glass had only the plain page colour behind it. A Home video leaves the glass plain. Turned off, the bars look exactly as before.
+
 ## [9.6.14] - 2026-11-21
 
 - A result card's title and its "Show more" links are real links to the row's article, at the article's readable address (`/travel/12-lapland-cabins`). Search engines can follow them, and a person can open an article in a new tab or copy its link; an ordinary click still opens the article in place. The card looks as before. A title whose own text holds a link stays plain, and that link now opens its own destination instead of the article.

@@ -5,6 +5,7 @@
 // Exists so the experiment is one removable module rather than a dataset or site setting.
 
 import { fetchAdminUIFeatureFlags } from "../endpoints/stable_endpoint_router.js";
+import { followBarBackdrop } from "./bar_surface_backdrop.js";
 import { translatePage } from "../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 
@@ -48,22 +49,28 @@ export function storeBarSurfaceChoice(choice, storage = browserStorage()) {
 
 let storageListenerAttached = false;
 
-/** Applies the stored choice and keeps other tabs of this browser in step. */
+/**
+ * Applies the stored choice and keeps other tabs of this browser in step. The wide-screen picture
+ * layer (followBackdrop) runs only while the look is frosted.
+ */
 export function initBarSurfaceExperiment({ storage = browserStorage(), root = document.documentElement,
-    target = globalThis.window } = {}) {
-    applyBarSurfaceChoice(readBarSurfaceChoice(storage), root);
+    target = globalThis.window, followBackdrop = followBarBackdrop } = {}) {
+    const choice = readBarSurfaceChoice(storage);
+    applyBarSurfaceChoice(choice, root);
+    followBackdrop(choice === "frosted");
     if (storageListenerAttached || !target?.addEventListener) return;
     storageListenerAttached = true;
     target.addEventListener("storage", (event) => {
         if (event.key !== null && event.key !== BAR_SURFACE_STORAGE_KEY) return;
         const choice = readBarSurfaceChoice(storage);
         applyBarSurfaceChoice(choice, root);
+        followBackdrop(choice === "frosted");
         const input = document.getElementById(BAR_SURFACE_SWITCH_ID);
         if (input) input.checked = choice === "frosted";
     });
 }
 
-function buildSwitchRow({ storage, root }) {
+function buildSwitchRow({ storage, root, followBackdrop }) {
     const row = document.createElement("label");
     row.classList.add("bar-surface-switch-row");
     row.dataset.testid = "bar-surface-experiment-switch";
@@ -77,6 +84,7 @@ function buildSwitchRow({ storage, root }) {
         const choice = input.checked ? "frosted" : "solid";
         storeBarSurfaceChoice(choice, storage);
         applyBarSurfaceChoice(choice, root);
+        followBackdrop(choice === "frosted");
     });
 
     const text = document.createElement("span");
@@ -96,6 +104,7 @@ export async function mountBarSurfaceSwitch(container, {
     verifyAdministrator = () => fetchAdminUIFeatureFlags({ suppressErrorToast: true, suppressAuthRedirect: true }),
     storage = browserStorage(), root = document.documentElement,
     translate = () => translatePage(getLanguageWithBrowserFallback()),
+    followBackdrop = followBarBackdrop,
 } = {}) {
     if (!(container instanceof HTMLElement)) return null;
     const existing = container.querySelector(":scope > .bar-surface-switch-row");
@@ -108,7 +117,7 @@ export async function mountBarSurfaceSwitch(container, {
     if (!container.isConnected) return null;
     const again = container.querySelector(":scope > .bar-surface-switch-row");
     if (again) return again;
-    const row = buildSwitchRow({ storage, root });
+    const row = buildSwitchRow({ storage, root, followBackdrop });
     container.prepend(row);
     // The row arrives after the page's own translation pass; translate its label now.
     void Promise.resolve().then(translate).catch(() => {});

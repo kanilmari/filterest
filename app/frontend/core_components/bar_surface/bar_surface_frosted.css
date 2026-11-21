@@ -117,10 +117,43 @@
     }
 }
 
+/* Wide screens (owner decision D2): a docked menu (> 1850px) or filter rail
+   (>= 1100px) stands on the bare page colour, where glass has nothing to show.
+   One window-sized layer beneath the shell repeats the displayed view's own
+   picture at the view's own strength and wash; bar_surface_backdrop.js
+   publishes them on .body_content and marks it while there is a picture.
+   Dataset content keeps its opaque surface above the layer, and Home gets the
+   page colour it already shows through, so the picture appears only beneath
+   docked bars. A Home video adds no second player: the glass stays plain. */
+@media (width >= 1100px) {
+    :root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .body_content[data-bar-backdrop]::before {
+        content: "";
+        position: fixed;
+        z-index: -1;
+        inset: 0;
+        /* Top to bottom: the wash; the page colour at (1 - strength), which
+           composes exactly like the picture at that strength over the page
+           colour; the picture. "colour 0 0" fills the whole layer. */
+        background:
+            linear-gradient(color-mix(in srgb, var(--bar-backdrop-wash-color) calc(var(--bar-backdrop-wash) * 100%), transparent) 0 0),
+            linear-gradient(color-mix(in srgb, var(--bg_color) calc((1 - var(--bar-backdrop-opacity)) * 100%), transparent) 0 0),
+            var(--bar-backdrop-image) var(--bar-backdrop-position) / cover no-repeat;
+        pointer-events: none;
+    }
+
+    :root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, .content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"])) .body_content[data-bar-backdrop] .front-page {
+        background-color: var(--bg_color);
+    }
+}
+
 /* People who ask for less transparency, more contrast or forced colours get
    the solid bars: an initial custom property makes every consumer use its
    fallback, which is today's value. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+    :root[data-bar-surface="frosted"] .body_content::before {
+        content: none !important;
+    }
+
     :root[data-bar-surface="frosted"] * {
         --bar-menu-background: initial !important;
         --bar-menu-backdrop: initial !important;

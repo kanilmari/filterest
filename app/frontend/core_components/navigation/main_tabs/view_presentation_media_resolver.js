@@ -1,6 +1,7 @@
 // view_presentation_media_resolver.js
 // Resolves presentation media for the current dataset or the mounted Home view.
-// Connects authoritative tab metadata and visible Home media to one shell flag.
+// Connects authoritative tab metadata and visible Home media to one shell flag,
+// and reads the displayed picture for the frosted bars' wide-screen layer.
 // Home visibility also distinguishes its side-menu buttons from dataset tabs.
 
 export const VIEW_PRESENTATION_MEDIA_ATTRIBUTE = 'data-view-has-presentation-media';
@@ -47,6 +48,35 @@ export function resolveViewHasPresentationMedia(activeTabId = '', viewName = '')
     if (opacity === 0 || wash === 1) return false;
     return Boolean(media.querySelector('video[src]')
         || media.style.getPropertyValue('--front-page-background-2160'));
+}
+
+/**
+ * The picture the displayed view paints behind its content, as the view's own layers resolve it
+ * (bar_surface_backdrop.js shows it beneath docked frosted bars, WL182). Reads the computed layers
+ * rather than restating their strength: a dataset's background ::before, or Home's image ::before
+ * and wash ::after in the current theme. Returns null for a Home video, hidden or absent media,
+ * and views without a background picture.
+ */
+export function resolveViewPresentationBackdrop(computed = (element, pseudo) => window.getComputedStyle(element, pseudo)) {
+    const home = document.getElementById('front_page_container');
+    if (isShown(home)) {
+        const media = home.querySelector('.front-page-background');
+        if (!resolveViewHasPresentationMedia('', 'front_page') || media.querySelector('video')) return null;
+        const picture = computed(media, '::before');
+        const wash = computed(media, '::after');
+        return readBackdrop(picture, { washColor: wash.backgroundColor, wash: wash.opacity });
+    }
+    const area = Array.from(document.querySelectorAll(
+        '.content_div:not(.hidden) .tab-content-area--has-dataset-background'))
+        .find(element => isShown(element) && isShown(element.closest('.content_div')));
+    return area ? readBackdrop(computed(area, '::before'), { washColor: 'transparent', wash: '0' }) : null;
+}
+
+function readBackdrop(picture, { washColor, wash }) {
+    const opacity = Number.parseFloat(picture.opacity);
+    if (!/^url\(/.test(picture.backgroundImage || '') || !(opacity > 0)) return null;
+    return { image: picture.backgroundImage, position: picture.backgroundPosition || 'center top',
+        opacity: String(opacity), washColor: washColor || 'transparent', wash: String(Number.parseFloat(wash) || 0) };
 }
 
 /** The sole writer of the flag consumed by SVG tabs and hero/Home button CSS. */

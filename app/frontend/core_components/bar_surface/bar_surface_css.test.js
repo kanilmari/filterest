@@ -77,6 +77,26 @@ describe('bar-surface variables', () => {
     });
 });
 
+test('the wide-screen picture layer is drawn only on docked widths, behind the gate, and leaves with the solid bars', () => {
+    const gate = ':root[data-bar-surface="frosted"]:not(:has(.image_first_view_overlay, '
+        + '.content_div:not(.hidden) .dataset-shared-topbar[data-topbar-mode="article"]))';
+    const layers = [];
+    frosted.walkRules(/\.body_content\[data-bar-backdrop\]/, (rule) => layers.push(rule));
+    expect(layers.length).toBeGreaterThan(0);
+    for (const rule of layers) {
+        expect(rule.parent.params, rule.selector).toBe('(width >= 1100px)');
+        expect(rule.selector.startsWith(gate), rule.selector).toBe(true);
+    }
+    let removed = false;
+    frosted.walkAtRules('media', (media) => {
+        if (!/prefers-reduced-transparency/.test(media.params)) return;
+        media.walkRules(':root[data-bar-surface="frosted"] .body_content::before', (rule) => {
+            removed = rule.nodes.some((node) => node.prop === 'content' && node.value === 'none' && node.important);
+        });
+    });
+    expect(removed, 'less transparency, more contrast and forced colours remove the layer').toBe(true);
+});
+
 test('the no-blur fallback outranks the dark-theme alpha, so dark panes do not stay 20% clear without blur', () => {
     let fallback = null;
     frosted.walkAtRules('supports', (rule) => { if (rule.params === 'not (backdrop-filter: blur(1px))') fallback = rule; });
