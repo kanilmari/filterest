@@ -88,7 +88,10 @@ Configured and inferred record headings take their size and heading level from t
 Stored HTML heading and paragraph wrappers contribute their words, with a space
 between blocks. Full headings retain supported inline emphasis and links. The
 compact rail, search result links, tooltips and browser tab use the visible
-words. Article editing and existing row addresses use the original source.
+words, and so do row addresses: a heading stored as `<h1>…</h1>` gives the
+address its words, never "h1". Article editing uses the original source. The
+server redirects an older address that still carries markup words, so earlier
+links and bookmarks arrive (`resolveArticleDocument`).
 
 A relation field needs its already-authorized generated display alias; a missing
 alias never triggers a privileged value lookup or exposes its numeric foreign
@@ -315,7 +318,8 @@ them and a person can open the article in a new tab or copy its link; an
 ordinary click still opens the article in place, and Ctrl, Cmd, Shift or Alt
 is left to the browser (`asksBrowserToOpenElsewhere`).
 
-- **Words.** The words come from the article's title, not the card's: the two
+- **Words.** The words are the article title's visible words, markup removed,
+  not the card title's: the two
   can come from different fields, because each surface hides its own. The
   server accepts them without a redirect (`resolveArticleDocument`). Known
   limit: the card builds the words from the fields the card list delivered; when

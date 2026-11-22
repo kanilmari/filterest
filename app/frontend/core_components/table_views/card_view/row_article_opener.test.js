@@ -218,7 +218,7 @@ describe("openRowArticleView", () => {
         expect(fetchPermittedRowArticleDataMock).toHaveBeenCalled();
     });
 
-    test("uses the first permitted stored header for the URL when its visible name is empty", async () => {
+    test("addresses the article by the visible header's words when the first stored header is empty", async () => {
         document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper">'
             + '<div class="card_container"><div class="card" data-id="42"></div></div>'
             + '<div class="row_article_placeholder"></div></div></div>';
@@ -239,8 +239,8 @@ describe("openRowArticleView", () => {
         } });
 
         expect(buildRowArticleContent.mock.calls[0][5]).toBe('S');
-        expect(window.location.pathname).toBe('/events/42-h2-h2');
-        expect(addressChanges).toEqual(['/events/42-h2-h2']);
+        expect(window.location.pathname).toBe('/events/42-second');
+        expect(addressChanges).toEqual(['/events/42-second']);
     });
 
     test("preserves active search params and marks row URLs as article view", async () => {

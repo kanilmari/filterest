@@ -132,10 +132,8 @@ export function resolveRecordTitle({
         const editValue = stored !== null && typeof stored === 'object' ? JSON.stringify(stored) : stored;
         return { ...heading, text, sourceText: heading.text, editValue };
     };
-    // Bookmarks use the first admitted source, even when its markup has no visible words.
     const storedHeaders = headerColumns.map(column => candidate(column, true)).filter(Boolean);
     const headers = storedHeaders.map(visibleHeading).filter(Boolean);
-    let slugSourceText = storedHeaders[0]?.text;
     let title = headers[0];
     if (!title) {
         const names = EXACT_NAMES.flatMap(name => ordered.filter(column => column.toLowerCase() === name));
@@ -145,7 +143,6 @@ export function resolveRecordTitle({
             if (headerColumns.includes(column)) continue;
             const inferred = candidate(column);
             if (!inferred) continue;
-            slugSourceText ??= inferred.text;
             title = visibleHeading(inferred);
             if (title) break;
         }
@@ -163,6 +160,10 @@ export function resolveRecordTitle({
             fallback: copy[language] || copy[language.split('-')[0]] || copy.en }).replaceAll('{id}', id);
         title = { text, language: '', column: null, isFallback: true, configured: false };
     }
+    // An address carries the words the reader sees, markup removed, so a heading
+    // stored as <h1>…</h1> never puts "h1" into it; a fallback title gives no words.
+    // The server builds the same words (public_article_projection.go) and redirects
+    // an older address to them, so earlier bookmarks still arrive.
     return { ...title, headers, initial: [...title.text][0]?.toUpperCase() || '',
-        slugSourceText: slugSourceText ?? title.text };
+        slugSourceText: title.isFallback ? '' : title.text };
 }

@@ -6,6 +6,7 @@
 import { rowOpeningHref } from "./default_row_affordance.js";
 import { buildCardUrl, buildSlug } from "./row_article_opener_helpers.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
+import { readInlineHeadingText } from "../../../reusable_components/dom_container_builder.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import {
     buildGeneratedForeignDisplayAliasBase,
@@ -64,7 +65,8 @@ export function expandForeignKeyDetailEntry(
         getLanguageWithBrowserFallback()
     ).trim();
     const aliasBase = buildGeneratedForeignDisplayAliasBase(detailEntry.column);
-    const rowPath = buildCardUrl(datasetPrefix, foreignTable, targetId, buildSlug(aliasValue));
+    // The related row's visible words, markup removed, as in its own address.
+    const rowPath = buildCardUrl(datasetPrefix, foreignTable, targetId, buildSlug(readInlineHeadingText(aliasValue)));
     const href = rowOpeningHref(rowPath, foreignTable);
 
     const expandedEntries = [

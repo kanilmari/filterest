@@ -167,8 +167,8 @@ func TestProjectPublicArticleTranslatesALanguageKeyHeader(t *testing.T) {
 }
 
 // A heading stored with markup, as fintravel.fi's "<h1>...</h1>" blog title, reads
-// as its words in page heads and lists; its address words stay the browser's,
-// built from the stored text. How markup reads is pinned by the examples in
+// as its words in page heads and lists, and its address words are those words,
+// never "h1…h1" from the markup. How markup reads is pinned by the examples in
 // app/testing/shared_contracts/heading_text_examples.json.
 func TestProjectPublicArticleReadsAMarkedUpHeadingAsText(t *testing.T) {
 	result := projectionResult(
@@ -180,15 +180,15 @@ func TestProjectPublicArticleReadsAMarkedUpHeadingAsText(t *testing.T) {
 	if article.Title != "An unexpected payment request? Check & pay" {
 		t.Fatalf("title = %q", article.Title)
 	}
-	if article.Slugs["en"] != "h1an-unexpected-payment-request-check-amp-payh1" {
-		t.Fatalf("address words = %q, want the browser's buildSlug of the stored text", article.Slugs["en"])
+	if article.Slugs["en"] != "an-unexpected-payment-request-check-pay" {
+		t.Fatalf("address words = %q, want the words of the title the reader sees", article.Slugs["en"])
 	}
 }
 
 // The app passes over a heading whose markup has no words to show, or reads as
 // a hidden false or null, and names the record by the next title. The address
-// words still come from the first stored heading, so published addresses stay.
-func TestProjectPublicArticleSkipsAHeadingWithNoWordsButKeepsItsAddress(t *testing.T) {
+// words are that title's words too; an older address is redirected to them.
+func TestProjectPublicArticleSkipsAHeadingWithNoWordsAndAddressesTheShownTitle(t *testing.T) {
 	types := map[string]string{
 		"id":     `{"card_element":"details"}`,
 		"kicker": `{"card_element":"header","hide_false_null_on_big_crd":true}`,
@@ -196,10 +196,10 @@ func TestProjectPublicArticleSkipsAHeadingWithNoWordsButKeepsItsAddress(t *testi
 		"name":   `{"card_element":"details","data_type":"text"}`,
 	}
 	for _, c := range []struct{ kicker, title, wantTitle, wantWords string }{
-		{"<h2> </h2>", "<h1>Hotel <em>news</em></h1>", "Hotel news", "h2-h2"},
-		{"<style>ignored</style>", "Plain title", "Plain title", "styleignoredstyle"},
-		{"<b>False</b>", "Plain title", "Plain title", "bfalseb"},
-		{"<h2> </h2>", "<br>", "Inferred name", "h2-h2"},
+		{"<h2> </h2>", "<h1>Hotel <em>news</em></h1>", "Hotel news", "hotel-news"},
+		{"<style>ignored</style>", "Plain title", "Plain title", "plain-title"},
+		{"<b>False</b>", "Plain title", "Plain title", "plain-title"},
+		{"<h2> </h2>", "<br>", "Inferred name", "inferred-name"},
 		{"Vector<T>", "Plain title", "Vector<T>", "vectort"},
 	} {
 		kicker, _ := json.Marshal(c.kicker)
@@ -214,6 +214,19 @@ func TestProjectPublicArticleSkipsAHeadingWithNoWordsButKeepsItsAddress(t *testi
 	}
 }
 
+// Each language's address words stand on their own: a title with no words in
+// the page's language must not take away the other languages' words, which the
+// sitemap and the language links print.
+func TestProjectPublicArticleKeepsOtherLanguagesWordsWhenThisLanguageHasNone(t *testing.T) {
+	types := map[string]string{"id": `{"card_element":"details"}`, "title": `{"card_element":"header","data_type":"text"}`}
+	stored, _ := json.Marshal(`{"en":"<h1> </h1>","fi":"<h1>Hotelliuutiset</h1>"}`)
+	result := projectionResult([]string{"id", "title"}, types, map[string]string{"id": `"3"`, "title": string(stored)})
+	article := projectPublicArticle(result, "en", []string{"en", "fi"}, noTranslations)
+	if article.Slugs["fi"] != "hotelliuutiset" || article.Slugs["en"] != "" {
+		t.Fatalf("address words = %v, want fi hotelliuutiset and no English words", article.Slugs)
+	}
+}
+
 // A stored text can begin with a byte-order mark, as the first cell of an
 // imported file does. The app's trim takes the mark away before it looks for a
 // language map or for markup, so the server must not print the raw map as the
@@ -225,7 +238,7 @@ func TestProjectPublicArticleReadsATitleBehindAByteOrderMark(t *testing.T) {
 		{"\ufeff{\"en\":\"Helsinki\",\"fi\":\"Helsingfors\"}", "en", "Helsinki", "helsinki"},
 		{"\ufeff{\"en\":\"Helsinki\",\"fi\":\"Helsingfors\"}", "fi", "Helsingfors", "helsingfors"},
 		{"{\"en\":\"Helsinki\",\"fi\":\"Helsingfors\"}\ufeff", "en", "Helsinki", "helsinki"},
-		{"\ufeff<h1>Title</h1>", "en", "Title", "h1titleh1"},
+		{"\ufeff<h1>Title</h1>", "en", "Title", "title"},
 		{"Price <b\ufeff", "en", "Price <b", "price-b"},
 	} {
 		stored, _ := json.Marshal(c.stored)

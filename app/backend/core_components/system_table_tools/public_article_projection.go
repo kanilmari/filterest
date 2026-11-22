@@ -90,11 +90,13 @@ func projectPublicArticle(result frontPageArticleResult, language string, langua
 	}
 	fields := publicArticleVisibleFields(result)
 
-	// The address words come from the first stored title, even when its markup
-	// has no words to show. The shown title is the first one with words, read
-	// as the card and article draw it. Both follow resolveRecordTitle in
-	// app/frontend/core_components/table_views/record_title_resolver.js.
-	title, titleField := publicArticleTitle(fields, language, translate, false)
+	// The shown title is the first one with words, read as the card and article
+	// draw it, and the address words are that title's words, markup removed.
+	// Both follow resolveRecordTitle in
+	// app/frontend/core_components/table_views/record_title_resolver.js. An
+	// address with older words, such as "h1…h1" from a heading stored with its
+	// markup, is redirected to these (public_article_document.go).
+	_, titleField := publicArticleTitle(fields, language, translate, false)
 	if shown, _ := publicArticleTitle(fields, language, translate, true); shown != "" {
 		article.Title = publicArticleHeadingText(shown)
 	}
@@ -115,12 +117,14 @@ func projectPublicArticle(result frontPageArticleResult, language string, langua
 		}
 	}
 	article.Slugs = make(map[string]string, len(languages)+1)
-	if title != "" {
-		article.Slugs[language] = dataset_routes.ArticleSlug(title)
-		for _, code := range languages {
-			if translated, _ := publicArticleTitle(fields, code, translate, false); translated != "" {
-				article.Slugs[code] = dataset_routes.ArticleSlug(translated)
-			}
+	if article.Title != "" {
+		article.Slugs[language] = dataset_routes.ArticleSlug(article.Title)
+	}
+	// Each language's words stand on their own: a title with no words in this
+	// page's language must not take the words of the other languages away.
+	for _, code := range languages {
+		if translated, _ := publicArticleTitle(fields, code, translate, true); translated != "" {
+			article.Slugs[code] = dataset_routes.ArticleSlug(publicArticleHeadingText(translated))
 		}
 	}
 

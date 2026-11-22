@@ -36,6 +36,16 @@ describe("expandForeignKeyDetailEntry", () => {
         expect(expanded[1].dataColumn).toBeNull();
     });
 
+    test("addresses a related row by its visible words, never its heading markup", () => {
+        const detailEntry = { column: "parent_id", label: "Parent ID", rawValue: "3", isLink: false };
+        const rowItem = { parent_id: 3, "parent_name (ln)": "<h1>Hotel news</h1>" };
+        const dataTypes = { parent_id: { foreign_table: "blogs" } };
+
+        const expanded = expandForeignKeyDetailEntry(detailEntry, rowItem, dataTypes);
+
+        expect(expanded[0].href).toBe("/blogs/3-hotel-news");
+    });
+
     test("leaves non-FK details unchanged", () => {
         const detailEntry = {
             column: "priority",

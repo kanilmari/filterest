@@ -253,13 +253,15 @@ test('empty formatted headers fall through and literal angle brackets survive', 
     expect(title({ title: '<h3>&lt;em&gt;x&lt;/em&gt;</h3>' }, types).text).toBe('<em>x</em>');
 });
 
-test('preserves addresses while inferring the visible title from marked-up fields', () => {
+test('addresses carry the words of the visible title, never its markup', () => {
     const row = { heading: '<h2> </h2>', title: '<h1>Hotel</h1>' };
     const types = { heading: text({ card_element: 'header' }), title: text() };
     expect(title(row, types)).toMatchObject({ column: 'title', text: 'Hotel', initial: 'H',
-        sourceText: row.title, slugSourceText: row.heading, headers: [] });
+        sourceText: row.title, slugSourceText: 'Hotel', headers: [] });
     expect(title({ title: row.title }, { title: types.title })).toMatchObject({
-        text: 'Hotel', sourceText: row.title, slugSourceText: row.title });
+        text: 'Hotel', sourceText: row.title, slugSourceText: 'Hotel' });
     expect(title({ name: '<h1> </h1>', title: row.title }, { name: text(), title: types.title })).toMatchObject({
-        column: 'title', text: 'Hotel', slugSourceText: '<h1> </h1>' });
+        column: 'title', text: 'Hotel', slugSourceText: 'Hotel' });
+    expect(title({ title: '<h1>An unexpected payment request? Check &amp; pay</h1>' }, { title: types.heading }))
+        .toMatchObject({ slugSourceText: 'An unexpected payment request? Check & pay' });
 });
