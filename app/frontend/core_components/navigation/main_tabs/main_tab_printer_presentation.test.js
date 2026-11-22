@@ -9,7 +9,7 @@ import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.j
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { resetMainTabPrinterTestState, setViewportWidth } from "./main_tab_printer_test_helpers.js";
 import { clearMainTabActiveState } from "./main_tab_active_state.js";
-import { buildTabOutlinePresentation } from "./tab_presentation_builder.js";
+import { endpoint_router } from "../../endpoints/endpoint_router.js";
 
 // The retitle boundary is verified in main_tab_printer_browser_tab_title.test.js.
 vi.mock("../nav_engine/browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: vi.fn() }));
@@ -116,34 +116,28 @@ vi.mock("../../filterbar/filterbar_engine/filterbar_visibility_handler.js", () =
 describe("initTabs", () => {
     beforeEach(resetMainTabPrinterTestState);
 
-    test.each([1920, 1440, 390])("Home side-menu paths stay rectangular with and without media at %ipx", async width => {
+    // Owner 2026-11-22: Home's own picture does not count, and Home keeps the menu's one shape.
+    test.each([1920, 1440, 390])("Home keeps the menu's shape with and without Home media at %ipx", async width => {
         setViewportWidth(width);
         setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
         await initTabs();
         await openNavTab("app_service_catalog");
+        const rounded = width >= 1850;
         const home = document.createElement("div");
         home.id = "front_page_container";
         home.innerHTML = '<div class="front-page-background"><video src="/probe.mp4"></video></div>';
         document.body.append(home);
-        clearMainTabActiveState("front_page");
-        expect(document.body.getAttribute("data-view-has-presentation-media")).toBe("true");
-        for (const tab of document.querySelectorAll(".navtablinks")) {
-            expect(tab.dataset.tabPresentation).toBe("button-inactive");
-            const expected = buildTabOutlinePresentation({ forceRectangular: true, isActive: false });
-            for (const path of tab.querySelectorAll(".navtab-shape-path")) {
-                expect(path.getAttribute("d")).toBe(expected.pathD);
-                expect(path.getAttribute("d").match(/A 0 0/g)).toHaveLength(4);
+        for (const media of [true, false]) {
+            if (!media) home.replaceChildren();
+            clearMainTabActiveState("front_page");
+            expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("rounded");
+            for (const tab of document.querySelectorAll(".navtablinks")) {
+                expect(tab.dataset.tabPresentation).toBe(rounded ? "tab-inactive" : "button-inactive");
+                for (const path of tab.querySelectorAll(".navtab-shape-path")) {
+                    expect(path.getAttribute("d").match(rounded ? /A 7 7/g : /A 0 0/g)).toHaveLength(4);
+                }
             }
-        }
-        // Removing Home media updates the media flag while keeping its sidebar buttons rectangular.
-        home.replaceChildren();
-        await Promise.resolve();
-        expect(document.body.getAttribute("data-view-has-presentation-media")).toBe("false");
-        for (const tab of document.querySelectorAll(".navtablinks")) {
-            const expected = buildTabOutlinePresentation({ forceRectangular: true, isActive: false });
-            expect(tab.dataset.tabPresentation).toBe(expected.state);
-            expect(tab.querySelector(".navtab-stroke-path").getAttribute("d")).toBe(expected.pathD);
         }
         home.remove();
     });
@@ -196,35 +190,50 @@ describe("initTabs", () => {
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");
     });
 
-    test("uses rectangular tabs for every dataset when the active dataset's view draws a cover or background", async () => {
+    test("one menu dataset whose picture shows makes every tab box-like before any dataset opens", async () => {
         setViewportWidth(1920);
-        setChosenDatasetView("media_dataset", "card");
+        setChosenDatasetView("plain_dataset", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
+        // The cover shows only in the dark theme; the shape is the same in every theme.
+        const strength = { overlay_opacity: 0, oval_enabled: false, center_opacity: 0.4, mid_opacity: 0.7, edge_opacity: 1 };
+        const darkOnlyCover = { background: false, cover: true, cover_themes: {
+            light: { ...strength, image_opacity: 0 }, dark: { ...strength, image_opacity: 0.3 } } };
         await initTabs({
             preloadedContentTablesResponse: {
                 datasets: [
-                    { dataset_name: "media_dataset", is_top_level_in_current_project: true },
-                    { dataset_name: "plain_dataset", is_top_level_in_current_project: true },
+                    { dataset_name: "media_dataset", is_top_level_in_current_project: true, presentation_picture: darkOnlyCover },
+                    { dataset_name: "plain_dataset", is_top_level_in_current_project: true,
+                        presentation_picture: { background: false, cover: false } },
                 ],
                 tab_order: null,
             },
         });
-        // The mocked navigation draws nothing; this is the media dataset's view with its shown background.
-        document.body.insertAdjacentHTML("beforeend", '<div class="content_div">'
-            + '<div id="media_dataset_tab_parts_container">'
-            + '<div class="tab-content-area tab-content-area--has-dataset-background"></div></div></div>');
-        await openNavTab("media_dataset");
-
         const tabs = Array.from(document.querySelectorAll(".navtablinks"));
         expect(tabs).toHaveLength(2);
-        expect(tabs[0].dataset.hasPresentationMedia).toBeUndefined();
-        expect(tabs[0].dataset.tabPresentation).toBe("button-active");
-        expect(tabs[1].dataset.tabPresentation).toBe("button-inactive");
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("box");
+        expect(localStorage.getItem("side_menu_tab_shape")).toBe("box");
+        // Without a stored selection the first tab opens; its view shows no picture of its own.
+        expect(tabs.map(tab => tab.dataset.tabPresentation)).toEqual(["button-active", "button-inactive"]);
+        // Opening the plain dataset does not change the shape.
+        await openNavTab("plain_dataset");
+        expect(tabs.map(tab => tab.dataset.tabPresentation)).toEqual(["button-inactive", "button-active"]);
         tabs.forEach((tab) => {
             expect(tab.querySelector(".navtab-stroke-path")?.getAttribute("d"))
                 .toContain("A 0 0");
         });
         expect(document.querySelector(".navtabs")?.style.right).toBe("0px");
+    });
+
+    test("a failed catalogue keeps the menu's last decision", async () => {
+        localStorage.setItem("side_menu_tab_shape", "box");
+        const { resetSideMenuTabShapeForTests } = await import("./side_menu_tab_shape.js");
+        resetSideMenuTabShapeForTests();
+        setViewportWidth(1920);
+        vi.mocked(endpoint_router).mockRejectedValueOnce(new Error("catalogue unavailable"));
+        const { initTabs } = await import("./main_tab_printer.js");
+        await initTabs();
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("box");
+        expect(localStorage.getItem("side_menu_tab_shape")).toBe("box");
     });
 
     test("uses button tabs for card view when the navbar is in overlay layout", async () => {
@@ -295,7 +304,7 @@ describe("initTabs", () => {
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");
     });
 
-    test("resets a former rounded overlap when tabs rebuild around a preloaded admin view", async () => {
+    test("tabs rebuilt around a preloaded admin view take the menu's shape and its overlap at once", async () => {
         Object.defineProperty(window, "innerWidth", { configurable: true, value: 1920 });
         setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
@@ -307,9 +316,10 @@ describe("initTabs", () => {
         vi.mocked(getSelectedDataset).mockReturnValue("view_field_settings");
         await initTabs({ dataAlreadyLoaded: true });
 
-        expect(Array.from(container.querySelectorAll(".navtablinks"), (tab) => tab.dataset.tabPresentation))
-            .toEqual(expect.arrayContaining(["button-inactive"]));
-        expect(container.style.right).toBe("0px");
+        // New buttons start rectangular; the rebuild gives them the rounded decision without a morph.
+        expect(new Set(Array.from(container.querySelectorAll(".navtablinks"), (tab) => tab.dataset.tabPresentation)))
+            .toEqual(new Set(["tab-inactive"]));
+        expect(container.style.right).toBe("-2px");
         expect(document.querySelector(".navtablinks.active")).toBeNull();
 
         // Returning to an ordinary wide card dataset retains its intended overlap.

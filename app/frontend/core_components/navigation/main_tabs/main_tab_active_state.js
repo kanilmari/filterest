@@ -13,8 +13,8 @@ import {
     NAVTAB_ACTIVE_FILL,
 } from "./tab_presentation_builder.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
-import { isHomeNavigationView, observeViewPresentationMedia, syncViewPresentationMediaFlag,
-    VIEW_PRESENTATION_MEDIA_ATTRIBUTE } from "./view_presentation_media_resolver.js";
+import { isHomeNavigationView } from "./view_presentation_media_resolver.js";
+import { onSideMenuTabShapeChange, sideMenuTabsBoxLike } from "./side_menu_tab_shape.js";
 
 const NAVTAB_OUTLINE_MORPH_ATTRIBUTE = "d";
 const NAVTAB_PRESENTATION_DURATION_PROPERTY = "--navtab-presentation-transition-duration";
@@ -235,6 +235,11 @@ function applyOutlinePathWithMorph(outlinePath, nextPathD, animate) {
     morphState.frameId = window.requestAnimationFrame(animateFrame);
 }
 
+let shapeSubscription = null;
+// The view the last presentation was applied for: a dataset without a menu tab (project subfolder) has no
+// active button to recover it from when the menu's decision changes.
+let lastViewDatasetName = "";
+
 function getActiveMainTabId() {
     return document.querySelector(".navtablinks.active")?.dataset?.id || "";
 }
@@ -253,12 +258,14 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
     const navTabs = document.querySelector(".navtabs");
     const allTabButtons = Array.from(document.querySelectorAll(".navtablinks"));
     const navbarWidth = getNavbarWidthPx();
-    syncViewPresentationMediaFlag(normalizedActiveTabId, viewDatasetName);
-    // Read current ownership when a queued DOM/theme change settles; a shell
-    // replacement or cancelled navigation must never replay an earlier view.
-    observeViewPresentationMedia(refreshMainTabPresentation);
-    const homeMenu = isHomeNavigationView(normalizedActiveTabId, viewDatasetName);
-    const forceRectangular = homeMenu || document.body.getAttribute(VIEW_PRESENTATION_MEDIA_ATTRIBUTE) === "true";
+    // One shape for the whole side menu, decided from every visible dataset tab's pictures
+    // (side_menu_tab_shape.js, owner 2026-11-22): navigation, Home and the theme never change it.
+    lastViewDatasetName = viewDatasetName;
+    shapeSubscription ||= onSideMenuTabShapeChange(() => refreshMainTabPresentation(lastViewDatasetName));
+    const forceRectangular = sideMenuTabsBoxLike();
+    // Freshly built buttons and Home take their shape without a morph.
+    const animate = options.instant !== true
+        && !isHomeNavigationView(normalizedActiveTabId, viewDatasetName);
 
     if (navTabs) {
         navTabs.style.right = buildNavTabsRightOffset({
@@ -311,7 +318,7 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
             ? shapePaths
             : (outlinePath ? [outlinePath] : []);
         morphPaths.forEach((path) => {
-            applyOutlinePathWithMorph(path, presentation.pathD, !homeMenu);
+            applyOutlinePathWithMorph(path, presentation.pathD, animate);
         });
 
         if (fillPath) {
@@ -339,9 +346,10 @@ export function clearMainTabActiveState(viewDatasetName = "") {
 // Recomputes SVG-tab geometry after layout or view-mode changes without changing ownership.
 // Operates between the currently active tab, local view preference, and tab outline SVG.
 // Keeps navbar overlay and button-mode transitions aligned with the current active dataset.
-export function refreshMainTabPresentation(viewDatasetName = "") {
+export function refreshMainTabPresentation(viewDatasetName = "", { instant = false } = {}) {
     const activeTabId = getActiveMainTabId();
     return applyMainTabActiveState(activeTabId, {
         viewDatasetName: viewDatasetName || activeTabId,
+        instant,
     });
 }

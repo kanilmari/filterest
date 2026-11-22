@@ -414,6 +414,13 @@ export async function generate_table(
                 ...tableSpecs[dataset_name],
                 ...(tableMeta && Object.hasOwn(tableMeta, 'filterbar_visible_by_default')
                     ? { filterbar_visible_by_default: tableMeta.filterbar_visible_by_default } : {}),
+                // Results own the search hero's cover like the background below: a visitor has no
+                // administrator tree to read it from (owner 2026-11-22). A response path, also an
+                // empty one, owns its visibility as well.
+                ...(typeof datasetPresentation?.cover_image_path === 'string' ? {
+                    dataset_cover_image_path: datasetPresentation.cover_image_path,
+                    dataset_cover_image_hidden: datasetPresentation.cover_image_hidden === true,
+                } : {}),
             } }
         );
 		const scrollableContainer = viewContainers[current_view];

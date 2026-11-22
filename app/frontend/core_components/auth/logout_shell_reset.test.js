@@ -66,6 +66,7 @@ describe("performSpaLogoutReset", () => {
         localStorage.setItem("navVisibleWide", "false");
         localStorage.setItem("navVisibleNarrow", "true");
         localStorage.setItem("filterest_experimental_bar_surface_v1", "frosted");
+        localStorage.setItem("side_menu_tab_shape", "rounded");
         localStorage.setItem("app_service_catalog_hide_columns", JSON.stringify({ id: true }));
         localStorage.setItem("app_service_catalog_sorting_and_filtering_specs", JSON.stringify({
             filters: { internal_notes: "restricted search" },
@@ -127,6 +128,7 @@ describe("performSpaLogoutReset", () => {
         expect(localStorage.getItem("navVisibleWide")).toBe("false");
         expect(localStorage.getItem("navVisibleNarrow")).toBe("true");
         expect(localStorage.getItem("filterest_experimental_bar_surface_v1")).toBe("frosted");
+        expect(localStorage.getItem("side_menu_tab_shape")).toBe("rounded");
         expect(localStorage.getItem("app_service_catalog_hide_columns")).toBeNull();
         expect(localStorage.getItem("app_service_catalog_sorting_and_filtering_specs")).toBeNull();
         expect(sessionStorage.length).toBe(0);

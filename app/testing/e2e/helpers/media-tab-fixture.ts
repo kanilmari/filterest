@@ -1,7 +1,7 @@
 // media-tab-fixture.ts
 // Supplies media-shaped Home and dataset GET responses without saving settings.
 // Shared by G18 and the uncommitted WO102 before/after screenshot probe.
-// Uses default signed-in storageState; only read-only permission POSTs may pass.
+// Uses default signed-in storageState, or none for a visitor; only read-only permission POSTs may pass.
 import { expect, type BrowserContext, type Page } from '@playwright/test';
 import homeDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 import { waitForAppReady } from './navigation';
@@ -9,11 +9,30 @@ import { closeActiveFilterbarIfOpen } from './filterbar';
 
 export const MEDIA_DATASET = 'app_service_catalog';
 export const PLAIN_DATASET = 'system_about';
-/** The media dataset's picture: shown or hidden background, or a cover shown or hidden by its theme switches. */
-export type DatasetPicture = 'background' | 'background_hidden' | 'cover' | 'cover_theme_hidden';
-export type MediaTabPolicy = { home: 'video' | 'image' | 'none' | 'hidden'; dataset: DatasetPicture; blocked: string[] };
+/** The media dataset's picture: shown or hidden background, or a cover shown in both themes, only in the dark
+ * theme or in neither (hidden by its theme switches). */
+export type DatasetPicture = 'background' | 'background_hidden' | 'cover' | 'cover_dark_only' | 'cover_theme_hidden';
+/** `unreadable` drops datasets from this viewer's catalogue, as missing read permission would. */
+export type MediaTabPolicy = { home: 'video' | 'image' | 'none' | 'hidden'; dataset: DatasetPicture; blocked: string[];
+  visitor: boolean; unreadable: string[] };
 const MEDIA_PATH = '/storage/104/dataset_media/background/original/d572.png';
 const COVER_PATH = '/storage/104/dataset_media/cover/original/d572.png';
+
+/** The cover's strength in each theme for the chosen picture (1 = shown, 0 = hidden by the theme switch). */
+function coverOpacity(picture: DatasetPicture, theme: 'light' | 'dark') {
+  if (picture === 'cover_theme_hidden') return 0;
+  if (picture === 'cover_dark_only') return theme === 'dark' ? 0.3 : 0;
+  return 1;
+}
+
+/** The catalogue's picture settings (GET /api/datasets presentation_picture) matching the drawn picture. */
+function cataloguePicture(picture: DatasetPicture | 'none') {
+  const strength = (theme: 'light' | 'dark') => ({ image_opacity: picture === 'none' ? 0 : coverOpacity(picture, theme),
+    overlay_opacity: 0, oval_enabled: false, center_opacity: 0.4, mid_opacity: 0.7, edge_opacity: 1 });
+  const cover = picture !== 'none' && picture.startsWith('cover');
+  return { background: picture === 'background', cover,
+    ...(cover ? { cover_themes: { light: strength('light'), dark: strength('dark') } } : {}) };
+}
 
 /** Generate tiny valid local media in memory; no uploaded file or installation media is needed. */
 async function buildMedia(page: Page) {
@@ -45,9 +64,10 @@ async function buildMedia(page: Page) {
 }
 
 /** Routes disappear at teardown. Permission queries are the only necessary non-GETs. */
-export async function installMediaTabFixture(page: Page, context: BrowserContext, width: number, theme: 'light' | 'dark') {
+export async function installMediaTabFixture(page: Page, context: BrowserContext, width: number, theme: 'light' | 'dark',
+  { visitor = false }: { visitor?: boolean } = {}) {
   const media = await buildMedia(page);
-  const policy: MediaTabPolicy = { home: 'video', dataset: 'background', blocked: [] };
+  const policy: MediaTabPolicy = { home: 'video', dataset: 'background', blocked: [], visitor, unreadable: [] };
   await page.setViewportSize({ width, height: width <= 700 ? 844 : 1000 });
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'reduce' });
   await page.addInitScript(theme => {
@@ -75,10 +95,13 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
       await route.fulfill({ json: { configured: true, revision: 1, theme_mode: theme } }); return;
     }
     if (url.pathname === '/api/front-page') {
-      const profile = await context.request.get(new URL('/api/user-profile', url).href);
-      expect(profile.ok()).toBe(true);
-      const viewer = (await profile.json()).user_id;
-      expect(Number.isInteger(viewer) && viewer > 1, 'Default signed-in storageState is required').toBe(true);
+      let viewer = 1;
+      if (!policy.visitor) {
+        const profile = await context.request.get(new URL('/api/user-profile', url).href);
+        expect(profile.ok()).toBe(true);
+        viewer = (await profile.json()).user_id;
+        expect(Number.isInteger(viewer) && viewer > 1, 'Default signed-in storageState is required').toBe(true);
+      }
       const video = policy.home === 'video';
       await route.fulfill({ json: { site_name: 'WO102', viewer_id: viewer, blocks: [], show_blocks: false,
         hero: { title: { fi: 'Etusivu', en: 'Home' } },
@@ -96,9 +119,13 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
       const data = await response.json();
       const datasets = data.datasets.filter((entry: { dataset_name: string }) => [MEDIA_DATASET, PLAIN_DATASET].includes(entry.dataset_name));
       expect(datasets.map((entry: { dataset_name: string }) => entry.dataset_name).sort()).toEqual([MEDIA_DATASET, PLAIN_DATASET].sort());
-      await route.fulfill({ response, json: { ...data, tab_order: null, datasets: datasets.map((entry: { dataset_name: string }) => ({
-        ...entry, is_in_current_project: true, is_top_level_in_current_project: true,
-      })) } }); return;
+      // The side menu's shape follows these picture settings (side_menu_tab_shape.js, owner 2026-11-22).
+      await route.fulfill({ response, json: { ...data, tab_order: null, datasets: datasets
+        .filter((entry: { dataset_name: string }) => !policy.unreadable.includes(entry.dataset_name))
+        .map((entry: { dataset_name: string }) => ({
+          ...entry, is_in_current_project: true, is_top_level_in_current_project: true,
+          presentation_picture: cataloguePicture(entry.dataset_name === MEDIA_DATASET ? policy.dataset : 'none'),
+        })) } }); return;
     }
     if (url.pathname === '/api/tree_data') {
       const response = await route.fetch();
@@ -113,7 +140,7 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
       const cover = media && policy.dataset.startsWith('cover');
       const background = media && policy.dataset.startsWith('background');
       // A cover hidden by both theme switches is drawn at opacity 0 (fintravel.fi, 9.6.14).
-      const coverOpacity = policy.dataset === 'cover_theme_hidden' ? 0 : 1;
+      const light = coverOpacity(policy.dataset, 'light'), dark = coverOpacity(policy.dataset, 'dark');
       const appearance = data.dataset_appearance;
       const effective = appearance?.effective;
       await route.fulfill({ response, json: { ...data,
@@ -123,9 +150,9 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
           background_image_hidden: policy.dataset === 'background_hidden' && media,
         },
         ...(cover && effective ? { dataset_appearance: { ...appearance,
-          tab_values: { ...appearance.tab_values, 'light.image_opacity': coverOpacity, 'dark.image_opacity': coverOpacity },
-          effective: { ...effective, light: { ...effective.light, image_opacity: coverOpacity },
-            dark: { ...effective.dark, image_opacity: coverOpacity } },
+          tab_values: { ...appearance.tab_values, 'light.image_opacity': light, 'dark.image_opacity': dark },
+          effective: { ...effective, light: { ...effective.light, image_opacity: light },
+            dark: { ...effective.dark, image_opacity: dark } },
         } } : {}),
       } }); return;
     }

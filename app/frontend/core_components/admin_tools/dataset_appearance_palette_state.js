@@ -5,6 +5,7 @@
 import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { readDatasetAppearance } from '../../shared/dataset_appearance/snapshot.js';
 import { DATASET_APPEARANCE_PATHS_BY_PLACE } from '../../shared/dataset_appearance/validator.js';
+import { refreshDatasetCatalogue } from '../navigation/nav_engine/dataset_access_registry.js';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -44,6 +45,8 @@ export function createDatasetAppearancePaletteState(datasetName, initial, canCom
                 throw new Error('Dataset appearance owner expired');
             }
             saved = clone(response);
+            // A saved cover visibility can change the side menu's tab shape (side_menu_tab_shape.js).
+            void refreshDatasetCatalogue({ force: true });
             return clone(saved);
         },
     };

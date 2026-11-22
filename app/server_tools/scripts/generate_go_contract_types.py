@@ -30,6 +30,10 @@ ALLOWLIST = [
     StructSpec("backend/core_components/dataset_routes/dataset_alias_editor.go", "AliasManagementSnapshot", "AliasManagementSnapshot"),
     StructSpec("backend/core_components/dataset_routes/dataset_namespace_audit_reader.go", "DisabledDatasetAlias", "DisabledDatasetAlias"),
     StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "Table", "DatasetCatalogueEntry"),
+    # The side menu's picture settings per catalogue entry (side_menu_tab_shape.js).
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetPresentationPicture", "DatasetPresentationPicture"),
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetCoverPictureThemes", "DatasetCoverPictureThemes"),
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetCoverPictureStrength", "DatasetCoverPictureStrength"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Target", "ApplicationUpdateTarget"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Offer", "ApplicationUpdateOffer"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Request", "ApplicationUpdateRequest"),

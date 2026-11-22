@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 )
 
@@ -158,12 +159,16 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 	// Recheck ordinary row read and visibility before adding optional structural metadata.
 	readableUIDs := []int64{}
 	readable := make(map[int64]bool)
+	// A recheck that could not finish leaves a listed dataset without picture settings; the side menu must then
+	// keep its decision rather than read the gap as "no picture" (Codex review r2, 2026-11-22).
+	recheckFailed := false
 	for i := range tables_list {
 		uid := int64(tables_list[i].TableUID)
 		allowed, err := permissions.CheckRouteTablePermission(backend.Db, "/api/get-results", userID,
 			permissions.RouteTableScope{TableUID: strconv.FormatInt(uid, 10)}, permissions.AccessControlRouteTableOptions(false))
 		if err != nil {
 			log.Printf("\033[31merror: optional navigation metadata permission: %v\033[0m", err)
+			recheckFailed = true
 			continue
 		}
 		if !allowed {
@@ -172,6 +177,7 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 		hidden, err := dataset_visibility.HiddenForUser(backend.Db, tables_list[i].TableName, userID)
 		if err != nil {
 			log.Printf("\033[31merror: optional navigation metadata visibility: %v\033[0m", err)
+			recheckFailed = true
 			continue
 		}
 		if !hidden {
@@ -192,8 +198,23 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 		}
 	}
 
+	// The side menu's tab shape needs every openable dataset's picture settings before any is opened
+	// (owner 2026-11-22). Only datasets that passed the recheck above get them; a read failure keeps the
+	// browser's previous decision instead of guessing.
+	pictures, pictureErr := readPresentationPictures(backend.Db, readableUIDs, os.Getenv("ENVIRONMENT_TYPE") == "dev")
+	if pictureErr != nil {
+		log.Printf("\033[31merror: optional navigation presentation pictures: %v\033[0m", pictureErr)
+	} else {
+		for i := range tables_list {
+			tables_list[i].PresentationPicture = pictures[int64(tables_list[i].TableUID)]
+		}
+	}
+
 	response_map := map[string]interface{}{
 		"datasets": tables_list,
+	}
+	if pictureErr != nil || recheckFailed {
+		response_map["presentation_pictures_unavailable"] = true
 	}
 
 	// Fetch tab_order_json from the active project folder (if column exists).

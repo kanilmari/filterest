@@ -45,6 +45,27 @@ export interface DatasetCatalogueEntry {
     is_in_current_project: boolean;
     is_top_level_in_current_project: boolean;
     icon_key?: string;
+    presentation_picture?: DatasetPresentationPicture;
+}
+
+export interface DatasetPresentationPicture {
+    background: boolean;
+    cover: boolean;
+    cover_themes?: DatasetCoverPictureThemes;
+}
+
+export interface DatasetCoverPictureThemes {
+    light: DatasetCoverPictureStrength;
+    dark: DatasetCoverPictureStrength;
+}
+
+export interface DatasetCoverPictureStrength {
+    image_opacity: number;
+    overlay_opacity: number;
+    oval_enabled: boolean;
+    center_opacity: number;
+    mid_opacity: number;
+    edge_opacity: number;
 }
 
 export interface ApplicationUpdateTarget {
@@ -298,6 +319,7 @@ export interface DatasetTable {
     is_in_current_project: boolean;
     is_top_level_in_current_project: boolean;
     icon_key?: string;
+    presentation_picture?: DatasetPresentationPicture;
 }
 
 export interface RelatedTableResult {

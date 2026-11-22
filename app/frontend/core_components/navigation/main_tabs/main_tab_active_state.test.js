@@ -135,21 +135,21 @@ describe("applyMainTabActiveState", () => {
         expect(tabButton.style.getPropertyValue("--navtab-rounded-left-offset")).toBe("56px");
     });
 
-    test("Home uses rectangular side-menu paths immediately, and leaving restores the dataset shape", async () => {
+    // Owner 2026-11-22: one shape for the whole side menu (side_menu_tab_shape.js); Home keeps it.
+    test("Home keeps the menu's rounded decision without a morph, and leaving keeps the same shape", async () => {
+        localStorage.setItem("side_menu_tab_shape", "rounded");
         const { applyMainTabActiveState, clearMainTabActiveState, refreshMainTabPresentation } = await import("./main_tab_active_state.js");
         const home = document.createElement("main");
         home.id = "front_page_container";
         document.body.append(home);
         const tab = document.querySelector(".navtablinks");
         const path = tab.querySelector("path");
-        const nav = document.querySelector(".navtabs");
         clearMainTabActiveState("front_page");
-        expect(document.body.dataset.viewHasPresentationMedia).toBe("false");
-        expect(tab.dataset.tabPresentation).toBe("button-inactive");
-        expect(path.getAttribute("d").match(/A 0 0/g)).toHaveLength(4);
-        expect(nav.style.right).toBe("0px");
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("rounded");
+        expect(tab.dataset.tabPresentation).toBe("tab-inactive");
+        expect(frameCallbacks).toHaveLength(0);
         refreshMainTabPresentation();
-        expect(tab.dataset.tabPresentation).toBe("button-inactive");
+        expect(tab.dataset.tabPresentation).toBe("tab-inactive");
         home.classList.add("hidden");
         setChosenDatasetView("app_service_catalog", "card");
         applyMainTabActiveState("app_service_catalog");
@@ -158,13 +158,10 @@ describe("applyMainTabActiveState", () => {
         expect(path.getAttribute("d").match(/A 7 7/g)).toHaveLength(4);
     });
 
-    test("forces a rectangular card tab when the dataset view draws a picture", async () => {
+    test("a box-like menu decision gives every dataset button rows, also in a card view", async () => {
+        localStorage.setItem("side_menu_tab_shape", "box");
         setChosenDatasetView("app_service_catalog", "card");
         const tabButton = document.querySelector(".navtablinks");
-        // The result builder adds the class only for a set background whose media switch is on.
-        document.body.insertAdjacentHTML("beforeend", '<div class="content_div">'
-            + '<div id="app_service_catalog_tab_parts_container">'
-            + '<div class="tab-content-area tab-content-area--has-dataset-background"></div></div></div>');
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
 
         applyMainTabActiveState("app_service_catalog", {
@@ -178,5 +175,50 @@ describe("applyMainTabActiveState", () => {
         }
         expect(document.querySelector(".svg-container path").getAttribute("d"))
             .toContain("A 0 0");
+    });
+
+    test("a changed menu decision redraws the tabs, and an instant refresh does not morph", async () => {
+        localStorage.setItem("side_menu_tab_shape", "box");
+        setChosenDatasetView("app_service_catalog", "card");
+        const { applyMainTabActiveState, refreshMainTabPresentation } = await import("./main_tab_active_state.js");
+        const { syncSideMenuTabShape } = await import("./side_menu_tab_shape.js");
+        const tab = document.querySelector(".navtablinks");
+        const path = tab.querySelector("path");
+        applyMainTabActiveState("app_service_catalog");
+        while (frameCallbacks.length > 0) runQueuedFrames(5000);
+        expect(tab.dataset.tabPresentation).toBe("button-active");
+        const menu = document.getElementById("navmenu");
+        menu.setAttribute("data-side-menu-rendered", "true");
+        syncSideMenuTabShape(menu, { datasets: [{ dataset_name: "app_service_catalog",
+            presentation_picture: { background: false, cover: false } }] });
+        expect(tab.dataset.tabPresentation).toBe("tab-active");
+        while (frameCallbacks.length > 0) runQueuedFrames(5000);
+        expect(path.getAttribute("d").match(/A 7 7/g)).toHaveLength(4);
+        syncSideMenuTabShape(menu, { datasets: [{ dataset_name: "app_service_catalog",
+            presentation_picture: { background: true, cover: false } }] });
+        while (frameCallbacks.length > 0) runQueuedFrames(5000);
+        expect(tab.dataset.tabPresentation).toBe("button-active");
+        tab.classList.remove("active");
+        refreshMainTabPresentation("app_service_catalog", { instant: true });
+        expect(frameCallbacks).toHaveLength(0);
+        expect(tab.dataset.tabPresentation).toBe("button-inactive");
+    });
+    test("a decision change keeps a displayed subfolder dataset's table rows", async () => {
+        localStorage.setItem("side_menu_tab_shape", "box");
+        setChosenDatasetView("subfolder_orders", "table");
+        const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
+        const { syncSideMenuTabShape } = await import("./side_menu_tab_shape.js");
+        const tab = document.querySelector(".navtablinks");
+        tab.classList.remove("active");
+        // A dataset in a project subfolder has no menu button: nothing is active, its view is named.
+        applyMainTabActiveState("", { viewDatasetName: "subfolder_orders" });
+        expect(tab.dataset.tabPresentation).toBe("button-inactive");
+        const menu = document.getElementById("navmenu");
+        menu.setAttribute("data-side-menu-rendered", "true");
+        syncSideMenuTabShape(menu, { datasets: [{ dataset_name: "app_service_catalog",
+            presentation_picture: { background: false, cover: false } }] });
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("rounded");
+        while (frameCallbacks.length > 0) runQueuedFrames(5000);
+        expect(tab.dataset.tabPresentation).toBe("button-inactive");
     });
 });

@@ -38,6 +38,8 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"hidden"}, rows: [][]driver.Value{{false}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"snapshot"}, rows: [][]driver.Value{{[]byte(`{"registrations":[{"table_uid":11,"name":"public.app_orders","table_kind":"ordinary"}],"shapes":[{"name":"public.app_orders"}]}`)}}})
+	// The readable dataset's picture settings: a background, no cover (no appearance read).
+	pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid", "cover", "background"}, rows: [][]driver.Value{{int64(11), false, true}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"exists"}, rows: [][]driver.Value{{true}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"order"}, rows: [][]driver.Value{{`[
         {"tab_id":"app_private","sort_order":0},
@@ -50,6 +52,10 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	GetGroupedTables(response, catalogueRequest(t, 1))
 	var body struct {
 		TabOrder []map[string]interface{} `json:"tab_order"`
+		Datasets []struct {
+			Picture map[string]interface{} `json:"presentation_picture"`
+		} `json:"datasets"`
+		PicturesUnavailable bool `json:"presentation_pictures_unavailable"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
@@ -57,6 +63,10 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	expected := []map[string]interface{}{{"tab_id": "app_orders", "sort_order": float64(0)}, {"tab_id": "static:login", "sort_order": float64(1)}}
 	if response.Code != 200 || !reflect.DeepEqual(body.TabOrder, expected) {
 		t.Fatalf("catalogue tab order leaked names or positions: %s", response.Body.String())
+	}
+	if len(body.Datasets) != 1 || body.PicturesUnavailable ||
+		!reflect.DeepEqual(body.Datasets[0].Picture, map[string]interface{}{"background": true, "cover": false}) {
+		t.Fatalf("catalogue lost the readable dataset's picture settings: %s", response.Body.String())
 	}
 }
 

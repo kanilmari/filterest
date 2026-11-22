@@ -17,6 +17,7 @@ import { publishAuthLogout } from "./auth_broadcast.js";
 import { invalidateSessionGeneration } from "./session_generation_store.js";
 import { stopAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
 import { BAR_SURFACE_STORAGE_KEY } from "../bar_surface/bar_surface_experiment.js";
+import { SIDE_MENU_TAB_SHAPE_STORAGE_KEY } from "../navigation/main_tabs/side_menu_tab_shape.js";
 
 // These settings describe the browser/device, not the authenticated user or
 // the datasets they were allowed to inspect. Everything else remains subject
@@ -29,6 +30,9 @@ const LOGOUT_SAFE_LOCAL_STORAGE_KEYS = Object.freeze([
     "filterest_public_presentation_v1", // Old public cache may survive a cutover.
     "filterest_public_presentation_v2", // Public site appearance only; no user or authorization state.
     BAR_SURFACE_STORAGE_KEY, // This browser's frosted-bars choice survives sign-out (WL182).
+    // The side menu's last tab shape, used until the next catalogue decides (owner 2026-11-22). One
+    // rounded/box choice; no dataset names or rights.
+    SIDE_MENU_TAB_SHAPE_STORAGE_KEY,
 ]);
 
 export function resolvePostLogoutPath(responseUrl, currentOrigin = window.location.origin) {

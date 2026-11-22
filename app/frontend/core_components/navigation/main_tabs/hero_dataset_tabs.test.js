@@ -45,7 +45,7 @@ const publish = (snapshot) => {
 let controls;
 beforeEach(() => {
     document.body.replaceChildren();
-    document.body.removeAttribute('data-view-has-presentation-media');
+    document.body.removeAttribute('data-side-menu-tab-shape');
     document.documentElement.lang = 'fi';
     mocks.listeners.clear();mocks.unsubscribe.mockClear();mocks.open.mockReset();
     mocks.open.mockResolvedValue(undefined);
@@ -75,12 +75,12 @@ describe('hero dataset tabs', () => {
         const destinations = [home, ...buttons(control)];
         const before = destinations.map(button => getComputedStyle(button).borderRadius);
         expect(before).toEqual(['8px', '8px', '8px']);
-        document.body.setAttribute('data-view-has-presentation-media', 'true');
+        document.body.setAttribute('data-side-menu-tab-shape', 'box');
         expect(destinations.map(button => getComputedStyle(button).borderRadius)).toEqual(before);
         expect(home.getAttribute('aria-current')).toBe('page');
         expect(buttons(control)[0].getAttribute('aria-current')).toBe('page');
         expect(buttons(control).map(button => button.textContent)).toEqual(['Paikat', 'Artikkelit']);
-        document.body.setAttribute('data-view-has-presentation-media', 'false');
+        document.body.setAttribute('data-side-menu-tab-shape', 'rounded');
         expect(destinations.map(button => getComputedStyle(button).borderRadius)).toEqual(before);
     });
 

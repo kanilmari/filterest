@@ -34,7 +34,10 @@ CREATE TABLE system_db_tables (
 CREATE TABLE system_table_folders (id integer PRIMARY KEY, parent_id integer, is_current_project boolean, folder_name text, tab_order_json jsonb);
 CREATE TABLE system_user_groups (id integer, name text);
 CREATE TABLE system_column_details (table_uid integer, column_name text, data_type text, co_number integer);
-CREATE TABLE system_dataset_media (table_uid integer, media_role text, hidden boolean);
+CREATE TABLE system_dataset_media (table_uid integer, media_role text, hidden boolean, storage_key text);
+CREATE TABLE IF NOT EXISTS system_dataset_appearance (table_uid integer PRIMARY KEY, schema_version integer, tab_values jsonb, overrides jsonb, revision bigint);
+-- Side-menu picture settings: a shown background (11), an administrator-only cover (14) and a hidden cover (15).
+INSERT INTO system_dataset_media VALUES (11,'background',false,'media/11.png'), (14,'cover',false,'media/14.png'), (15,'cover',true,'media/15.png');
 CREATE TABLE system_user_group_memberships (user_id integer, group_id integer);
 CREATE TABLE system_functions (id integer, url_route_endpoint text, disabled boolean, specific_table_related boolean DEFAULT true, name text);
 CREATE TABLE system_group_table_func_rights (user_group_id integer, function_id integer, target_table_uid integer, target_schema_name text DEFAULT 'public');
@@ -168,6 +171,26 @@ func TestDatasetCataloguePostgresGuestsReadersAdminsAndEmpty(t *testing.T) {
 			}
 			if fixture.user != 99 && (strings.Contains(response.Body.String(), "hidden-orders") || strings.Contains(response.Body.String(), "private-orders")) {
 				t.Fatal("unreadable aliases leaked")
+			}
+			// Each viewer gets the picture settings of exactly the datasets they may open (2026-11-22).
+			pictures := map[string]*dtt_models.DatasetPresentationPicture{}
+			for _, entry := range body.Datasets {
+				pictures[entry.TableName] = entry.PresentationPicture
+			}
+			if fixture.user == 73 {
+				return
+			}
+			if got := pictures["app_orders"]; got == nil || !got.Background || got.Cover || got.CoverThemes != nil {
+				t.Fatalf("shown background: %+v", got)
+			}
+			if got := pictures["app_automatic"]; got == nil || got.Background || got.Cover {
+				t.Fatalf("hidden cover counted: %+v", got)
+			}
+			if got, private := pictures["app_private"], fixture.user == 99; private != (got != nil) {
+				t.Fatalf("administrator-only cover disclosed or lost: %+v", got)
+			} else if private && (!got.Cover || got.CoverThemes == nil ||
+				got.CoverThemes.Light.ImageOpacity != 1 || got.CoverThemes.Dark.ImageOpacity != 0.3) {
+				t.Fatalf("administrator cover strengths: %+v", got)
 			}
 		})
 	}

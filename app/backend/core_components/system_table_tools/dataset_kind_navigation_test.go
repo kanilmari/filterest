@@ -117,6 +117,17 @@ func (c *kindNavigationConn) QueryContext(_ context.Context, q string, args []dr
 		return rows([]string{"hidden"}, []driver.Value{c.mode == "hidden"}), nil
 	case strings.Contains(q, "FROM system_user_group_memberships"):
 		return rows([]string{"admin"}), nil
+	case strings.Contains(q, "FROM public.system_dataset_media AS media"):
+		*c.evidenceReads++
+		if len(args) != 1 {
+			c.t.Fatal("picture settings read without the proven datasets", q, args)
+		}
+		return rows([]string{"uid", "cover", "background"}, []driver.Value{int64(22), true, false}), nil
+	case strings.Contains(q, "LEFT JOIN public.system_dataset_appearance a USING(table_uid)"):
+		*c.evidenceReads++
+		// No saved appearance: the resolver's defaults (cover 1 in light, 0.3 in dark).
+		return rows([]string{"shared", "stamp", "version", "tab", "overrides", "revision"},
+			[]driver.Value{nil, "", nil, nil, nil, nil}), nil
 	case strings.Contains(q, "SELECT EXISTS"):
 		return rows([]string{"exists"}, []driver.Value{false}), nil
 	default:
@@ -162,7 +173,8 @@ func TestKindNavigationRequiresRowReadAndDegradesOnEvidenceFailure(t *testing.T)
 				t.Fatalf("navigation failed: %d %s", w.Code, w.Body.String())
 			}
 			var body struct {
-				Datasets []map[string]json.RawMessage `json:"datasets"`
+				Datasets            []map[string]json.RawMessage `json:"datasets"`
+				PicturesUnavailable bool                         `json:"presentation_pictures_unavailable"`
 			}
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
@@ -178,6 +190,35 @@ func TestKindNavigationRequiresRowReadAndDegradesOnEvidenceFailure(t *testing.T)
 			}
 			if (body.Datasets[0]["kind_capabilities"] != nil) != (mode == "read") {
 				t.Fatal("wrong disclosure", w.Body.String())
+			}
+			// Picture settings follow the same read proof as kind evidence (side-menu tab shape, 2026-11-22);
+			// a failed kind evidence read does not take them away.
+			proven := mode == "read" || mode == "query" || mode == "decode"
+			if (body.Datasets[0]["presentation_picture"] != nil) != proven {
+				t.Fatal("wrong picture disclosure", w.Body.String())
+			}
+			// A recheck that failed is not a denial: the browser must keep its menu decision.
+			if body.PicturesUnavailable != (mode == "permission failure") {
+				t.Fatal("picture settings availability", w.Body.String())
+			}
+			if mode == "read" {
+				var picture struct {
+					Cover       bool `json:"cover"`
+					CoverThemes struct {
+						Light struct {
+							ImageOpacity float64 `json:"image_opacity"`
+						} `json:"light"`
+						Dark struct {
+							ImageOpacity float64 `json:"image_opacity"`
+						} `json:"dark"`
+					} `json:"cover_themes"`
+				}
+				if err := json.Unmarshal(body.Datasets[0]["presentation_picture"], &picture); err != nil {
+					t.Fatal(err)
+				}
+				if !picture.Cover || picture.CoverThemes.Light.ImageOpacity != 1 || picture.CoverThemes.Dark.ImageOpacity != 0.3 {
+					t.Fatal("cover strengths do not follow the appearance resolver", w.Body.String())
+				}
 			}
 			if mode == "write only" || mode == "disabled" || mode == "hidden" || mode == "permission failure" {
 				if count != 0 {

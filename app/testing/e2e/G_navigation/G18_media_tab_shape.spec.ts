@@ -1,8 +1,8 @@
 // G18_media_tab_shape.spec.ts
-// Proves top-row buttons stay rounded while only the side menu follows media.
-// GET-only fixtures shape Home media and the two existing datasets' tab metadata.
-// Default signed-in storageState; only read-only permission POSTs pass the write guard.
-import { test, expect, type Locator, type Page } from '@playwright/test';
+// Proves top-row buttons stay rounded while the side menu keeps one shape decided by its datasets' pictures.
+// GET-only fixtures shape Home media, the two existing datasets' pictures and their catalogue settings.
+// Default signed-in storageState, or none for the visitor cases; only read-only permission POSTs pass the write guard.
+import { test, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { installMediaTabFixture, openMediaTabView, useDatasetPicture, MEDIA_DATASET, PLAIN_DATASET } from '../helpers/media-tab-fixture';
 import { ensureNavbarVisible } from '../helpers/navbar';
 
@@ -99,12 +99,13 @@ async function expectButtons(page: Page, root: string, media: boolean, measureme
   }
 }
 
-async function expectMenuShapes(page: Page, view: 'home' | 'dataset', media: boolean, width: number, measurements: unknown[] = []) {
+/** The side menu's one shape (side_menu_tab_shape.js, owner 2026-11-22); narrow and overlay menus keep rows. */
+async function expectMenuShapes(page: Page, boxLike: boolean, width: number, measurements: unknown[] = []) {
   await ensureNavbarVisible(page);
+  await expect(page.locator('body')).toHaveAttribute('data-side-menu-tab-shape', boxLike ? 'box' : 'rounded');
   const tabs = page.locator('#navmenu .navtablinks');
-  expect(await tabs.count()).toBeGreaterThanOrEqual(2);
-  // Only a docked dataset without presentation media uses connector curves.
-  const rectangular = view === 'home' || media || width < 1850;
+  expect(await tabs.count()).toBeGreaterThanOrEqual(1);
+  const rectangular = boxLike || width < 1850;
   for (const tab of await tabs.all()) {
     await expect(tab).toHaveAttribute('data-tab-presentation', rectangular ? /^button-/ : /^tab-/);
     const paths = tab.locator('.navtab-shape-path');
@@ -119,15 +120,42 @@ async function expectMenuShapes(page: Page, view: 'home' | 'dataset', media: boo
       const contrast = await labelContrast(tab);
       expect(contrast.alpha).toBe(255);
       expect(contrast.ratio, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
-      measurements.push({ menu: await tab.getAttribute('data-id'), state, media, ...contrast });
+      measurements.push({ menu: await tab.getAttribute('data-id'), state, boxLike, ...contrast });
     }
     await page.mouse.move(0, 0);
   }
 }
 
+/** Records every change between rounded tabs and button rows in the side menu, from the first paint on. */
+async function trackMenuShapeFamilies(page: Page) {
+  await page.addInitScript(() => {
+    const families: string[] = [];
+    (window as unknown as { __sideMenuFamilies: string[] }).__sideMenuFamilies = families;
+    new MutationObserver(records => {
+      for (const { target } of records) {
+        const tab = target as HTMLElement;
+        if (!tab.matches?.('#navmenu .navtablinks')) continue;
+        const family = String(tab.dataset.tabPresentation || '').split('-')[0];
+        if (family && families[families.length - 1] !== family) families.push(family);
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-tab-presentation'] });
+  });
+}
+const menuShapeFamilies = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __sideMenuFamilies: string[] }).__sideMenuFamilies);
+
+async function saveShot(page: Page, info: TestInfo, name: string) {
+  // Saved before the shape checks, so a failing run still shows the menu it drew.
+  await ensureNavbarVisible(page);
+  const shot = info.outputPath(`${name}.png`);
+  await page.screenshot({ path: shot });
+  await info.attach(name, { path: shot, contentType: 'image/png' });
+}
+
 for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const) {
-  test(`rounded top row, media-shaped side menu and label contrast at ${width}px in ${theme}`, async ({ page, context }, info) => {
+  test(`rounded top row, one side-menu shape and label contrast at ${width}px in ${theme}`, async ({ page, context }, info) => {
     test.setTimeout(120_000);
+    // The media dataset's background shows, so the whole side menu is box-like on every page.
     const policy = await installMediaTabFixture(page, context, width, theme);
     const measurements: unknown[] = [];
     try {
@@ -136,25 +164,23 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
         await openMediaTabView(page, home === 'video' ? 'home_video' : 'home');
         await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
         const media = home === 'video' || home === 'image';
-        await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', String(media));
         await expectButtons(page, '#front_page_container', media, measurements);
-        await expectMenuShapes(page, 'home', media, width, measurements);
+        await expectMenuShapes(page, true, width, measurements);
       }
       for (const view of ['dataset_media', 'dataset_plain'] as const) {
         await openMediaTabView(page, view);
         const media = view === 'dataset_media', dataset = media ? MEDIA_DATASET : PLAIN_DATASET;
-        await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', String(media));
         const root = `#${dataset}_tab_parts_container`;
         // K529: a phone's dataset view has no top-row buttons: Main hides the hero row and Home is off the bar.
         if (width <= 700) await expect(topRowButtons(page, root)).toHaveCount(0);
         else await expectButtons(page, root, media, measurements);
-        await expectMenuShapes(page, 'dataset', media, width, measurements);
+        await expectMenuShapes(page, true, width, measurements);
       }
-      // These in-page switches catch stale flags that cold loads cannot expose.
+      // These in-page switches catch a shape that follows the page instead of the menu.
       policy.home = 'video';
       await page.locator('#navbarFrontPage a').click();
       await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
-      await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', 'true');
+      await expect(page.locator('body')).toHaveAttribute('data-side-menu-tab-shape', 'box');
       // Menu Home is an inside click: close its drawer through the real control
       // at both widths, then wait until the destination is no longer covered.
       await page.locator('#hideMenuButton').click();
@@ -162,59 +188,80 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
       await expect(page.locator('#navbar')).not.toBeInViewport();
       await expect(page.locator('#hideMenuButton')).toBeHidden();
       await page.locator(`#front_page_container [data-dataset="${PLAIN_DATASET}"]`).click();
-      await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', 'false');
+      await expect(page.locator('body')).toHaveAttribute('data-side-menu-tab-shape', 'box');
       await ensureNavbarVisible(page);
       await page.locator(`#navmenu [data-id="${MEDIA_DATASET}"]`).click();
-      await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', 'true');
+      await expect(page.locator('body')).toHaveAttribute('data-side-menu-tab-shape', 'box');
     } finally {
       await info.attach('label-contrast', { body: JSON.stringify({ width, theme, measurements, blocked: policy.blocked }, null, 2), contentType: 'application/json' });
     }
   });
 }
 
-test('docked Home keeps rectangular side-menu buttons while dataset connectors follow media', async ({ page, context }) => {
-  test.setTimeout(90_000);
-  const policy = await installMediaTabFixture(page, context, 1920, 'light');
-  for (const home of ['video', 'none'] as const) {
-    policy.home = home;
-    await openMediaTabView(page, home === 'video' ? 'home_video' : 'home');
-    await expectMenuShapes(page, 'home', home === 'video', 1920);
-  }
-  await test.step('Media shows a rounded top row and rectangular side-menu tabs on the same page', async () => {
-    await openMediaTabView(page, 'dataset_media');
-    await expectButtons(page, `#${MEDIA_DATASET}_tab_parts_container`, true, []);
-    await expectMenuShapes(page, 'dataset', true, 1920);
-  });
-  await openMediaTabView(page, 'dataset_plain');
-  await expectMenuShapes(page, 'dataset', false, 1920);
-});
-
-// Owner rule (2026-11-21): a uniform background gives the side menu rounded tabs and a shown picture
-// box-like buttons. A picture that is set but hidden, by the media switch or by both theme switches
-// of a cover (opacity 0, as on fintravel.fi in 9.6.14), leaves a uniform background.
-for (const picture of ['background_hidden', 'cover_theme_hidden', 'cover', 'background'] as const) {
-  test(`docked side menu over a ${picture.replace('_', ' ')} picture follows what the view draws`, async ({ page, context }, info) => {
+// Owner rule (2026-11-22): rounded side-menu tabs only when none of the viewer's menu datasets shows a picture in
+// the light or the dark theme; one such dataset makes every tab box-like, in every theme, on every page, Home
+// included (Home's own picture or video does not count). A picture that is set but hidden does not count.
+const MENU_CASES = [
+  { picture: 'cover_dark_only', boxLike: true },
+  { picture: 'background_hidden', boxLike: false },
+  { picture: 'cover_theme_hidden', boxLike: false },
+] as const;
+for (const { picture, boxLike } of MENU_CASES) for (const theme of ['light', 'dark'] as const) {
+  test(`administrator's side menu over a ${picture.replaceAll('_', ' ')} picture is ${boxLike ? 'box-like' : 'rounded'} in ${theme}, Home included`, async ({ page, context }, info) => {
     test.setTimeout(90_000);
-    const policy = await installMediaTabFixture(page, context, 1920, 'dark');
+    const policy = await installMediaTabFixture(page, context, 1920, theme);
     await useDatasetPicture(page, policy, picture);
+    await trackMenuShapeFamilies(page);
     await openMediaTabView(page, 'dataset_picture');
-    const parts = page.locator(`#${MEDIA_DATASET}_tab_parts_container`);
-    const content = parts.locator('.tab-content-area');
-    const hero = parts.locator('.filterbar-inline-hero');
-    if (picture === 'background') await expect(content).toHaveClass(/tab-content-area--has-dataset-background/);
-    else await expect(content).not.toHaveClass(/tab-content-area--has-dataset-background/);
-    if (picture.startsWith('cover')) {
-      await expect(hero).toHaveClass(/filterbar-inline-hero--has-cover/);
-      await expect.poll(() => hero.evaluate(element => getComputedStyle(element, '::before').opacity))
-        .toBe(picture === 'cover' ? '1' : '0');
-    }
-    await ensureNavbarVisible(page);
-    // Saved before the shape checks, so a failing run still shows the menu it drew.
-    const shot = info.outputPath(`side-menu-${picture}.png`);
-    await page.screenshot({ path: shot });
-    await info.attach(`side-menu-${picture}`, { path: shot, contentType: 'image/png' });
-    const shown = picture === 'cover' || picture === 'background';
-    await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', String(shown));
-    await expectMenuShapes(page, 'dataset', shown, 1920);
+    await saveShot(page, info, `admin-${picture}-${theme}-dataset`);
+    await expectMenuShapes(page, boxLike, 1920);
+    // In-page navigation to the plain dataset, to Home with its video and back never changes the shape.
+    await page.locator(`#navmenu [data-id="${PLAIN_DATASET}"]`).click();
+    await expect(page.locator(`#${PLAIN_DATASET}_tab_parts_container`)).toBeVisible();
+    await expectMenuShapes(page, boxLike, 1920);
+    policy.home = 'video';
+    await page.locator('#navbarFrontPage a').click();
+    await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
+    await saveShot(page, info, `admin-${picture}-${theme}-home`);
+    await expectMenuShapes(page, boxLike, 1920);
+    await page.locator(`#navmenu [data-id="${MEDIA_DATASET}"]`).click();
+    await expect(page.locator(`#${MEDIA_DATASET}_tab_parts_container`)).toBeVisible();
+    await expectMenuShapes(page, boxLike, 1920);
+    expect(await menuShapeFamilies(page)).toEqual([boxLike ? 'button' : 'tab']);
   });
 }
+
+test.describe('visitor', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  // Owner 2026-11-22: the visitor's search hero takes the cover from the results, as the background does; the
+  // menu counts that cover, so the visitor sees the picture that makes the tabs box-like.
+  test("visitor sees the dataset cover the menu counts, from the results alone", async ({ page, context }, info) => {
+    test.setTimeout(90_000);
+    const policy = await installMediaTabFixture(page, context, 1920, 'dark', { visitor: true });
+    policy.dataset = 'cover_dark_only';
+    await openMediaTabView(page, 'dataset_picture');
+    const hero = page.locator(`#${MEDIA_DATASET}_tab_parts_container .filterbar-inline-hero`);
+    await expect(hero).toHaveClass(/filterbar-inline-hero--has-cover/);
+    await expect.poll(() => hero.evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('0.3');
+    await saveShot(page, info, 'visitor-cover-dark');
+    await expectMenuShapes(page, true, 1920);
+  });
+  // The set is each viewer's own visible tabs: a pictured dataset the visitor may not read does not count.
+  for (const { readable, boxLike } of [{ readable: true, boxLike: true }, { readable: false, boxLike: false }]) {
+    test(`visitor's side menu ${readable ? 'with' : 'without'} the dataset whose cover shows in the dark theme is ${boxLike ? 'box-like' : 'rounded'}`, async ({ page, context }, info) => {
+      test.setTimeout(90_000);
+      const policy = await installMediaTabFixture(page, context, 1920, 'light', { visitor: true });
+      policy.dataset = 'cover_dark_only';
+      if (!readable) policy.unreadable = [MEDIA_DATASET];
+      await trackMenuShapeFamilies(page);
+      await openMediaTabView(page, 'dataset_plain');
+      await expect(page.locator(`#navmenu [data-id="${MEDIA_DATASET}"]`)).toHaveCount(readable ? 1 : 0);
+      await saveShot(page, info, `visitor-${readable ? 'with' : 'without'}-picture-dataset`);
+      await expectMenuShapes(page, boxLike, 1920);
+      await page.locator('#navbarFrontPage a').click();
+      await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
+      await expectMenuShapes(page, boxLike, 1920);
+      expect(await menuShapeFamilies(page)).toEqual([boxLike ? 'button' : 'tab']);
+    });
+  }
+});

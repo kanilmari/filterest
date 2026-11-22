@@ -201,6 +201,33 @@ describe('generate_table', () => {
             expect(content.style.getPropertyValue('--dataset-background-image')).toContain('new.webp');
         }
     });
+    // A visitor has no administrator tree: the results' cover reaches the search hero (owner 2026-11-22).
+    test.each([
+        [null, { dataset_cover_image_path: '/storage/104/dataset_media/cover/original/old.webp', dataset_cover_image_hidden: false }],
+        [{ cover_image_path: '/storage/104/dataset_media/cover/original/new.webp', cover_image_hidden: false },
+            { dataset_cover_image_path: '/storage/104/dataset_media/cover/original/new.webp', dataset_cover_image_hidden: false }],
+        [{ cover_image_path: '/storage/104/dataset_media/cover/original/new.webp', cover_image_hidden: true },
+            { dataset_cover_image_path: '/storage/104/dataset_media/cover/original/new.webp', dataset_cover_image_hidden: true }],
+        [{ cover_image_path: '' }, { dataset_cover_image_path: '', dataset_cover_image_hidden: false }],
+    ])('cover response %j owns the search hero cover over the cached tree', async (presentation, expected) => {
+        setChosenDatasetView('demo_dataset', 'card');
+        getAllSpecsMock.mockReturnValue({ demo_dataset: {
+            dataset_cover_image_path: '/storage/104/dataset_media/cover/original/old.webp',
+            dataset_cover_image_hidden: false,
+        } });
+        const { generate_table } = await import('./dataset_view_printer.js');
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, null, presentation);
+        expect(createFilterBarMock.mock.calls[0][7].metadata).toEqual(expect.objectContaining(expected));
+    });
+    test('a visitor without an administrator tree gets the cover from the results', async () => {
+        setChosenDatasetView('demo_dataset', 'card');
+        getAllSpecsMock.mockReturnValue({});
+        const { generate_table } = await import('./dataset_view_printer.js');
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, null,
+            { cover_image_path: '/storage/104/dataset_media/cover/original/cover.webp', cover_image_hidden: false });
+        expect(createFilterBarMock.mock.calls[0][7].metadata).toEqual(expect.objectContaining({
+            dataset_cover_image_path: '/storage/104/dataset_media/cover/original/cover.webp', dataset_cover_image_hidden: false }));
+    });
     test.each([null, {card_style_variant: null}, {card_style_variant: 'standard'}])('retains style inheritance or an explicit override from metadata %j', async tableMeta => {
         setChosenDatasetView('demo_dataset', 'card');
         const { generate_table } = await import('./dataset_view_printer.js');

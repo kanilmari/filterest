@@ -10,7 +10,7 @@ import { showErrorToast, showInfoToast, showSuccessToast, showWarningToast } fro
 import { getTranslationForKey, translatePage } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getAllSpecs, setAllSpecs } from '../state_stores/table_specs_reader.js';
-import { refreshMainTabPresentation } from '../navigation/main_tabs/main_tab_active_state.js';
+import { refreshDatasetCatalogue } from '../navigation/nav_engine/dataset_access_registry.js';
 import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from '../table_views/storage_media_urls.js';
 import { resolveVisibleDatasetMediaPath } from '../table_views/dataset_media_visibility_resolver.js';
 import { syncCachedTreeDatasetMedia } from '../vanilla_tree/van_tr_components/admin_tree_metadata_reader.js';
@@ -339,7 +339,9 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
             backgroundImageHidden
         );
     }
-    refreshMainTabPresentation();
+    // The side menu's tab shape follows every menu dataset's saved pictures (side_menu_tab_shape.js); the
+    // refreshed catalogue carries this save's settings.
+    void refreshDatasetCatalogue({ force: true });
 }
 
 function setOptionalSpecPath(spec, key, path) {

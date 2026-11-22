@@ -207,10 +207,7 @@ describe('dataset_header_config_view', () => {
         contentArea.className = 'tab-content-area';
         contentArea.dataset.tableName = 'orders';
         tabParts.appendChild(contentArea);
-        const tabButton = document.createElement('button');
-        tabButton.className = 'navtablinks';
-        tabButton.dataset.id = 'orders';
-        document.body.append(hero, tabParts, tabButton);
+        document.body.append(hero, tabParts);
 
         await generate_dataset_header_config_view(container);
 
@@ -246,8 +243,9 @@ describe('dataset_header_config_view', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('/cover/1000/new-cover.webp');
         expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
         expect(contentArea.style.getPropertyValue('--dataset-background-image')).toContain('/background/2160/new-background.webp');
-        // The side menu reads the drawn picture above (view_presentation_media_resolver.js), not a tab copy.
-        expect(tabButton.dataset.hasPresentationMedia).toBeUndefined();
+        // The side menu's tab shape follows every menu dataset's saved pictures: the save refreshes the catalogue
+        // that carries them (side_menu_tab_shape.js).
+        expect(endpointRouterMock).toHaveBeenCalledWith('fetchContentTables', expect.objectContaining({ suppressAuthRedirect: true }));
         expect(document.querySelector('meta[name="project-logo-path"]')).toBeNull();
     });
 

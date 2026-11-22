@@ -18,6 +18,7 @@ import {
     primeMultipleDatasetPermissions,
 } from "../../route_permission_checker.js";
 import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
+import { resetSideMenuTabShapeForTests } from "./side_menu_tab_shape.js";
 
 export function setViewportWidth(width) {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
@@ -32,8 +33,8 @@ export function resetMainTabPrinterTestState() {
             <div id="tabs_container"></div>
             <div id="navmenu" class="navtabs"></div>
         `;
-    // Each test starts without an earlier view's picture decision on the page (view_presentation_media_resolver.js).
-    document.body.removeAttribute("data-view-has-presentation-media");
+    // Each test starts without an earlier test's side-menu shape decision (side_menu_tab_shape.js): a first visit.
+    resetSideMenuTabShapeForTests();
     vi.mocked(getButtonState).mockReturnValue("logout");
     vi.mocked(endpoint_router).mockClear();
     vi.mocked(requestLoginRedirect).mockClear();

@@ -26,6 +26,36 @@ type Table struct {
 	IsInCurrentProject         bool                        `json:"is_in_current_project"`
 	IsTopLevelInCurrentProject bool                        `json:"is_top_level_in_current_project"`
 	IconKey                    *string                     `json:"icon_key,omitempty"`
+	// Only for a dataset the viewer may open (the get-results recheck in GetGroupedTables).
+	PresentationPicture *DatasetPresentationPicture `json:"presentation_picture,omitempty"`
+}
+
+// DatasetPresentationPicture tells the side menu, before the dataset is opened, which pictures the dataset
+// is set to show (owner 2026-11-22: one shown picture makes every side-menu tab box-like). The server only
+// reads the settings; the browser decides (navigation/main_tabs/side_menu_tab_shape.js).
+type DatasetPresentationPicture struct {
+	// Set with its media switch on. The background has no per-theme strength.
+	Background bool `json:"background"`
+	Cover      bool `json:"cover"`
+	// The cover's effective strength per theme; absent when the cover is off or its appearance was unreadable.
+	CoverThemes *DatasetCoverPictureThemes `json:"cover_themes,omitempty"`
+}
+
+// DatasetCoverPictureThemes holds the cover strength in the light and dark theme.
+type DatasetCoverPictureThemes struct {
+	Light DatasetCoverPictureStrength `json:"light"`
+	Dark  DatasetCoverPictureStrength `json:"dark"`
+}
+
+// DatasetCoverPictureStrength is the part of a theme's effective cover appearance that decides whether the
+// cover is drawn at all: its opacity, its wash and its oval mask.
+type DatasetCoverPictureStrength struct {
+	ImageOpacity   float64 `json:"image_opacity"`
+	OverlayOpacity float64 `json:"overlay_opacity"`
+	OvalEnabled    bool    `json:"oval_enabled"`
+	CenterOpacity  float64 `json:"center_opacity"`
+	MidOpacity     float64 `json:"mid_opacity"`
+	EdgeOpacity    float64 `json:"edge_opacity"`
 }
 
 type GroupedTables struct {

@@ -27,6 +27,7 @@ import { asksBrowserToOpenElsewhere, bindLiveLinkAddress, withAddressLanguage } 
 import { DATASET_PREFIX, useStorageParams, useUrlParams } from "../nav_engine/query_params.js";
 import { buildDatasetPath } from "../nav_engine/dataset_aliases.js";
 import { fetchProjectTabs, acceptMainDatasetTabs, AUTH_ACTION_TAB_IDS } from "./main_dataset_tabs.js";
+import { SIDE_MENU_RENDERED_ATTRIBUTE, syncSideMenuTabShape } from "./side_menu_tab_shape.js";
 import { renderNavbarAllArticlesLink } from "../navbar/navbar_all_articles_link.js";
 import { getTabIconPath } from "./tab_icon_library.js";
 import { buildTabOutlinePresentation } from "./tab_presentation_builder.js";
@@ -129,6 +130,8 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
     }
 
     container.replaceChildren();
+    // Until this rebuild has rendered its buttons they do not decide the menu's tab shape.
+    container.setAttribute(SIDE_MENU_RENDERED_ATTRIBUTE, "false");
     // New SVG buttons start rectangular. A preloaded admin view can return
     // before openNavTab recomputes the shape, so clear the old rounded overlap
     // along with its buttons. Normal dataset activation restores its own offset.
@@ -237,7 +240,10 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
                 datasetPermissionFallbackPromise.then(() =>
                     hasDatasetPermission(tabData.route, tabData.dataset)
                 ).then((allowed) => {
-                    if (allowed) tabButton.style.display = '';
+                    if (!allowed) return;
+                    tabButton.style.display = '';
+                    // A tab revealed late joins the set that decides the menu's shape.
+                    syncSideMenuTabShape();
                 });
             }
         } else if (tabData.route) {
@@ -252,12 +258,19 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         tabs: allTabs.filter((tabData) => tabData.dataset && canReadDatasetFromRegistry(tabData.dataset) !== false),
     });
 
+    const opensHome = isSeparateFrontPageEnabled() && window.location.pathname === '/'
+        && (isLoggedIn || localStorage.getItem('login_required_for_browse') !== 'true');
+    // The rendered buttons decide the menu's shape and take it at once, without a morph, for the view about to
+    // open: an already shown Home opens without another refresh, and a table view keeps its button rows.
+    container.setAttribute(SIDE_MENU_RENDERED_ATTRIBUTE, "true");
+    syncSideMenuTabShape(container);
+    refreshMainTabPresentation(opensHome ? "" : getSelectedDataset() || "", { instant: true });
+
     if (!isLoggedIn && hasExplicitAuthShellEntry()) {
         return;
     }
 
-    if (isSeparateFrontPageEnabled() && window.location.pathname === '/'
-        && (isLoggedIn || localStorage.getItem('login_required_for_browse') !== 'true')) {
+    if (opensHome) {
         await openFrontPage({ replace: true });
         return;
     }
