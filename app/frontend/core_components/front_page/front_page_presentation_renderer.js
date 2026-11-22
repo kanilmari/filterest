@@ -39,12 +39,10 @@ export function applyHomePresentation(page, scroller, stage, hero, presentation)
 export function applyHomeSurfacePresentation(container, presentation) {
     const value = readHomePresentation(presentation);
     container.style.setProperty('--home-box-heading-gap', `${value.box_heading_gap_px}px`);
-    // The original spacing follows the reader's root font size until the owner changes it.
-    if (value.box_row_gap_px === HOME_PRESENTATION_DEFINITION.default.box_row_gap_px) {
-        container.style.removeProperty('--home-box-row-gap');
-    } else {
-        container.style.setProperty('--home-box-row-gap', `${value.box_row_gap_px}px`);
-    }
+    // The slider's minimum keeps the original spacing, which follows the reader's root font size.
+    const rowGap = value.box_row_gap_px;
+    container.style.setProperty('--home-box-row-gap',
+        rowGap === HOME_PRESENTATION_DEFINITION.box_row_gap_px.min ? '0.6rem' : `${rowGap}px`);
     for (const theme of ['light', 'dark']) for (const property of ['wash', 'opacity']) {
         container.style.setProperty(`--home-${theme}-${property}`, String(value[`${theme}_${property}`] / 100));
     }

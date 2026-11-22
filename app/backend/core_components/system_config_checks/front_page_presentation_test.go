@@ -17,17 +17,20 @@ func TestHomePresentationGenericWriteValidation(t *testing.T) {
 			"key": "front_page_presentation", "value_type": kind, "json_value": value,
 		})
 	}
+	defaultRowGap := presentation.Rules().Default.BoxRowGapPx
 	for _, tc := range []struct {
 		name, preset, phoneAlignment  string
 		phoneSize, gap, storedVersion int
 		rowGap                        float64
 	}{
-		{"default", "default", "inherit", 15, 8, 2, 9.6},
-		{"styled text", "serif_story_v1", "inherit", 15, 8, 3, 9.6},
-		{"phone alignment", "default", "center", 15, 8, 4, 9.6},
-		{"phone size", "default", "center", 16, 8, 5, 9.6},
-		{"heading gap", "default", "center", 16, 21, 6, 9.6},
+		{"default", "default", "inherit", 15, 8, 2, defaultRowGap},
+		{"styled text", "serif_story_v1", "inherit", 15, 8, 3, defaultRowGap},
+		{"phone alignment", "default", "center", 15, 8, 4, defaultRowGap},
+		{"phone size", "default", "center", 16, 8, 5, defaultRowGap},
+		{"heading gap", "default", "center", 16, 21, 6, defaultRowGap},
 		{"row gap", "default", "inherit", 15, 8, 7, 19.3},
+		// The slider's minimum is the original font-relative spacing, no longer the default.
+		{"original row spacing", "default", "inherit", 15, 8, 7, 9.6},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			value := presentation.Rules().Default

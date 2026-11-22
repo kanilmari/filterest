@@ -231,7 +231,9 @@ func TestHomeRowGapSaveAndRestore(t *testing.T) {
 	value.BoxHeadingGapPx = 21 // The previous version's custom heading gap must survive.
 	revision := "none"
 	var original []byte
-	for _, gap := range []float64{9.6, 9.7, 30, 9.6} {
+	defaultGap := value.BoxRowGapPx
+	// The default drops the field; the original 9.6 spacing is now a setting of its own.
+	for _, gap := range []float64{defaultGap, 9.6, 9.7, 30, defaultGap} {
 		value.BoxRowGapPx = gap
 		request, err := json.Marshal(map[string]any{"presentation": value, "version": revision})
 		if err != nil {
@@ -255,7 +257,7 @@ func TestHomeRowGapSaveAndRestore(t *testing.T) {
 		if err := json.Unmarshal(state.raw, &fields); err != nil {
 			t.Fatal(err)
 		}
-		if gap == 9.6 {
+		if gap == defaultGap {
 			if _, present := fields["box_row_gap_px"]; present || fields["schema_version"] != float64(6) {
 				t.Fatal(string(state.raw))
 			}

@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Home's dataset boxes space their rows 23 px apart by default, instead of 0.6 rem (9.6 px at the usual font size). A site that has not chosen its own **Space between rows in a box** gets the new spacing; a site that has keeps its own until it saves 23 px. The slider now moves in whole pixels; a saved value with a fraction stays as it is until it is changed. Its lowest position still restores the original spacing, which follows the reader's font size.
+
 ## [9.6.15] - 2026-11-21
 
 - Ordinary Docker installations can connect to the existing site assistant through its Unix socket and dedicated uploads directory. The connection is optional (WL99).

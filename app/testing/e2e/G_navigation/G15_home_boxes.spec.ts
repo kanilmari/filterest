@@ -13,8 +13,9 @@ test.afterEach(async ({ page, context }) => {
   await context.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
-// A v6 presentation has no row-gap override; a saved pixel setting is inherited by both Home surfaces.
-test('Home keeps two rows 0.6rem apart at a 60px reader font unless a pixel gap is configured', async ({ page }) => {
+// Without a written gap the 23px default applies above the original 0.6rem floor, which stops at 30px;
+// the slider's minimum writes 0.6rem itself, and a saved pixel setting is inherited by both Home surfaces.
+test('Home rows are 23px apart by default, at least 0.6rem up to 30px, and follow a written gap', async ({ page }) => {
   const group = '<section class="supplemental-dataset-group"><ul><li>First</li><li>Second</li></ul></section>';
   await page.setContent(`<style>html { font-size: 60px }</style>
     <main class="front-page-blocks">${group}</main><aside class="front-page-search-sheet__slot">${group}</aside>`);
@@ -24,9 +25,16 @@ test('Home keeps two rows 0.6rem apart at a 60px reader font unless a pixel gap 
     const [first, second] = element.querySelectorAll('li');
     return second.getBoundingClientRect().top - first.getBoundingClientRect().bottom;
   }));
+  expect(await gaps()).toEqual([30, 30]);
+  await page.locator('body').evaluate(body => body.style.setProperty('--home-box-row-gap', '0.6rem'));
   expect(await gaps()).toEqual([36, 36]);
   await page.locator('body').evaluate(body => body.style.setProperty('--home-box-row-gap', '30px'));
   expect(await gaps()).toEqual([30, 30]);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '16px';
+    document.body.style.removeProperty('--home-box-row-gap');
+  });
+  expect(await gaps()).toEqual([23, 23]);
 });
 
 // The article rail is hidden at 390px and compact at 1920px (cards.css).
@@ -241,6 +249,60 @@ async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number,
   await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
   return writes;
 }
+
+// The public API fills rows without their own spacing with the 23px default; the slider's
+// minimum is the original 0.6rem (9.6px here); a saved value such as 23.2px stays its own.
+for (const width of [1440, 390]) for (const [label, gap, expected] of [
+  ['default', presentationDefinition.default.box_row_gap_px, 23], ['original', 9.6, 9.6], ['saved', 23.2, 23.2],
+] as const) {
+  test(`Home box rows are ${expected}px apart at ${width}px (${label})`, async ({ page }) => {
+    const presentation = { ...presentationDefinition.default, box_row_gap_px: gap };
+    const writes = await openHomeBoxes(page, 'light', width, 'center-left', { presentation, heading: 'Etusivu', accent: '' });
+    const groups = page.locator('.front-page-blocks .supplemental-dataset-group');
+    await expect(groups).toHaveCount(datasets.length);
+    await expect(groups.first().locator(':scope > ul > li')).toHaveCount(3);
+    const measured = await groups.evaluateAll(elements => elements.map(element => {
+      const rows = [...element.querySelectorAll(':scope > ul > li')];
+      return { heading: getComputedStyle(element.querySelector(':scope > h2')!).marginBlockEnd,
+        gaps: rows.slice(1).map((row, index) => row.getBoundingClientRect().top - rows[index].getBoundingClientRect().bottom) };
+    }));
+    for (const { heading, gaps } of measured) {
+      // The heading gap is a separate setting and keeps its 8px default.
+      expect(heading).toBe('8px');
+      expect(gaps).toHaveLength(2);
+      for (const value of gaps) expect(value).toBeCloseTo(expected, 1);
+    }
+    expect(writes).toEqual([]);
+  });
+}
+
+// The palette's row slider moves in whole pixels; a saved 23.2px keeps its exact label until the first move.
+// Preview only: openHomeBoxes aborts every Home write.
+test('the Home palette shows a saved 23.2px row gap and its first move previews a whole pixel', async ({ page }) => {
+  const presentation = { ...presentationDefinition.default, box_row_gap_px: 23.2 };
+  const writes = await openHomeBoxes(page, 'light', 1440, 'center-left', { presentation, heading: 'Etusivu', accent: '' });
+  await page.getByTestId('home-palette-button').click();
+  const slider = page.getByTestId('home-palette-box-row-gap');
+  const label = page.getByTestId('home-palette-box-row-gap-value');
+  await expect(slider).toHaveAttribute('step', '1');
+  await expect(slider).toHaveValue('23');
+  await expect(label).toHaveText('23.2px');
+  await expect(slider).toHaveAttribute('aria-valuetext', '23.2px');
+  await slider.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(slider).toHaveValue('24');
+  await expect(label).toHaveText('24px');
+  const gap = () => page.locator('.front-page-blocks .supplemental-dataset-group').first().evaluate(element => {
+    const [first, second] = element.querySelectorAll(':scope > ul > li');
+    return second.getBoundingClientRect().top - first.getBoundingClientRect().bottom;
+  });
+  await expect.poll(gap).toBeCloseTo(24, 1);
+  await page.keyboard.press('Home');
+  await expect(slider).toHaveValue('9');
+  await expect(label).toHaveText('9.6px');
+  await expect.poll(gap).toBeCloseTo(9.6, 1);
+  expect(writes).toEqual([]);
+});
 
 // One response fixture per case; moving the saved anchor only changes subsequent GETs.
 for (const width of [1440, 768, 390]) for (const [label, heading, accent] of [

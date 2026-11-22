@@ -72,29 +72,36 @@ test('row spacing previews, saves and resets independently from heading spacing 
     render.mockImplementation(value => applyHomeSurfacePresentation(container, value));
     container.style.setProperty('--home-box-row-gap', '30px');
     applyHomeSurfacePresentation(container, old);
-    expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('');
+    // A row saved before 23 px became the default has no gap of its own and follows the new default.
+    expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('23px');
     const rowGap = get('box-row-gap');
     try {
-        expect([rowGap.min, rowGap.max, rowGap.step, rowGap.value]).toEqual(['9.6', '30', '0.1', '9.6']);
+        // Whole pixels from the integer below the original 9.6px, which the lowest position restores.
+        expect([rowGap.min, rowGap.max, rowGap.step, rowGap.value]).toEqual(['9', '30', '1', '23']);
         for (const [lang, label] of [['fi', 'Laatikon rivien väli'], ['en', 'Space between rows in a box']]) {
             document.documentElement.lang = lang;
             await vi.waitFor(() => expect(rowGap.getAttribute('aria-label')).toBe(label));
         }
-        for (const px of [9.7, 30]) {
+        for (const px of [10, 30]) {
             edit(rowGap, px);
             expect(get('box-row-gap-value').value).toContain(String(px));
             expect(container.style.getPropertyValue('--home-box-row-gap')).toBe(String(px) + 'px');
             expect(container.style.getPropertyValue('--home-box-heading-gap')).toBe('21px');
         }
         get('reset').click();
-        expect(rowGap.value).toBe('9.6');
-        expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('');
+        expect(rowGap.value).toBe('23');
+        expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('23px');
+        // The slider's bottom is still the original spacing, which follows the reader's font.
+        edit(rowGap, 9);
+        expect(render.mock.lastCall[0].box_row_gap_px).toBe(9.6);
+        expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('0.6rem');
+        expect(get('box-row-gap-value').value).toBe('9.6px');
         edit(rowGap, 30);
         get('save').click();
         await vi.waitFor(() => expect(get('save').disabled).toBe(false));
         expect(saveRequestFn).toHaveBeenCalledWith({ version: 'v6-saved',
             presentation: { ...defaults, box_heading_gap_px: 21, box_row_gap_px: 30 } });
-        edit(rowGap, 9.6);
+        edit(rowGap, 9);
         get('reset').click();
         expect(rowGap.value).toBe('30');
     } finally {
@@ -102,23 +109,57 @@ test('row spacing previews, saves and resets independently from heading spacing 
     }
 });
 
-test.each([[20, '12', 12.1], [60, '30', 30]])('the row spacing floor follows a %ipx root up to 30px', (size, min, next) => {
+// The 23px default is shown where it renders: never below the font's floor, which stops at 30px.
+test.each([[20, '12', '23', 13], [60, '30', '30', 30]])('the row spacing floor follows a %ipx root up to 30px', (size, min, initial, next) => {
     const root = document.documentElement;
     const original = root.style.fontSize;
     try {
         root.style.fontSize = String(size) + 'px';
         const { get, render } = setup();
         const rowGap = get('box-row-gap');
-        expect([rowGap.min, rowGap.max, rowGap.value]).toEqual([min, '30', min]);
-        expect(get('box-row-gap-value').value).toBe(String(size * 0.6) + 'px');
+        expect([rowGap.min, rowGap.max, rowGap.value]).toEqual([min, '30', initial]);
+        expect(get('box-row-gap-value').value).toBe(initial + 'px');
         expect(rowGap.getAttribute('aria-valuetext')).toBe(get('box-row-gap-value').value);
         edit(rowGap, next);
         expect(render.mock.lastCall[0].box_row_gap_px).toBe(next === Number(min) ? 9.6 : next);
         edit(rowGap, min);
         expect(render.mock.lastCall[0].box_row_gap_px).toBe(9.6);
+        // The bottom names the original spacing at its real size, beyond 30px on a large font.
+        expect(get('box-row-gap-value').value).toBe(String(size * 0.6) + 'px');
+        expect(rowGap.getAttribute('aria-valuetext')).toBe(get('box-row-gap-value').value);
     } finally {
         root.style.fontSize = original;
     }
+});
+
+// A saved fractional gap rests on the nearest whole pixel with its exact label; the first move
+// stores a whole pixel, and resetting the preview brings the saved 23.2px back.
+test('a saved 23.2px row gap shows exactly and the first move stores a whole pixel', async () => {
+    const saved = { ...defaults, box_heading_gap_px: 21, box_row_gap_px: 23.2 };
+    const { get, render, saveRequestFn } = setup({ presentation: saved, presentation_version: 'fractional' });
+    const container = document.createElement('div');
+    render.mockImplementation(value => applyHomeSurfacePresentation(container, value));
+    const rowGap = get('box-row-gap');
+    const label = () => get('box-row-gap-value').value;
+    expect([rowGap.step, rowGap.value, label(), rowGap.getAttribute('aria-valuetext')]).toEqual(['1', '23', '23.2px', '23.2px']);
+    edit(rowGap, 24);
+    expect(render.mock.lastCall[0].box_row_gap_px).toBe(24);
+    expect([rowGap.value, label()]).toEqual(['24', '24px']);
+    expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('24px');
+    get('reset').click();
+    expect([rowGap.value, label()]).toEqual(['23', '23.2px']);
+    expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('23.2px');
+    edit(rowGap, 23);
+    expect(render.mock.lastCall[0].box_row_gap_px).toBe(23);
+    expect(label()).toBe('23px');
+    get('save').click();
+    await vi.waitFor(() => expect(get('save').disabled).toBe(false));
+    expect(saveRequestFn).toHaveBeenCalledWith({ version: 'fractional', presentation: { ...saved, box_row_gap_px: 23 } });
+});
+
+test.each([[9.7, '10', '9.7px'], [29.6, '30', '29.6px'], [10.4, '10', '10.4px']])('a saved %spx rests on %s with its exact label', (gap, position, shown) => {
+    const { get } = setup({ presentation: { ...defaults, box_row_gap_px: gap }, presentation_version: 'fractional' });
+    expect([get('box-row-gap').value, get('box-row-gap-value').value]).toEqual([position, shown]);
 });
 
 test('logical buttons reuse icons and phone choices translate, preview, save and reset in both languages', async () => {

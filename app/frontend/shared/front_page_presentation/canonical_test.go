@@ -213,3 +213,54 @@ func TestCanonicalStoredRejectsInvalidPhoneSizes(t *testing.T) {
 		t.Fatal("v4 with phone size accepted")
 	}
 }
+
+// The 23px row-gap default reaches every stored row without a gap of its own, while a
+// saved value such as 23.2 stays until the owner saves the default, which drops the field.
+func TestRowGapDefaultReachesOnlyRowsWithoutTheirOwnGap(t *testing.T) {
+	rules := Rules()
+	if rules.Default.BoxRowGapPx != 23 {
+		t.Fatalf("default row gap = %v, want 23", rules.Default.BoxRowGapPx)
+	}
+	if _, err := rules.BoxRowGap.readNumber(map[string]json.RawMessage{"gap": json.RawMessage(`23`)}, "gap"); err != nil {
+		t.Fatal("default row gap is off its own grid:", err)
+	}
+	// A v3 row, the shape a development site keeps after older palette saves.
+	v3 := []byte(`{"schema_version":3,"anchor":"top-center","alignment":"left","horizontal_margin_px":40,"vertical_margin_px":40,"max_width_px":1120,"light_wash":73,"light_opacity":75,"dark_wash":0,"dark_opacity":20,"text_style":{"preset":"none","reveal":{"mode":"none","start_ms":3000,"interval_ms":800}}}`)
+	if read, err := ParseStored(v3); err != nil || read.BoxRowGapPx != 23 || read.BoxHeadingGapPx != 8 {
+		t.Fatal("v3", read, err)
+	}
+	fields, _ := presentationFields(rules.Default)
+	fields["schema_version"], fields["box_heading_gap_px"] = json.RawMessage(`6`), json.RawMessage(`21`)
+	delete(fields, "box_row_gap_px")
+	v6, _ := json.Marshal(fields)
+	if read, err := ParseStored(v6); err != nil || read.BoxRowGapPx != 23 || read.BoxHeadingGapPx != 21 {
+		t.Fatal("v6", read, err)
+	}
+
+	saved := rules.Default
+	saved.BoxHeadingGapPx, saved.BoxRowGapPx = 21, 23.2
+	raw, _ := json.Marshal(saved)
+	if read, err := ParseStored(raw); err != nil || read != saved {
+		t.Fatal("saved 23.2", read, err)
+	}
+	stored, canonical, err := CanonicalStored(raw)
+	if read, readErr := ParseStored(stored); err != nil || readErr != nil || !canonical || read != saved {
+		t.Fatal("saved 23.2 must stay v7", string(stored), canonical, err, readErr)
+	}
+
+	// A v7 row holding 23 (saved by an older binary) stays readable; the palette's save
+	// stores it without the field, v6 here because the heading gap is custom.
+	saved.BoxRowGapPx = 23
+	raw, _ = json.Marshal(saved)
+	if read, err := Parse(raw); err != nil || read != saved {
+		t.Fatal("v7 23", read, err)
+	}
+	stored, canonical, err = CanonicalStored(raw)
+	fields, _ = presentationFields(stored)
+	if err != nil || canonical || string(fields["schema_version"]) != "6" || fields["box_row_gap_px"] != nil {
+		t.Fatal("saving the default must drop the field", string(stored), canonical, err)
+	}
+	if read, err := ParseStored(stored); err != nil || read != saved {
+		t.Fatal("v6 after saving the default", read, err)
+	}
+}

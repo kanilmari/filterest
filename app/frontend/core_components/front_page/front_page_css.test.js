@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { requireNodeDependency } from '../../../server_tools/lib/node_dependency_loader.mjs';
+import presentationDefinition from '../../shared/front_page_presentation/definition.json' with { type: 'json' };
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(currentDirectory, 'front_page.css'), 'utf8');
@@ -60,6 +61,13 @@ test('Home box and search headings use the larger link size while supplemental s
         style.remove();
         blocks.remove();
     }
+});
+
+// jsdom does not resolve max(), so the rendered pixels are measured in G15_home_boxes.spec.ts.
+test('the row gap falls back to the shared 23px default above the original 0.6rem floor', () => {
+    const gapRule = postcss.parse(css).nodes.find(node => node.nodes?.some(decl => decl.prop === 'margin-block-start' && decl.value.includes('--home-box-row-gap')));
+    expect(gapRule.nodes.find(decl => decl.prop === 'margin-block-start').value)
+        .toBe(`max(var(--home-box-row-gap, ${presentationDefinition.default.box_row_gap_px}px), min(0.6rem, 30px))`);
 });
 
 test('only Home row links and Show all share a light-theme ink, and only adjacent rows take the row gap', () => {

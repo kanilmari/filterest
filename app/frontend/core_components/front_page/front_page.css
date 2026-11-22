@@ -239,8 +239,9 @@ body.dark-mode .front-page {
 }
 
 :is(.front-page-blocks, .front-page-search-sheet__slot) .supplemental-dataset-group > ul > li + li {
-  /* An unset gap follows the reader's font. Saved pixel values are bounded at 30px. */
-  margin-block-start: max(var(--home-box-row-gap, 0.6rem), min(0.6rem, 30px));
+  /* Home writes every saved gap; this fallback is the 23px default (front_page_presentation/definition.json).
+     The original 0.6rem is the floor up to 30px; the slider's minimum writes 0.6rem itself. */
+  margin-block-start: max(var(--home-box-row-gap, 23px), min(0.6rem, 30px));
 }
 
 :is(.front-page-blocks, .front-page-search-sheet__slot) :is(.supplemental-dataset-result-text > a, .supplemental-dataset-show-all, .supplemental-dataset-filter-results):any-link:not([data-article-access="denied"]) {

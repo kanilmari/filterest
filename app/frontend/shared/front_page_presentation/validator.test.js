@@ -72,7 +72,7 @@ test('all seven phone sizes are integers and incomplete or coerced sizes fail', 
 
 test('missing defaults centre the start-aligned block and brighten only the light theme', () => {
     expect(readHomePresentation(null)).toEqual(defaults);
-    expect(defaults).toMatchObject({ schema_version: 7, box_row_gap_px: 9.6, box_heading_gap_px: 8, phone_story_size: 15, anchor: 'center-center', alignment: 'start', phone_alignment: 'inherit',
+    expect(defaults).toMatchObject({ schema_version: 7, box_row_gap_px: 23, box_heading_gap_px: 8, phone_story_size: 15, anchor: 'center-center', alignment: 'start', phone_alignment: 'inherit',
         horizontal_margin_px: 40, vertical_margin_px: 40, max_width_px: 1120, dark_wash: 0, dark_opacity: 20 });
     expect(defaults.light_opacity).toBeGreaterThan(defaults.dark_opacity);
 });

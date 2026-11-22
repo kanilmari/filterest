@@ -39,7 +39,7 @@ func TestHomeTextStyleGenericWriteTwinExamples(t *testing.T) {
 					(value.SchemaVersion == 4 && value.PhoneAlignment != "inherit") ||
 					(value.SchemaVersion == 5 && value.PhoneStorySize != 15) ||
 					(value.SchemaVersion == 6 && value.BoxHeadingGapPx != 8) ||
-					(value.SchemaVersion == 7 && value.BoxRowGapPx != 9.6)
+					(value.SchemaVersion == 7 && value.BoxRowGapPx != presentation.Rules().Default.BoxRowGapPx)
 			}
 			err := ValidateRow("system_config", map[string]interface{}{"key": "front_page_presentation", "value_type": 5, "json_value": example.Value})
 			if (err == nil) != valid {

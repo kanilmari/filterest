@@ -10,20 +10,24 @@ import { hasRoutePermission } from '../route_permission_checker.js';
 import { createPresentationPaletteShell, createPaletteDraftOwner,
     createPaletteRangeControl, createPaletteSelectControl, getPaletteCopy, renderControlValue } from './presentation_palette_shell.js';
 
-// Choosing the minimum restores the original 0.6rem. Show its actual size even
-// when the reader's font takes that default above the editable pixel range.
+// The slider moves in whole pixels (owner decision, 2026-11-21); stored values keep the
+// definition's tenths, so a saved 23.2 stays valid until the next move. Its lowest position
+// restores the original 0.6rem. The label shows the size Home renders: the original at the
+// minimum, otherwise the value or the font floor up to 30px (front_page.css).
 function createRowGapControl(copy, change, documentElement) {
     const key = 'box_row_gap_px';
-    const { min, max, step } = HOME_PRESENTATION_DEFINITION[key];
+    const { min, max } = HOME_PRESENTATION_DEFINITION[key];
     const fontSize = Number.parseFloat(getComputedStyle(documentElement).fontSize) || 16;
     const originalGap = fontSize * 0.6;
-    const sliderMin = Math.min(max, Math.max(min, Math.ceil(originalGap * 10) / 10));
+    const sliderMin = Math.min(max, Math.max(Math.floor(min), Math.floor(Math.round(originalGap * 10) / 10)));
     const control = createPaletteRangeControl({ id: 'box-row-gap', key, label: 'boxRowGap',
-        min: sliderMin, max, step, unit: 'px' }, copy, { prefix: 'home-palette',
+        min: sliderMin, max, step: 1, unit: 'px' }, copy, { prefix: 'home-palette',
         onChange: px => change(key, px === sliderMin ? min : px) });
     return { ...control, setValue(value) {
-        control.setValue(Math.max(sliderMin, value));
-        if (value === min) control.output.value = renderControlValue(originalGap, 'px');
+        const original = value === min;
+        control.setValue(original ? sliderMin : Math.max(sliderMin, Math.round(value)));
+        const rendered = original ? originalGap : Math.max(value, Math.min(originalGap, max));
+        control.output.value = renderControlValue(rendered, 'px');
         control.input.setAttribute('aria-valuetext', control.output.value);
     } };
 }

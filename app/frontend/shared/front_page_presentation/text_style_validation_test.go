@@ -40,7 +40,7 @@ func TestHomeTextStyleTwinExamples(t *testing.T) {
 				SchemaVersion int `json:"schema_version"`
 			}
 			json.Unmarshal(example.Value, &stored)
-			if example.Readable && stored.SchemaVersion < 7 && got.BoxRowGapPx != 9.6 {
+			if example.Readable && stored.SchemaVersion < 7 && got.BoxRowGapPx != Rules().Default.BoxRowGapPx {
 				t.Fatal(got)
 			}
 			if example.Readable && stored.SchemaVersion < 6 && got.BoxHeadingGapPx != 8 {

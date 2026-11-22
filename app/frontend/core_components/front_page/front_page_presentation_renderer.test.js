@@ -136,3 +136,14 @@ test('media preview writes both themes, and reset restores all four default valu
     expect(container.style.getPropertyValue('--home-dark-opacity')).toBe('0.2');
     expect(container.style.getPropertyValue('--home-light-opacity')).toBe('0.75');
 });
+
+test('row spacing is written for every value: 23px by default, the font-relative original at the minimum', () => {
+    const container = document.createElement('div');
+    const gap = () => container.style.getPropertyValue('--home-box-row-gap');
+    for (const [presentation, expected] of [[null, '23px'], [defaults, '23px'],
+        [{ ...defaults, box_row_gap_px: 9.6 }, '0.6rem'], [{ ...defaults, box_row_gap_px: 19.3 }, '19.3px'],
+        [{ ...defaults, box_row_gap_px: 23.2 }, '23.2px'], [{ ...defaults, box_row_gap_px: 30 }, '30px']]) {
+        applyHomeSurfacePresentation(container, presentation);
+        expect(gap()).toBe(expected);
+    }
+});
