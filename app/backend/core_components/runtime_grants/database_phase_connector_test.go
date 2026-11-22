@@ -11,6 +11,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"easelect/backend/core_components/dbutils"
 )
 
 type phaseWorkDriver struct{}
@@ -111,5 +113,35 @@ func TestDatabasePhaseConnectorGatesLegacyReadsRowsAndTransactions(t *testing.T)
 	cancel()
 	if _, err := work.QueryContext(ctx, `SELECT true`); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled query was admitted", err)
+	}
+}
+
+type phaseFailingCommitTx struct{ phaseWorkTx }
+
+func (phaseFailingCommitTx) Commit() error { return errors.New("commit rejected") }
+
+// A release failure after the database committed must not read as a failed
+// commit: the request middleware would otherwise report a saved change as lost.
+func TestPhaseTransactionKeepsCommittedOutcomeWhenReleaseFails(t *testing.T) {
+	releaseErr := errors.New("admission release failed")
+	release := func() error { return releaseErr }
+
+	committed := &phaseTx{Tx: phaseWorkTx{}, conn: &phaseConn{inTx: true, lifecycleHeld: true}, release: release}
+	err := committed.Commit()
+	if !dbutils.IsCommittedCleanupError(err) || !errors.Is(err, releaseErr) {
+		t.Fatalf("committed transaction lost its outcome: %v", err)
+	}
+	if committed.conn.inTx || committed.conn.lifecycleHeld {
+		t.Fatal("connection still marked as inside a transaction")
+	}
+
+	rolledBack := &phaseTx{Tx: phaseWorkTx{}, conn: &phaseConn{inTx: true}, release: release}
+	if err := rolledBack.Rollback(); dbutils.IsCommittedCleanupError(err) || !errors.Is(err, releaseErr) {
+		t.Fatalf("rollback release failure claimed a commit: %v", err)
+	}
+
+	rejected := &phaseTx{Tx: phaseFailingCommitTx{}, conn: &phaseConn{inTx: true}, release: release}
+	if err := rejected.Commit(); dbutils.IsCommittedCleanupError(err) || err == nil || err.Error() != "commit rejected" {
+		t.Fatalf("rejected commit must report the commit error itself: %v", err)
 	}
 }

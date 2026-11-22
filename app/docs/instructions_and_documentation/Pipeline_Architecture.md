@@ -122,7 +122,7 @@ After all stages, the **handler** runs — the actual business logic.
 - **CSRF before fingerprint:** Reject forged requests before doing device verification.
 - **Fingerprint/device_id before access control:** Verify device identity before granting access.
 - **Admin check after access control:** Most specific check, only for admin routes.
-- **Transaction before audit:** Wraps the business logic in a lazy transaction for normal request/response routes. The lazy transaction opens only when a handler calls `dbutils.GetTx()` or `dbutils.RequireTx()`, commits after the inner handler chain returns, and rolls back on panic. Because it is lazy, routes that never touch the DB pay no connection cost, and long-lived stream profiles can explicitly skip it.
+- **Transaction before audit:** Wraps the business logic in a lazy transaction for normal request/response routes. The lazy transaction opens only when a handler calls `dbutils.GetTx()` or `dbutils.RequireTx()`, commits after the inner handler chain returns, and rolls back on panic. Finite responses for writes in the request transaction wait for its commit before success reaches the client, with no response-size limit; [commit-confirmed responses](Commit_Confirmed_Responses.md) defines read/streaming exceptions and names pool-written routes outside this guarantee. A release failure after the database committed keeps the committed outcome instead of reporting the save as failed. Independently committed pool writes are not part of the request transaction. Routes that never use a transaction pay no connection cost, and stream profiles can explicitly skip it.
 - **Audit last (before handler):** Captures the semantic operation and HTTP status after the handler completes, then enqueues the audit event asynchronously. It runs inside the transaction wrapper, so transaction commit/rollback outcome is recorded separately by the transaction log stage rather than by the audit event itself.
 
 ### Request Actor and DB Pool Selection
@@ -585,7 +585,7 @@ var MyCustomProfile = RouteProfile{
 | `app/backend/pipeline/audit/with_audit.go` | Semantic audit logging stage (async batched inserts) |
 | `app/backend/pipeline/error_handling/error_recovery.go` | Per-route panic recovery (pipeline stage) |
 | `app/backend/core_components/middlewares/panic_recovery.go` | Global panic recovery (app/main.go wrapper) |
-| `app/backend/core_components/middlewares/with_transaction.go` | Legacy transaction middleware (no longer called from app/main.go) |
+| `app/backend/core_components/middlewares/with_transaction.go` | Shared transaction and commit-response middleware used by the lazy transaction stage |
 | `app/backend/core_components/httpresponse/httpresponse.go` | Shared JSON response helpers |
 | `app/backend/core_components/router/routing_builder.go` | Route registration, calls BuildHandler |
 | **Frontend** | |

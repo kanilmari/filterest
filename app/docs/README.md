@@ -48,6 +48,8 @@ Architecture and behaviour guides in
   the payment capability's structure.
 - [Go_Type_Bridge_Audit.md](instructions_and_documentation/Go_Type_Bridge_Audit.md) —
   how backend types reach the browser without drifting.
+- [Commit-confirmed responses](instructions_and_documentation/Commit_Confirmed_Responses.md) —
+  finite-write delivery, unbounded buffering and the read/streaming exceptions.
 - [SPA_Immediate_UI_Update_Inventory.md](instructions_and_documentation/SPA_Immediate_UI_Update_Inventory.md) —
   which actions update the open view without a reload.
 - [Coding_Agent.md](instructions_and_documentation/Coding_Agent.md) —

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	"easelect/backend/core_components/dbutils"
 )
 
 type phaseConnector struct {
@@ -167,18 +169,23 @@ type phaseTx struct {
 	release func() error
 }
 
-func (t *phaseTx) finish(work func() error) (err error) {
+func (t *phaseTx) finish(work func() error, committing bool) (err error) {
 	defer func() {
 		t.conn.inTx = false
 		t.conn.lifecycleHeld = false
-		if e := t.release(); err == nil {
+		if e := t.release(); err == nil && e != nil {
+			// The database already committed; a late release must not turn
+			// a saved change into a reported failure.
+			if committing {
+				e = dbutils.CommittedWithCleanupError(e)
+			}
 			err = e
 		}
 	}()
 	return work()
 }
-func (t *phaseTx) Commit() error   { return t.finish(t.Tx.Commit) }
-func (t *phaseTx) Rollback() error { return t.finish(t.Tx.Rollback) }
+func (t *phaseTx) Commit() error   { return t.finish(t.Tx.Commit, true) }
+func (t *phaseTx) Rollback() error { return t.finish(t.Tx.Rollback, false) }
 
 type phaseStmt struct {
 	driver.Stmt

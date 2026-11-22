@@ -36,6 +36,8 @@ type LazyTx struct {
 	admit              func(context.Context) (func() error, error)
 	admissionRelease   func() error
 	budgetConnection   *sql.Conn
+	// refusal, once set, keeps a transaction from opening later in the request.
+	refusal error
 }
 
 // NewLazyTx creates a new LazyTx bound to the given database pool.
@@ -67,6 +69,9 @@ func (lt *LazyTx) BeginContext(ctx context.Context) (*sql.Tx, error) {
 	defer lt.mu.Unlock()
 	if lt.started {
 		return lt.tx, nil
+	}
+	if lt.refusal != nil {
+		return nil, lt.refusal
 	}
 	if lt.admit != nil {
 		release, err := lt.admit(ctx)
@@ -109,6 +114,22 @@ func (lt *LazyTx) BeginContext(ctx context.Context) (*sql.Tx, error) {
 	return lt.tx, nil
 }
 
+// RefuseNewTransactions keeps any later Begin from opening a transaction and
+// makes it return reason instead. It reports false, and changes nothing, when
+// a transaction is already open. The response middleware uses it before it
+// forwards output that a failed commit could no longer replace.
+func (lt *LazyTx) RefuseNewTransactions(reason error) bool {
+	lt.mu.Lock()
+	defer lt.mu.Unlock()
+	if lt.started {
+		return false
+	}
+	if lt.refusal == nil {
+		lt.refusal = reason
+	}
+	return true
+}
+
 // WasStarted returns true if a transaction was actually opened during this request.
 func (lt *LazyTx) WasStarted() bool {
 	lt.mu.Lock()
@@ -117,11 +138,18 @@ func (lt *LazyTx) WasStarted() bool {
 }
 
 // Commit commits the transaction if it was started. No-op otherwise.
+// A release failure after the database committed is returned as
+// CommittedCleanupError: the after-commit hooks still run, and callers must
+// keep the committed outcome instead of reporting the save as failed.
 func (lt *LazyTx) Commit() (err error) {
+	committed := false
 	defer lt.closeBudgetConnection()
 	if lt.admissionRelease != nil {
 		defer func() {
-			if e := lt.admissionRelease(); err == nil {
+			if e := lt.admissionRelease(); err == nil && e != nil {
+				if committed {
+					e = CommittedWithCleanupError(e)
+				}
 				err = e
 			}
 		}()
@@ -138,13 +166,18 @@ func (lt *LazyTx) Commit() (err error) {
 	lt.afterCommitHooks = nil
 	lt.mu.Unlock()
 
-	if err := tx.Commit(); err != nil {
+	// The pool-admission connector reports its own late release failure as
+	// CommittedCleanupError; anything else means the commit did not happen.
+	if err = tx.Commit(); err != nil && !IsCommittedCleanupError(err) {
 		return err
 	}
+	committed = true
 	// Hooks may query the same one-connection pool after the transaction ends.
 	lt.closeBudgetConnection()
 	if lt.admissionRelease != nil {
-		err = lt.admissionRelease()
+		if e := lt.admissionRelease(); e != nil && err == nil {
+			err = CommittedWithCleanupError(e)
+		}
 	}
 	lt.mu.Lock()
 	lt.afterRollbackHooks = nil

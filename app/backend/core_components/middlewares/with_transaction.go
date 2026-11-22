@@ -19,12 +19,19 @@ import (
 	"easelect/backend/pipeline/txlog"
 )
 
+// errResponseAlreadyForwarded refuses a request transaction after a stream or an
+// explicit flush has already sent output that a failed commit could not replace.
+var errResponseAlreadyForwarded = errors.New("request transaction unavailable: the response was already forwarded; write through the pool and check that commit instead")
+
 // WithLazyTransaction wraps an http.Handler with a lazy transaction provider.
 // No database connection is reserved until the handler calls dbutils.RequireTx(ctx)
 // or dbutils.GetTx(ctx). If a transaction was opened, only a final 2xx or 3xx
 // response commits it; 4xx, 5xx, other non-success statuses, panics and a
 // cancelled request (the client left) roll it back. If no transaction was
-// needed, no connection is used.
+// needed, no connection is used. Finite write responses remain private until
+// commit; a release failure after the commit keeps the committed outcome.
+// Safe methods, and streams or explicit flushes while no transaction is open,
+// retain forwarding. See docs/instructions_and_documentation/Commit_Confirmed_Responses.md.
 func WithLazyTransaction(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor := dbutils.RequestActorContextFromRequest(r)
@@ -73,6 +80,10 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 		}()
 
 		statusCapture := newCommitResponse(w)
+		statusCapture.claimForwarding = func() bool { return lt.RefuseNewTransactions(errResponseAlreadyForwarded) }
+		if buffersFiniteWrite(r) {
+			statusCapture.enableAutomaticBuffer()
+		}
 		next.ServeHTTP(statusCapture, r)
 
 		// Only commit/log if a transaction was actually opened
@@ -104,7 +115,18 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 			return
 		}
 
-		if err := lt.Commit(); err != nil {
+		err := lt.Commit()
+		if dbutils.IsCommittedCleanupError(err) {
+			// The change is saved. Reporting it as failed would invite a retry
+			// that saves it twice, so only the late release failure is logged.
+			logging.ErrorAttrs(
+				"transaction committed; cleanup after commit failed",
+				slog.String("path", r.URL.Path),
+				slog.String("error", err.Error()),
+			)
+			err = nil
+		}
+		if err != nil {
 			// A cancelled request cannot commit; its transaction is rolled back.
 			if err == sql.ErrTxDone || r.Context().Err() != nil {
 				_ = lt.Rollback()
@@ -128,6 +150,27 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 			statusCapture.release()
 		}
 	})
+}
+
+// POST reads use a request body for query inputs. Preserve their forwarding and
+// size behaviour just like GET; all other unsafe methods default to buffering.
+// Keep these read exceptions aligned with
+// docs/instructions_and_documentation/Commit_Confirmed_Responses.md.
+func buffersFiniteWrite(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return false
+	case http.MethodPost:
+		switch r.URL.Path {
+		case "/api/check-table-rights", "/api/check-table-rights-multi",
+			"/api/fetch-dynamic-children", "/api/comment-counts", "/api/query-table",
+			"/api/count-lang-embeddings", "/api/geocode-address",
+			"/api/image-source-picker/resolve", "/api/image-source-picker/file",
+			"/api/app/ai-chat/query", "/api/dev-ai-translate-single":
+			return false
+		}
+	}
+	return true
 }
 
 // WithTransaction is kept as an alias for backward compatibility.
