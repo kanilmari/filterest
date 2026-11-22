@@ -5,6 +5,7 @@
 import { test, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { installMediaTabFixture, openMediaTabView, useDatasetPicture, MEDIA_DATASET, PLAIN_DATASET } from '../helpers/media-tab-fixture';
 import { ensureNavbarVisible } from '../helpers/navbar';
+import { switchToView } from '../helpers/view-switch';
 
 async function labelContrast(button: Locator) {
   return button.evaluate(element => {
@@ -230,6 +231,44 @@ for (const { picture, boxLike } of MENU_CASES) for (const theme of ['light', 'da
     expect(await menuShapeFamilies(page)).toEqual([boxLike ? 'button' : 'tab']);
   });
 }
+
+// Owner rule (2026-11-22): a table view (Taulu, Lista, Vertailu) counts like a picture, menu-wide, from a
+// dataset's default before it is opened. The shape changes only when a dataset's view moves into or out of a
+// table view, never by clicking tabs or Home.
+test("a table-view default makes every tab box-like; switching that dataset to cards restores rounded tabs", async ({ page, context }, info) => {
+  test.setTimeout(150_000);
+  const policy = await installMediaTabFixture(page, context, 1920, 'light');
+  await useDatasetPicture(page, policy, 'background_hidden');
+  policy.defaultViews[MEDIA_DATASET] = 'table';
+  await trackMenuShapeFamilies(page);
+  await openMediaTabView(page, 'dataset_plain');
+  await saveShot(page, info, 'table-default-other-dataset-open');
+  await expectMenuShapes(page, true, 1920);
+  await page.locator('#navbarFrontPage a').click();
+  await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
+  await expectMenuShapes(page, true, 1920);
+  await page.locator(`#navmenu [data-id="${MEDIA_DATASET}"]`).click();
+  await expect(page.locator(`#${MEDIA_DATASET}_tab_parts_container`)).toBeVisible();
+  await expectMenuShapes(page, true, 1920);
+  expect(await menuShapeFamilies(page)).toEqual(['button']);
+  // The dataset's own view moves out of the table view: rounded tabs, once.
+  await switchToView(page, 'card');
+  await saveShot(page, info, 'table-default-switched-to-cards');
+  await expectMenuShapes(page, false, 1920);
+  await page.locator(`#navmenu [data-id="${PLAIN_DATASET}"]`).click();
+  await expect(page.locator(`#${PLAIN_DATASET}_tab_parts_container`)).toBeVisible();
+  await expectMenuShapes(page, false, 1920);
+  await page.locator('#navbarFrontPage a').click();
+  await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
+  await expectMenuShapes(page, false, 1920);
+  await page.locator(`#navmenu [data-id="${MEDIA_DATASET}"]`).click();
+  await expect(page.locator(`#${MEDIA_DATASET}_tab_parts_container`)).toBeVisible();
+  await expectMenuShapes(page, false, 1920);
+  // Back into the comparison table: box-like again.
+  await switchToView(page, 'transposed');
+  await expectMenuShapes(page, true, 1920);
+  expect(await menuShapeFamilies(page)).toEqual(['button', 'tab', 'button']);
+});
 
 test.describe('visitor', () => {
   test.use({ storageState: { cookies: [], origins: [] } });

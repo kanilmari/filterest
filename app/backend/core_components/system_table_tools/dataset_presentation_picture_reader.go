@@ -1,10 +1,11 @@
 // dataset_presentation_picture_reader.go
-// Reads the picture settings the side menu needs for every dataset the viewer may open.
+// Reads the picture settings and default views the side menu needs for every dataset the viewer may open.
 // Bridges the media registry and the canonical appearance resolver with the dataset catalogue.
 // Exists so the side menu can decide its tab shape before any dataset is opened (owner 2026-11-22).
 package system_table_tools
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 
@@ -74,6 +75,41 @@ func readPresentationPictures(q dbutils.Querier, uids []int64, development bool)
 		}
 	}
 	return pictures, nil
+}
+
+// readDefaultViews returns the own default view of the given datasets, which the caller has already proved the
+// viewer may open, as get-results reports it (system_db_tables.default_view_id → system_table_views.name); a null
+// name inherits the site's default. The browser resolves and decides (side_menu_tab_shape.js).
+func readDefaultViews(q dbutils.Querier, uids []int64) (map[int64]*dtt_models.DatasetDefaultView, error) {
+	views := make(map[int64]*dtt_models.DatasetDefaultView, len(uids))
+	if len(uids) == 0 {
+		return views, nil
+	}
+	rows, err := q.Query(`
+		SELECT tables.table_uid, views.name
+		FROM public.system_db_tables AS tables
+		LEFT JOIN public.system_table_views AS views ON views.id = tables.default_view_id
+		WHERE tables.table_uid = ANY($1)`, pq.Array(uids))
+	if err != nil {
+		return nil, fmt.Errorf("read dataset default views: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uid int64
+		var name sql.NullString
+		if err := rows.Scan(&uid, &name); err != nil {
+			return nil, fmt.Errorf("scan dataset default views: %w", err)
+		}
+		view := &dtt_models.DatasetDefaultView{}
+		if name.Valid {
+			view.Name = &name.String
+		}
+		views[uid] = view
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read dataset default views: %w", err)
+	}
+	return views, nil
 }
 
 func coverPictureStrength(values appearance.DatasetCoverThemeValues) dtt_models.DatasetCoverPictureStrength {

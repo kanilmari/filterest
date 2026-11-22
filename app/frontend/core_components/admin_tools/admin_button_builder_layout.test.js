@@ -73,6 +73,7 @@ vi.mock("../navigation/nav_engine/query_params.js", () => ({
 vi.mock("../navigation/nav_engine/dataset_aliases.js", () => ({ getInternalDatasetName: (name) => name }));
 vi.mock("../navigation/nav_engine/dataset_access_registry.js", () => ({
     hasDatasetAccessSnapshot: () => true,
+    getDatasetAccessSnapshot: () => null,
     subscribeDatasetAccessRegistry: vi.fn(),
 }));
 vi.mock("../navigation/nav_engine/image_first_view_history.js", () => ({ handleImageFirstViewHistory: async () => false }));

@@ -20,6 +20,7 @@ import { updateBrowserTabTitle } from "../navigation/nav_engine/browser_tab_titl
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
 import { closeRowArticle } from "./card_view/row_article_ui_handler.js";
 import { createRowPresentationSplitButton } from "./row_presentation/row_presentation_split_button.js";
+import { noteDatasetViewShown } from "../navigation/main_tabs/side_menu_tab_shape.js";
 import {
     ARTICLE_VIEW_KEY,
     DATASET_VIEW_SELECTOR_TEXT,
@@ -241,6 +242,8 @@ export function selectDatasetView(tableName, viewKey, currentView = null) {
         closeRowArticleBeforeViewSwitch(tableName);
     }
     setChosenDatasetView(datasetName, nextViewKey);
+    // The person's own choice, the article view included, decides the side menu's tab shape (owner 2026-11-22).
+    noteDatasetViewShown(datasetName, nextViewKey, { chosen: true });
     syncActiveViewButtons(tableName, nextViewKey);
     applyViewStyling(tableName);
     if (nextViewKey === ARTICLE_VIEW_KEY) {

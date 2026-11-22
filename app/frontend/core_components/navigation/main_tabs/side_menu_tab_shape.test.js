@@ -5,17 +5,19 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import {
-    datasetShowsPicture, onSideMenuTabShapeChange, resetSideMenuTabShapeForTests, SIDE_MENU_RENDERED_ATTRIBUTE,
-    SIDE_MENU_TAB_SHAPE_ATTRIBUTE, sideMenuShowsPicture, sideMenuTabsBoxLike, syncSideMenuTabShape,
+    datasetCurrentView, datasetShowsPicture, isTableView, noteDatasetViewShown, onSideMenuTabShapeChange,
+    resetSideMenuTabShapeForTests, SIDE_MENU_RENDERED_ATTRIBUTE, SIDE_MENU_TAB_SHAPE_ATTRIBUTE, sideMenuNeedsBoxes,
+    sideMenuTabsBoxLike, syncSideMenuTabShape,
 } from './side_menu_tab_shape.js';
+import { invalidateSessionGeneration } from '../../auth/session_generation_store.js';
 import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from '../nav_engine/dataset_access_registry.js';
 
 const strength = (overrides = {}) => ({ image_opacity: 1, overlay_opacity: 0, oval_enabled: false,
     center_opacity: 0.4, mid_opacity: 0.7, edge_opacity: 1, ...overrides });
 const cover = (light, dark) => ({ background: false, cover: true, cover_themes: { light: strength(light), dark: strength(dark) } });
 const NONE = { background: false, cover: false };
-const entry = (name, picture) => ({ dataset_name: name, table_uid: name.length, names: [name], can_read_rows: true,
-    ...(picture === undefined ? {} : { presentation_picture: picture }) });
+const entry = (name, picture, defaultView = null) => ({ dataset_name: name, table_uid: name.length, names: [name],
+    can_read_rows: true, ...(picture === undefined ? {} : { presentation_picture: picture, default_view: { name: defaultView } }) });
 
 function menu(ids, { rendered = true } = {}) {
     document.body.innerHTML = '<nav id="navmenu"></nav>';
@@ -62,14 +64,14 @@ test.each([
 test('one shown picture among the menu datasets makes the whole menu box-like', () => {
     const catalogue = { datasets: [entry('plain', NONE), entry('hidden', cover({ image_opacity: 0 }, { image_opacity: 0 })),
         entry('dark_only', cover({ image_opacity: 0 }, { image_opacity: 0.3 }))] };
-    expect(sideMenuShowsPicture(['plain', 'hidden'], catalogue)).toBe(false);
-    expect(sideMenuShowsPicture(['plain', 'hidden', 'dark_only'], catalogue)).toBe(true);
+    expect(sideMenuNeedsBoxes(['plain', 'hidden'], catalogue)).toBe(false);
+    expect(sideMenuNeedsBoxes(['plain', 'hidden', 'dark_only'], catalogue)).toBe(true);
 });
 test('datasets without a menu tab, unknown tabs and entries the viewer may not open do not count', () => {
     const catalogue = { datasets: [entry('plain', NONE), entry('subfolder', { background: true, cover: false }),
         entry('unreadable')] };
-    expect(sideMenuShowsPicture(['plain', 'login', 'unreadable'], catalogue)).toBe(false);
-    expect(sideMenuShowsPicture([], catalogue)).toBe(false);
+    expect(sideMenuNeedsBoxes(['plain', 'login', 'unreadable'], catalogue)).toBe(false);
+    expect(sideMenuNeedsBoxes([], catalogue)).toBe(false);
 });
 
 test('a first visit is box-like before any catalogue decides', () => {
@@ -145,5 +147,53 @@ test('a browser that refuses storage still decides for the page', () => {
     resetSideMenuTabShapeForTests();
     expect(sideMenuTabsBoxLike()).toBe(true);
     syncSideMenuTabShape(menu(['plain']), { datasets: [entry('plain', NONE)] });
+    expect(sideMenuTabsBoxLike()).toBe(false);
+});
+
+// Owner 2026-11-22: a table view counts like a picture. Table views are Taulu, Lista and Vertailu.
+test.each([
+    ['table', true], ['normal', true], ['transposed', true], ['list', true],
+    ['card', false], ['article_view', false], ['calendar', false], ['image_first_view', false], ['', false],
+])('%s is a table view = %s', (view, expected) => {
+    expect(isTableView(view)).toBe(expected);
+});
+test('a menu dataset whose default view is a table view makes every tab box-like before it is opened', () => {
+    const catalogue = { datasets: [entry('plain', NONE, 'card'), entry('compare', NONE, 'transposed')] };
+    expect(datasetCurrentView('compare', catalogue.datasets[1])).toBe('transposed');
+    expect(sideMenuNeedsBoxes(['plain'], catalogue)).toBe(false);
+    expect(sideMenuNeedsBoxes(['plain', 'compare'], catalogue)).toBe(true);
+    // A dataset without its own menu tab does not count, whatever its view.
+    expect(sideMenuNeedsBoxes(['plain', 'login'], { datasets: [...catalogue.datasets, entry('login')] })).toBe(false);
+});
+test('the drawn view decides over the default; a row article does not, the Article view does', () => {
+    const element = menu(['plain', 'orders']);
+    const catalogue = { datasets: [entry('plain', NONE, 'card'), entry('orders', NONE, 'table')] };
+    primeDatasetAccessRegistry(catalogue);
+    syncSideMenuTabShape(element, catalogue);
+    expect(sideMenuTabsBoxLike()).toBe(true);
+    noteDatasetViewShown('orders', 'card');
+    expect(sideMenuTabsBoxLike()).toBe(false);
+    // Opening a row's article from the cards is not a change of the dataset's view.
+    noteDatasetViewShown('orders', 'article_view', { rowArticle: true });
+    expect(datasetCurrentView('orders', catalogue.datasets[1])).toBe('card');
+    noteDatasetViewShown('orders', 'normal');
+    expect(sideMenuTabsBoxLike()).toBe(true);
+    // The Article view itself (an address, history or the view selector): not a table view.
+    noteDatasetViewShown('orders', 'article_view');
+    expect(sideMenuTabsBoxLike()).toBe(false);
+    element.remove();
+});
+test('a sign-in or sign-out forgets the drawn views; focus changes do not', () => {
+    const catalogue = { datasets: [entry('orders', NONE, 'table')] };
+    noteDatasetViewShown('orders', 'card');
+    invalidateSessionGeneration({ reason: 'focus', revalidate: false });
+    expect(datasetCurrentView('orders', catalogue.datasets[0])).toBe('card');
+    invalidateSessionGeneration({ reason: 'logout', revalidate: false });
+    expect(datasetCurrentView('orders', catalogue.datasets[0])).toBe('table');
+});
+test('unreadable default views keep the decision', () => {
+    localStorage.setItem('side_menu_tab_shape', 'rounded');
+    resetSideMenuTabShapeForTests();
+    syncSideMenuTabShape(menu(['orders']), { datasets: [entry('orders', NONE, 'table')], default_views_unavailable: true });
     expect(sideMenuTabsBoxLike()).toBe(false);
 });

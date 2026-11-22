@@ -210,11 +210,24 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 		}
 	}
 
+	// The same tab shape also counts each openable dataset's default view (owner 2026-11-22).
+	defaultViews, defaultViewErr := readDefaultViews(backend.Db, readableUIDs)
+	if defaultViewErr != nil {
+		log.Printf("\033[31merror: optional navigation default views: %v\033[0m", defaultViewErr)
+	} else {
+		for i := range tables_list {
+			tables_list[i].DefaultView = defaultViews[int64(tables_list[i].TableUID)]
+		}
+	}
+
 	response_map := map[string]interface{}{
 		"datasets": tables_list,
 	}
 	if pictureErr != nil || recheckFailed {
 		response_map["presentation_pictures_unavailable"] = true
+	}
+	if defaultViewErr != nil || recheckFailed {
+		response_map["default_views_unavailable"] = true
 	}
 
 	// Fetch tab_order_json from the active project folder (if column exists).

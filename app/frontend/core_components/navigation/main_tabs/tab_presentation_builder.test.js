@@ -10,7 +10,6 @@ import {
     buildTabIconMaskImage,
     buildTabOutlinePresentation,
     buildTabPresentationState,
-    shouldUseButtonTabsForView,
 } from "./tab_presentation_builder.js";
 
 describe("buildTabPresentationState", () => {
@@ -33,39 +32,15 @@ describe("buildTabPresentationState", () => {
         ).toBe("tab-inactive");
     });
 
-    test("uses button presets for grid-like dataset views even with physical navbar space", () => {
-        expect(
-            buildTabPresentationState({
-                isNarrow: false,
-                isNavbarOverlay: false,
-                isActive: true,
-                viewKey: "table",
-            })
-        ).toBe("button-active");
-        expect(
-            buildTabPresentationState({
-                isNarrow: false,
-                isNavbarOverlay: false,
-                isActive: true,
-                viewKey: "normal",
-            })
-        ).toBe("button-active");
-        expect(
-            buildTabPresentationState({
-                isNarrow: false,
-                isNavbarOverlay: false,
-                isActive: true,
-                viewKey: "transposed",
-            })
-        ).toBe("button-active");
-        expect(
-            buildTabPresentationState({
-                isNarrow: false,
-                isNavbarOverlay: false,
-                isActive: false,
-                viewKey: "list",
-            })
-        ).toBe("button-inactive");
+    // Owner 2026-11-22: the open view no longer shapes the tabs; table views count in the menu-wide decision
+    // (side_menu_tab_shape.js), which arrives here as forceRectangular.
+    test("ignores the open view and follows the menu-wide decision", () => {
+        for (const viewKey of ["table", "normal", "transposed", "list", "card"]) {
+            expect(buildTabPresentationState({ isNarrow: false, isNavbarOverlay: false, isActive: true, viewKey }))
+                .toBe("tab-active");
+            expect(buildTabPresentationState({ forceRectangular: true, isNarrow: false, isNavbarOverlay: false,
+                isActive: false, viewKey })).toBe("button-inactive");
+        }
     });
 
     test("uses button presets in narrow views", () => {
@@ -90,16 +65,6 @@ describe("buildTabPresentationState", () => {
     });
 });
 
-describe("shouldUseButtonTabsForView", () => {
-    test("keeps the grid-view tab policy centralized", () => {
-        expect(shouldUseButtonTabsForView("table")).toBe(true);
-        expect(shouldUseButtonTabsForView("normal")).toBe(true);
-        expect(shouldUseButtonTabsForView("list")).toBe(true);
-        expect(shouldUseButtonTabsForView("transposed")).toBe(true);
-        expect(shouldUseButtonTabsForView("card")).toBe(false);
-    });
-});
-
 describe("buildNavTabsRightOffset", () => {
     test("only rounded physical-navbar tabs overlap the navbar edge", () => {
         expect(
@@ -117,13 +82,14 @@ describe("buildNavTabsRightOffset", () => {
                 viewKey: "card",
             })
         ).toBe("0px");
+        // The open view does not matter any more; only the decision and the layout do.
         expect(
             buildNavTabsRightOffset({
                 isNarrow: false,
                 isNavbarOverlay: false,
                 viewKey: "table",
             })
-        ).toBe("0px");
+        ).toBe("-2px");
         expect(
             buildNavTabsRightOffset({
                 isNarrow: false,
@@ -186,12 +152,12 @@ describe("buildTabOutlinePresentation", () => {
         expect(inactiveOutline.strokeWidth).toBe("2");
     });
 
-    test("uses button outlines for table, list, and comparison views with physical navbar space", () => {
+    test("uses button outlines when the menu-wide decision is box-like, also with physical navbar space", () => {
         const activeOutline = buildTabOutlinePresentation({
+            forceRectangular: true,
             isNarrow: false,
             isNavbarOverlay: false,
             isActive: true,
-            viewKey: "table",
         });
 
         expect(activeOutline.state).toBe("button-active");

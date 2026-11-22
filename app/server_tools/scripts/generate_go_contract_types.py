@@ -34,6 +34,7 @@ ALLOWLIST = [
     StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetPresentationPicture", "DatasetPresentationPicture"),
     StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetCoverPictureThemes", "DatasetCoverPictureThemes"),
     StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetCoverPictureStrength", "DatasetCoverPictureStrength"),
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "DatasetDefaultView", "DatasetDefaultView"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Target", "ApplicationUpdateTarget"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Offer", "ApplicationUpdateOffer"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Request", "ApplicationUpdateRequest"),

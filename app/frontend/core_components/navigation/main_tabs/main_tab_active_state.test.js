@@ -80,15 +80,15 @@ describe("applyMainTabActiveState", () => {
     }
 
     test("keeps the visible path at the previous outline until the morph frame advances", async () => {
-        setChosenDatasetView("app_service_catalog", "table");
+        // A first visit is box-like until a catalogue decides (side_menu_tab_shape.js).
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
         const outlinePath = document.querySelector(".svg-container path");
         const roundedPath = outlinePath.getAttribute("d");
         const buttonPath = buildTabOutlinePresentation({
+            forceRectangular: true,
             isNarrow: false,
             isNavbarOverlay: false,
             isActive: true,
-            viewKey: "table",
         }).pathD;
 
         applyMainTabActiveState("app_service_catalog", {
@@ -203,22 +203,31 @@ describe("applyMainTabActiveState", () => {
         expect(frameCallbacks).toHaveLength(0);
         expect(tab.dataset.tabPresentation).toBe("button-inactive");
     });
-    test("a decision change keeps a displayed subfolder dataset's table rows", async () => {
-        localStorage.setItem("side_menu_tab_shape", "box");
-        setChosenDatasetView("subfolder_orders", "table");
+    // Owner 2026-11-22: only datasets with a menu tab count; the open view itself no longer shapes the tabs.
+    test("a table view of a dataset without a menu tab leaves the menu's rounded decision", async () => {
+        localStorage.setItem("side_menu_tab_shape", "rounded");
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
-        const { syncSideMenuTabShape } = await import("./side_menu_tab_shape.js");
+        const { noteDatasetViewShown, syncSideMenuTabShape } = await import("./side_menu_tab_shape.js");
         const tab = document.querySelector(".navtablinks");
         tab.classList.remove("active");
-        // A dataset in a project subfolder has no menu button: nothing is active, its view is named.
-        applyMainTabActiveState("", { viewDatasetName: "subfolder_orders" });
-        expect(tab.dataset.tabPresentation).toBe("button-inactive");
         const menu = document.getElementById("navmenu");
         menu.setAttribute("data-side-menu-rendered", "true");
-        syncSideMenuTabShape(menu, { datasets: [{ dataset_name: "app_service_catalog",
-            presentation_picture: { background: false, cover: false } }] });
+        const catalogue = { datasets: [
+            { dataset_name: "app_service_catalog", presentation_picture: { background: false, cover: false },
+                default_view: { name: "card" } },
+            { dataset_name: "subfolder_orders", presentation_picture: { background: false, cover: false },
+                default_view: { name: "table" } },
+        ] };
+        syncSideMenuTabShape(menu, catalogue);
+        noteDatasetViewShown("subfolder_orders", "table");
+        applyMainTabActiveState("", { viewDatasetName: "subfolder_orders" });
         expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("rounded");
+        expect(tab.dataset.tabPresentation).toBe("tab-inactive");
+        // The menu's own dataset drawn in a table view makes every tab box-like.
+        noteDatasetViewShown("app_service_catalog", "table");
+        syncSideMenuTabShape(menu, catalogue);
         while (frameCallbacks.length > 0) runQueuedFrames(5000);
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("box");
         expect(tab.dataset.tabPresentation).toBe("button-inactive");
     });
 });

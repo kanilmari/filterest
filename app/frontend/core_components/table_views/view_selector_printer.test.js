@@ -111,6 +111,16 @@ describe("view_selector_printer", () => {
     // (a) Owner decision K143: the chosen view is this tab's own. Choosing one
     // writes it to the tab's session storage and never to the storage that
     // every tab of the site shares.
+    // The person's choice decides the side menu's tab shape, the article view included (owner 2026-11-22).
+    test("a chosen view reaches the side menu's tab shape owner", async () => {
+        const { selectDatasetView } = await loadModule();
+        const { datasetCurrentView } = await import("../navigation/main_tabs/side_menu_tab_shape.js");
+        selectDatasetView("demo_table", "table", "card");
+        expect(datasetCurrentView("demo_table")).toBe("table");
+        selectDatasetView("demo_table", "article_view", "table");
+        expect(datasetCurrentView("demo_table")).toBe("article_view");
+    });
+
     test("choosing a view keeps it in this tab and never writes it to localStorage", async () => {
         const { selectDatasetView } = await loadModule();
         const writes = vi.spyOn(Storage.prototype, "setItem");

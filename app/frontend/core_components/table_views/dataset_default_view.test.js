@@ -8,7 +8,7 @@ const hasRoutePermission = vi.hoisted(() => vi.fn(() => true));
 vi.mock('../route_permission_checker.js', () => ({ hasRoutePermission }));
 vi.mock("../config_fetcher.js", () => ({ getDefaultViewSync: () => "card" }));
 vi.mock("../state_stores/table_specs_reader.js", () => ({ getAllSpecs: tree }));
-import { resolveDatasetDefaultView } from "./dataset_default_view.js";
+import { predictDatasetOpeningView, resolveDatasetDefaultView } from "./dataset_default_view.js";
 beforeEach(() => { localStorage.clear(); tree.mockReturnValue({}); hasRoutePermission.mockReturnValue(true); });
 test("current metadata overrides cached and stale tree defaults without storage writes", () => {
     tree.mockReturnValue({ one: { default_view_name: "article_view" } });
@@ -44,4 +44,28 @@ test.each([
     expect(resolveDatasetDefaultView('one', { tableMeta: { default_view_name: datasetDefault }, globalDefault })).toBe(fallback);
     hasRoutePermission.mockReturnValue(true);
     expect(resolveDatasetDefaultView('one', { tableMeta: { default_view_name: datasetDefault }, globalDefault })).toBe('price_chart');
+});
+
+// The side menu predicts an unopened dataset's view with rendering's own rules (owner 2026-11-22).
+test.each([
+    [{ default_view_name: 'table' }, 'card', 'table'],
+    [{ default_view_name: null }, 'transposed', 'transposed'],
+    [{ default_view_name: 'card' }, 'table', 'card'],
+])('the catalogue default %j with site default %s opens as %s', (tableMeta, globalDefault, expected) => {
+    expect(predictDatasetOpeningView('one', { tableMeta, globalDefault })).toBe(expected);
+});
+test('an Article default the reader may not open falls back as rendering does (Codex plan review r1)', () => {
+    hasRoutePermission.mockImplementation(route => route !== '/ui/view/article_view');
+    expect(predictDatasetOpeningView('one', { tableMeta: { default_view_name: 'article_view' }, globalDefault: 'table' }))
+        .toBe('table');
+    hasRoutePermission.mockReturnValue(true);
+    expect(predictDatasetOpeningView('one', { tableMeta: { default_view_name: 'article_view' }, globalDefault: 'table' }))
+        .toBe('article_view');
+});
+test('without a catalogue default the cached row metadata and the tree decide, as in rendering', () => {
+    localStorage.setItem('one_tableMeta', JSON.stringify({ default_view_name: 'normal' }));
+    expect(predictDatasetOpeningView('one', { globalDefault: 'card' })).toBe('normal');
+    localStorage.clear();
+    tree.mockReturnValue({ one: { default_view_name: 'transposed' } });
+    expect(predictDatasetOpeningView('one', { globalDefault: 'card' })).toBe('transposed');
 });

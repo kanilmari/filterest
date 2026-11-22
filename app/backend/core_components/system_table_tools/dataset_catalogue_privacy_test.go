@@ -40,6 +40,8 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"snapshot"}, rows: [][]driver.Value{{[]byte(`{"registrations":[{"table_uid":11,"name":"public.app_orders","table_kind":"ordinary"}],"shapes":[{"name":"public.app_orders"}]}`)}}})
 	// The readable dataset's picture settings: a background, no cover (no appearance read).
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid", "cover", "background"}, rows: [][]driver.Value{{int64(11), false, true}}})
+	// Its own default view, the table view (side-menu tab shape, 2026-11-22).
+	pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid", "name"}, rows: [][]driver.Value{{int64(11), "table"}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"exists"}, rows: [][]driver.Value{{true}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"order"}, rows: [][]driver.Value{{`[
         {"tab_id":"app_private","sort_order":0},
@@ -53,9 +55,11 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	var body struct {
 		TabOrder []map[string]interface{} `json:"tab_order"`
 		Datasets []struct {
-			Picture map[string]interface{} `json:"presentation_picture"`
+			Picture     map[string]interface{} `json:"presentation_picture"`
+			DefaultView map[string]interface{} `json:"default_view"`
 		} `json:"datasets"`
-		PicturesUnavailable bool `json:"presentation_pictures_unavailable"`
+		PicturesUnavailable     bool `json:"presentation_pictures_unavailable"`
+		DefaultViewsUnavailable bool `json:"default_views_unavailable"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
@@ -64,8 +68,9 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	if response.Code != 200 || !reflect.DeepEqual(body.TabOrder, expected) {
 		t.Fatalf("catalogue tab order leaked names or positions: %s", response.Body.String())
 	}
-	if len(body.Datasets) != 1 || body.PicturesUnavailable ||
-		!reflect.DeepEqual(body.Datasets[0].Picture, map[string]interface{}{"background": true, "cover": false}) {
+	if len(body.Datasets) != 1 || body.PicturesUnavailable || body.DefaultViewsUnavailable ||
+		!reflect.DeepEqual(body.Datasets[0].Picture, map[string]interface{}{"background": true, "cover": false}) ||
+		!reflect.DeepEqual(body.Datasets[0].DefaultView, map[string]interface{}{"name": "table"}) {
 		t.Fatalf("catalogue lost the readable dataset's picture settings: %s", response.Body.String())
 	}
 }

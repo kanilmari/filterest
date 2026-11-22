@@ -12,7 +12,6 @@ import {
     buildTabOutlinePresentation,
     NAVTAB_ACTIVE_FILL,
 } from "./tab_presentation_builder.js";
-import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { isHomeNavigationView } from "./view_presentation_media_resolver.js";
 import { onSideMenuTabShapeChange, sideMenuTabsBoxLike } from "./side_menu_tab_shape.js";
 
@@ -236,9 +235,6 @@ function applyOutlinePathWithMorph(outlinePath, nextPathD, animate) {
 }
 
 let shapeSubscription = null;
-// The view the last presentation was applied for: a dataset without a menu tab (project subfolder) has no
-// active button to recover it from when the menu's decision changes.
-let lastViewDatasetName = "";
 
 function getActiveMainTabId() {
     return document.querySelector(".navtablinks.active")?.dataset?.id || "";
@@ -252,16 +248,12 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
     const viewDatasetName = String(options.viewDatasetName ?? normalizedActiveTabId).trim();
     const isNarrow = window.innerWidth <= NAVTAB_BUTTON_BREAKPOINT_PX;
     const isNavbarOverlay = isNavbarUsingOverlayLayout();
-    const viewKey = viewDatasetName
-        ? getChosenDatasetView(viewDatasetName) || ""
-        : "";
     const navTabs = document.querySelector(".navtabs");
     const allTabButtons = Array.from(document.querySelectorAll(".navtablinks"));
     const navbarWidth = getNavbarWidthPx();
-    // One shape for the whole side menu, decided from every visible dataset tab's pictures
-    // (side_menu_tab_shape.js, owner 2026-11-22): navigation, Home and the theme never change it.
-    lastViewDatasetName = viewDatasetName;
-    shapeSubscription ||= onSideMenuTabShapeChange(() => refreshMainTabPresentation(lastViewDatasetName));
+    // One shape for the whole side menu, decided from every visible dataset tab's pictures and current view
+    // (side_menu_tab_shape.js, owner 2026-11-22): navigation, Home, the open view and the theme never change it.
+    shapeSubscription ||= onSideMenuTabShapeChange(() => refreshMainTabPresentation());
     const forceRectangular = sideMenuTabsBoxLike();
     // Freshly built buttons and Home take their shape without a morph.
     const animate = options.instant !== true
@@ -272,7 +264,6 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
             forceRectangular,
             isNarrow,
             isNavbarOverlay,
-            viewKey,
         });
     }
 
@@ -294,7 +285,6 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
             isNavbarOverlay,
             isActive,
             navbarWidth,
-            viewKey,
         });
         btn.dataset.tabPresentation = presentation.state;
         const outlineSvg = btn.querySelector(".svg-container");

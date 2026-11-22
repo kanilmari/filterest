@@ -12,9 +12,10 @@ export const PLAIN_DATASET = 'system_about';
 /** The media dataset's picture: shown or hidden background, or a cover shown in both themes, only in the dark
  * theme or in neither (hidden by its theme switches). */
 export type DatasetPicture = 'background' | 'background_hidden' | 'cover' | 'cover_dark_only' | 'cover_theme_hidden';
-/** `unreadable` drops datasets from this viewer's catalogue, as missing read permission would. */
+/** `unreadable` drops datasets from this viewer's catalogue, as missing read permission would. `defaultViews` sets
+ * each dataset's own default view in the catalogue and the results (null inherits the site's default). */
 export type MediaTabPolicy = { home: 'video' | 'image' | 'none' | 'hidden'; dataset: DatasetPicture; blocked: string[];
-  visitor: boolean; unreadable: string[] };
+  visitor: boolean; unreadable: string[]; defaultViews: Record<string, string | null> };
 const MEDIA_PATH = '/storage/104/dataset_media/background/original/d572.png';
 const COVER_PATH = '/storage/104/dataset_media/cover/original/d572.png';
 
@@ -67,7 +68,8 @@ async function buildMedia(page: Page) {
 export async function installMediaTabFixture(page: Page, context: BrowserContext, width: number, theme: 'light' | 'dark',
   { visitor = false }: { visitor?: boolean } = {}) {
   const media = await buildMedia(page);
-  const policy: MediaTabPolicy = { home: 'video', dataset: 'background', blocked: [], visitor, unreadable: [] };
+  const policy: MediaTabPolicy = { home: 'video', dataset: 'background', blocked: [], visitor, unreadable: [],
+    defaultViews: { [MEDIA_DATASET]: 'card', [PLAIN_DATASET]: 'card' } };
   await page.setViewportSize({ width, height: width <= 700 ? 844 : 1000 });
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'reduce' });
   await page.addInitScript(theme => {
@@ -125,6 +127,7 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
         .map((entry: { dataset_name: string }) => ({
           ...entry, is_in_current_project: true, is_top_level_in_current_project: true,
           presentation_picture: cataloguePicture(entry.dataset_name === MEDIA_DATASET ? policy.dataset : 'none'),
+          default_view: { name: policy.defaultViews[entry.dataset_name] ?? null },
         })) } }); return;
     }
     if (url.pathname === '/api/tree_data') {
@@ -143,7 +146,9 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
       const light = coverOpacity(policy.dataset, 'light'), dark = coverOpacity(policy.dataset, 'dark');
       const appearance = data.dataset_appearance;
       const effective = appearance?.effective;
+      const dataset = url.searchParams.get('dataset') || '';
       await route.fulfill({ response, json: { ...data,
+        table_meta: { ...data.table_meta, default_view_name: policy.defaultViews[dataset] ?? null },
         dataset_presentation: { ...data.dataset_presentation,
           cover_image_path: cover ? COVER_PATH : '', cover_image_hidden: !cover,
           background_image_path: background ? MEDIA_PATH : '',

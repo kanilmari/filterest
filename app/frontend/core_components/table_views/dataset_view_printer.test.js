@@ -201,6 +201,39 @@ describe('generate_table', () => {
             expect(content.style.getPropertyValue('--dataset-background-image')).toContain('new.webp');
         }
     });
+    // The side menu's tab shape counts the view a dataset is drawn in (owner 2026-11-22).
+    test.each([['table', 'table'], ['normal', 'normal'], ['card', 'card']])('drawing the %s view reports %s to the side menu', async (chosen, reported) => {
+        setChosenDatasetView('demo_dataset', chosen);
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const { datasetCurrentView } = await import('../navigation/main_tabs/side_menu_tab_shape.js');
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, { default_view_name: 'card' });
+        expect(datasetCurrentView('demo_dataset')).toBe(reported);
+    });
+    test('a row article is not reported as the dataset view; the Article view itself is (Codex review r1)', async () => {
+        const { setUnifiedTableState } = await import('../state_stores/table_state_store.js');
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const { datasetCurrentView, noteDatasetViewShown } = await import('../navigation/main_tabs/side_menu_tab_shape.js');
+        noteDatasetViewShown('demo_dataset', 'table');
+        setChosenDatasetView('demo_dataset', 'article_view');
+        setUnifiedTableState('demo_dataset', { articleView: { expandedId: 5 } });
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, { default_view_name: 'card' });
+        expect(datasetCurrentView('demo_dataset')).toBe('table');
+        // An address or history entry that opens the Article view without a row.
+        setUnifiedTableState('demo_dataset', { articleView: { expandedId: null } });
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, { default_view_name: 'card' });
+        expect(datasetCurrentView('demo_dataset')).toBe('article_view');
+    });
+    test('an abandoned build reports nothing (Codex review r1)', async () => {
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const { datasetCurrentView, noteDatasetViewShown } = await import('../navigation/main_tabs/side_menu_tab_shape.js');
+        noteDatasetViewShown('demo_dataset', 'table');
+        setChosenDatasetView('demo_dataset', 'card');
+        let current = true;
+        createCardViewMock.mockImplementation(() => { current = false; return document.createElement('div'); });
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, { default_view_name: 'card' },
+            null, null, { isCurrent: () => current });
+        expect(datasetCurrentView('demo_dataset')).toBe('table');
+    });
     // A visitor has no administrator tree: the results' cover reaches the search hero (owner 2026-11-22).
     test.each([
         [null, { dataset_cover_image_path: '/storage/104/dataset_media/cover/original/old.webp', dataset_cover_image_hidden: false }],

@@ -28,6 +28,14 @@ type Table struct {
 	IconKey                    *string                     `json:"icon_key,omitempty"`
 	// Only for a dataset the viewer may open (the get-results recheck in GetGroupedTables).
 	PresentationPicture *DatasetPresentationPicture `json:"presentation_picture,omitempty"`
+	// Only for a dataset the viewer may open: its own default view, which the side menu needs before the
+	// dataset is opened (owner 2026-11-22: a table view anywhere in the menu makes every tab box-like).
+	DefaultView *DatasetDefaultView `json:"default_view,omitempty"`
+}
+
+// DatasetDefaultView is a dataset's own default view; a null name inherits the site's default view.
+type DatasetDefaultView struct {
+	Name *string `json:"name"`
 }
 
 // DatasetPresentationPicture tells the side menu, before the dataset is opened, which pictures the dataset

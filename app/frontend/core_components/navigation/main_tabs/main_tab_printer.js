@@ -260,11 +260,11 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
 
     const opensHome = isSeparateFrontPageEnabled() && window.location.pathname === '/'
         && (isLoggedIn || localStorage.getItem('login_required_for_browse') !== 'true');
-    // The rendered buttons decide the menu's shape and take it at once, without a morph, for the view about to
-    // open: an already shown Home opens without another refresh, and a table view keeps its button rows.
+    // The rendered buttons decide the menu's shape (side_menu_tab_shape.js) and take it at once, without a
+    // morph: an already shown Home opens without another refresh, and no view changes the shape later.
     container.setAttribute(SIDE_MENU_RENDERED_ATTRIBUTE, "true");
     syncSideMenuTabShape(container);
-    refreshMainTabPresentation(opensHome ? "" : getSelectedDataset() || "", { instant: true });
+    refreshMainTabPresentation("", { instant: true });
 
     if (!isLoggedIn && hasExplicitAuthShellEntry()) {
         return;

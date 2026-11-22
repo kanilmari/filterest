@@ -46,6 +46,7 @@ export interface DatasetCatalogueEntry {
     is_top_level_in_current_project: boolean;
     icon_key?: string;
     presentation_picture?: DatasetPresentationPicture;
+    default_view?: DatasetDefaultView;
 }
 
 export interface DatasetPresentationPicture {
@@ -66,6 +67,10 @@ export interface DatasetCoverPictureStrength {
     center_opacity: number;
     mid_opacity: number;
     edge_opacity: number;
+}
+
+export interface DatasetDefaultView {
+    name: string | null;
 }
 
 export interface ApplicationUpdateTarget {
@@ -320,6 +325,7 @@ export interface DatasetTable {
     is_top_level_in_current_project: boolean;
     icon_key?: string;
     presentation_picture?: DatasetPresentationPicture;
+    default_view?: DatasetDefaultView;
 }
 
 export interface RelatedTableResult {

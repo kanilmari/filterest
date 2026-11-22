@@ -123,6 +123,12 @@ func (c *kindNavigationConn) QueryContext(_ context.Context, q string, args []dr
 			c.t.Fatal("picture settings read without the proven datasets", q, args)
 		}
 		return rows([]string{"uid", "cover", "background"}, []driver.Value{int64(22), true, false}), nil
+	case strings.Contains(q, "LEFT JOIN public.system_table_views AS views"):
+		*c.evidenceReads++
+		if len(args) != 1 {
+			c.t.Fatal("default views read without the proven datasets", q, args)
+		}
+		return rows([]string{"uid", "name"}, []driver.Value{int64(22), nil}), nil
 	case strings.Contains(q, "LEFT JOIN public.system_dataset_appearance a USING(table_uid)"):
 		*c.evidenceReads++
 		// No saved appearance: the resolver's defaults (cover 1 in light, 0.3 in dark).
@@ -173,8 +179,9 @@ func TestKindNavigationRequiresRowReadAndDegradesOnEvidenceFailure(t *testing.T)
 				t.Fatalf("navigation failed: %d %s", w.Code, w.Body.String())
 			}
 			var body struct {
-				Datasets            []map[string]json.RawMessage `json:"datasets"`
-				PicturesUnavailable bool                         `json:"presentation_pictures_unavailable"`
+				Datasets                []map[string]json.RawMessage `json:"datasets"`
+				PicturesUnavailable     bool                         `json:"presentation_pictures_unavailable"`
+				DefaultViewsUnavailable bool                         `json:"default_views_unavailable"`
 			}
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
@@ -198,8 +205,12 @@ func TestKindNavigationRequiresRowReadAndDegradesOnEvidenceFailure(t *testing.T)
 				t.Fatal("wrong picture disclosure", w.Body.String())
 			}
 			// A recheck that failed is not a denial: the browser must keep its menu decision.
-			if body.PicturesUnavailable != (mode == "permission failure") {
+			if body.PicturesUnavailable != (mode == "permission failure") || body.DefaultViewsUnavailable != (mode == "permission failure") {
 				t.Fatal("picture settings availability", w.Body.String())
+			}
+			// Default views follow the same proof; a null name inherits the site's default.
+			if (string(body.Datasets[0]["default_view"]) == `{"name":null}`) != proven {
+				t.Fatal("wrong default view disclosure", w.Body.String())
 			}
 			if mode == "read" {
 				var picture struct {

@@ -32,15 +32,18 @@ import { applyViewStyling } from "./view_selector_printer.js";
 import { dataset_supports_map_view } from "./map_view/map_view_printer.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { getDefaultViewSync } from "../config_fetcher.js";
-import { resolveDatasetDefaultView } from "./dataset_default_view.js";
+import { resolveArticlePermissionFallback, resolveDatasetDefaultView, resolveFallbackViewForUnavailableView } from "./dataset_default_view.js";
+import { noteDatasetViewShown } from "../navigation/main_tabs/side_menu_tab_shape.js";
 import { show_search_and_filter_button } from "../../ui_config.js";
 import { getAllSpecs } from "../state_stores/table_specs_reader.js";
 import { getChosenDatasetView, setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
+import { getUnifiedTableState } from "../state_stores/table_state_store.js";
 import {
     getDatasetViewContainerId,
     getDatasetViewDefinition,
     getDatasetViewPermissionRoute,
     getDatasetViewScrollDirection,
+    isArticleDatasetView,
     isRenderableDatasetView,
     RENDERABLE_DATASET_VIEW_DEFINITIONS,
     resolveDatasetViewSelectionTarget,
@@ -99,21 +102,6 @@ function toggleDatasetSearchAndFilter(tableName) {
     if (!isHidden && legacyHideButton instanceof HTMLElement) {
         legacyHideButton.click();
     }
-}
-
-function resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, unavailableView, columns, dataTypes) {
-    const defaultViewName = tableSpecs[datasetName]?.default_view_name;
-    const fallbackCandidates = [defaultViewName, globalDefault, "card", "table",
-        ...(unavailableView === "price_chart" ? ["normal", "transposed", "article_view", "product_card"] : [])];
-    const fallbackView = fallbackCandidates.find((candidate) => (
-        candidate
-        && candidate !== unavailableView
-        && isRenderableDatasetView(candidate)
-        && (candidate !== "price_chart" || datasetSupportsChartView(columns, dataTypes))
-        && (candidate !== "tree" || datasetSupportsTreeView(datasetName, columns, dataTypes))
-        && (!getDatasetViewPermissionRoute(candidate) || hasRoutePermission(getDatasetViewPermissionRoute(candidate)))
-    ));
-    return fallbackView || "card";
 }
 
 function resolvePermittedView(viewKey, globalDefault) {
@@ -237,9 +225,8 @@ export async function generate_table(
         let defaultView = resolveRenderableView(
             datasetName, datasetDefault, columns, data, data_types, hasGeo, tableSpecs, globalDefault
         );
-        if (defaultView === 'article_view' && !hasRoutePermission('/ui/view/article_view')) {
-            defaultView = resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, 'article_view', columns, data_types);
-        }
+        defaultView = resolveArticlePermissionFallback(datasetName, defaultView,
+            { tableSpecs, globalDefault, columns, dataTypes: data_types });
         let current_view = resolveStoredViewForDatasetDefault(datasetName, defaultView);
         if (current_view === 'article_view' && !requireArticleViewAccess()) {
             current_view = defaultView;
@@ -490,6 +477,11 @@ export async function generate_table(
         restoreSelection?.();
         tab_parts_container.setAttribute("data-view", current_view);
         pendingView = null;
+        // The side menu's tab shape counts the view each dataset is drawn in (owner 2026-11-22), reported only
+        // once this swap has committed, never for an abandoned build. A row's article (its open row id) is
+        // reading a row, not a change of the dataset's view; the Article view itself counts (Codex review r1).
+        noteDatasetViewShown(datasetName, current_view, { rowArticle: isArticleDatasetView(current_view)
+            && getUnifiedTableState(dataset_name)?.articleView?.expandedId != null });
         // syncDatasetSearchVisibility(dataset_name); // REMOVED: No longer needed as we have a single filter bar
         // Place topControls inside the scrollable_content container,
         // right after the hero and before the actual view element.

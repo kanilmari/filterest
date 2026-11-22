@@ -142,12 +142,24 @@ describe("initTabs", () => {
         home.remove();
     });
 
-    test("uses button tabs on wide grid-like views even with physical navbar space", async () => {
+    // Owner 2026-11-22: a table view counts like a picture, menu-wide, from the dataset's default before it is
+    // ever opened; a dataset drawn in another view counts with that view.
+    test("a menu dataset whose default view is a table makes every tab box-like, until it is drawn as cards", async () => {
         setViewportWidth(1920);
-        setChosenDatasetView("app_service_catalog", "table");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
-
-        await initTabs();
+        const { noteDatasetViewShown } = await import("./side_menu_tab_shape.js");
+        const plain = { background: false, cover: false };
+        await initTabs({
+            preloadedContentTablesResponse: {
+                datasets: [
+                    { dataset_name: "app_service_catalog", is_top_level_in_current_project: true,
+                        presentation_picture: plain, default_view: { name: "table" } },
+                    { dataset_name: "plain_dataset", is_top_level_in_current_project: true,
+                        presentation_picture: plain, default_view: { name: null } },
+                ],
+                tab_order: null,
+            },
+        });
         await openNavTab("app_service_catalog");
 
         const container = document.querySelector(".navtabs");
@@ -168,6 +180,12 @@ describe("initTabs", () => {
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");
         expect(outlinePath?.getAttribute("vector-effect")).toBe("non-scaling-stroke");
         expect(outlinePath?.closest("svg")?.getAttribute("preserveAspectRatio")).toBe("none");
+        // Opening the other dataset does not change the shape; drawing the table dataset as cards does.
+        await openNavTab("plain_dataset");
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("box");
+        noteDatasetViewShown("app_service_catalog", "card");
+        expect(document.body.getAttribute("data-side-menu-tab-shape")).toBe("rounded");
+        expect(document.querySelector('.navtablinks[data-id="plain_dataset"]').dataset.tabPresentation).toBe("tab-active");
     });
 
     test("uses right-opening tabs for card view when the desktop navbar has physical space", async () => {

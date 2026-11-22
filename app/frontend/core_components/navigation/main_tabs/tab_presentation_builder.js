@@ -20,7 +20,6 @@ const NAVTAB_ACTIVE_RIGHT_CAP_WIDTH = 3;
 const NAVTAB_NAVBAR_EDGE_OVERLAP = 2;
 const NAVTAB_STROKE_WIDTH = 2;
 const NAVTAB_STROKE_INSET = NAVTAB_STROKE_WIDTH / 2;
-const BUTTON_PRESENTATION_VIEW_KEYS = new Set(["table", "normal", "list", "transposed"]);
 
 function formatPathNumber(value) {
     if (!Number.isFinite(value)) {
@@ -79,22 +78,18 @@ function buildCompatibleTabPath({
     )).join(" ");
 }
 
-export function shouldUseButtonTabsForView(viewKey) {
-    return BUTTON_PRESENTATION_VIEW_KEYS.has(String(viewKey || "").trim());
-}
-
+// Table views no longer shape the tabs here: the menu-wide rule counts them (side_menu_tab_shape.js, owner
+// 2026-11-22) and arrives as forceRectangular. Narrow screens and the overlay menu keep their button rows.
 export function buildTabPresentationState({
     forceRectangular = false,
     isNarrow,
     isNavbarOverlay,
     isActive,
-    viewKey,
 }) {
     if (
         !forceRectangular
         && !isNarrow
         && !isNavbarOverlay
-        && !shouldUseButtonTabsForView(viewKey)
     ) {
         return isActive ? "tab-active" : "tab-inactive";
     }
@@ -106,15 +101,12 @@ export function buildNavTabsRightOffset({
     forceRectangular = false,
     isNarrow,
     isNavbarOverlay,
-    viewKey,
 }) {
     if (forceRectangular || isNarrow || isNavbarOverlay) {
         return "0px";
     }
 
-    return shouldUseButtonTabsForView(viewKey)
-        ? "0px"
-        : `-${NAVTAB_NAVBAR_EDGE_OVERLAP}px`;
+    return `-${NAVTAB_NAVBAR_EDGE_OVERLAP}px`;
 }
 
 export function buildTabOutlinePresentation({
@@ -123,14 +115,12 @@ export function buildTabOutlinePresentation({
     isNavbarOverlay,
     isActive,
     navbarWidth = NAVTAB_DEFAULT_NAVBAR_WIDTH,
-    viewKey,
 }) {
     const state = buildTabPresentationState({
         forceRectangular,
         isNarrow,
         isNavbarOverlay,
         isActive,
-        viewKey,
     });
     const isButton = state.startsWith("button");
     const width = normalizeNavbarWidth(navbarWidth);
