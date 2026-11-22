@@ -5,7 +5,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, test } from "vitest";
-import { setResultsCount, setSearchAiResultsCount } from "./results_count_printer.js";
+import { setResultsCount, setSearchAiResultsCount, withdrawSearchAiResultsCount } from "./results_count_printer.js";
 
 describe("setResultsCount", () => {
     afterEach(() => {
@@ -157,5 +157,94 @@ describe("setResultsCount", () => {
         setResultsCount("orders", 12);
 
         expect(document.getElementById("orders_results_count").textContent).toBe("12 results");
+    });
+});
+
+// #1039: the counter and the rows it describes change together. When the AI
+// group leaves the screen without a new listing, the counter returns at once
+// to the dataset's own number, which still describes the rows on screen.
+describe("the AI part follows the AI group on the page", () => {
+    afterEach(() => {
+        setSearchAiResultsCount("tasks", null);
+    });
+
+    function countDom() {
+        document.documentElement.lang = "fi";
+        document.body.innerHTML = `
+            <div id="tasks_results_count"></div>
+            <div data-results-count-for="tasks"></div>
+            <div id="tasks_search_ai_cards"></div>
+        `;
+        return {
+            primary: document.getElementById("tasks_results_count"),
+            mirror: document.querySelector('[data-results-count-for="tasks"]'),
+            host: document.getElementById("tasks_search_ai_cards"),
+        };
+    }
+
+    test("withdrawing the AI part redraws both counters with the dataset's own number", () => {
+        const { primary, mirror, host } = countDom();
+        setResultsCount("tasks", 5);
+        setSearchAiResultsCount("tasks", 3, { isShown: () => host.isConnected });
+        setResultsCount("tasks", 5);
+        expect(primary.textContent).toBe("5 results in text search + 3 results in AI search");
+
+        expect(withdrawSearchAiResultsCount("tasks")).toBe(true);
+
+        expect(primary.textContent).toBe("5 results");
+        expect(mirror.textContent).toBe("5 results");
+        expect(primary.dataset.resultCount).toBe("5");
+    });
+
+    test("without an AI part the counter is left as it is", () => {
+        const { primary } = countDom();
+        setResultsCount("tasks", 5);
+        const updates = [];
+        primary.addEventListener("results-count-updated", () => updates.push(primary.textContent));
+
+        expect(withdrawSearchAiResultsCount("tasks")).toBe(false);
+
+        expect(updates).toEqual([]);
+        expect(primary.textContent).toBe("5 results");
+    });
+
+    test("a view rebuilt without the AI group shows only the dataset's number", () => {
+        const { primary, mirror, host } = countDom();
+        setSearchAiResultsCount("tasks", 3, { isShown: () => host.isConnected });
+        setResultsCount("tasks", 10);
+        expect(primary.textContent).toBe("10 results in text search + 3 results in AI search");
+
+        // The rebuild replaces the results surface, AI group included, and
+        // writes the fresh listing's number before the group is placed again.
+        host.remove();
+        setResultsCount("tasks", 7);
+
+        expect(primary.textContent).toBe("7 results");
+        expect(mirror.textContent).toBe("7 results");
+    });
+
+    test("withdrawal redraws the number now on screen, not an older search's number", () => {
+        const { primary, host } = countDom();
+        setSearchAiResultsCount("tasks", 3, { isShown: () => host.isConnected });
+        setResultsCount("tasks", 10);
+        host.remove();
+        // A rebuild committed an empty listing before the search learned of it.
+        setResultsCount("tasks", 0);
+
+        expect(withdrawSearchAiResultsCount("tasks")).toBe(true);
+
+        expect(primary.textContent).toBe("0 results");
+    });
+
+    test("an AI group that is hidden but still in the page is not counted", () => {
+        const { primary } = countDom();
+        let shown = true;
+        setSearchAiResultsCount("tasks", 3, { isShown: () => shown });
+        setResultsCount("tasks", 5);
+        expect(primary.textContent).toBe("5 results in text search + 3 results in AI search");
+
+        shown = false;
+        setResultsCount("tasks", 5);
+        expect(primary.textContent).toBe("5 results");
     });
 });

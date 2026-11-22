@@ -404,9 +404,12 @@ async function fetchMoreData(tableName, options = {}) {
         }
         if (result.dataset_appearance != null
             && !datasetAppearanceState.accept(tableName, result.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
-        setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;
         scrollSt.rowCountSignature = scopeSignature;
+        // The counter changes in the same step as the rows it describes. Cards
+        // are built off screen first, and a replaced reply never commits, so
+        // writing earlier showed this number over the previous rows (#1039).
+        const showRowCount = () => setResultsCount(tableName, result.row_count);
 
         if (!result.data || result.data.length === 0) {
             // A reload still has to empty the view: an answer with no rows is
@@ -416,6 +419,7 @@ async function fetchMoreData(tableName, options = {}) {
                 if (!outcome || !isCurrent()) return null;
                 if (isCurrent()) clearLoadedDatasetRows(container);
             }
+            showRowCount();
             // Kaikki rivit ladattu — pysäytetään infinite scroll kokonaan.
             // disconnect() + null estää myös fillScreenInterval-silmukan jatkumisen.
             if (!replace && scrollSt.observer) {
@@ -432,6 +436,7 @@ async function fetchMoreData(tableName, options = {}) {
             : filterLoadedDatasetDuplicates(container, tableName, result.data);
         const outcome = await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types, beforeSwap });
         if (!outcome || !isCurrent()) return null;
+        showRowCount();
         updateOffset(tableName, result.data.length);
         if (replace) {
             // A replaced list starts a new remembered prefix: exactly the rows

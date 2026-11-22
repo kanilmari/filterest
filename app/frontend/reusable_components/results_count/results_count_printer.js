@@ -11,26 +11,47 @@ const SEARCH_BREAKDOWN_MODE = "search-breakdown";
 // moments. Registering the AI part here lets either one publish without
 // erasing the other's number, so the counter never contradicts the page.
 const searchAiResultCounts = new Map();
+// The dataset's own number that each counter shows now. Every writer passes it
+// once the rows it describes are on screen, so it is the number that matches
+// the visible rows when the AI part has to leave without a new listing.
+const shownDatasetCounts = new Map();
 
 /**
  * Register, or with a null or zero value withdraw, the AI part of a dataset's
  * counter. Only a search sets this; clearing the search withdraws it.
+ * With `isShown`, the part counts only while that check says its AI group is
+ * what the reader sees: a view rebuilt or switched without the group shows the
+ * dataset's own number, never AI rows that are gone or hidden.
  */
-export function setSearchAiResultsCount(tableName, aiCount) {
+export function setSearchAiResultsCount(tableName, aiCount, { isShown = null } = {}) {
     if (Number.isFinite(aiCount) && aiCount > 0) {
-        searchAiResultCounts.set(tableName, aiCount);
+        searchAiResultCounts.set(tableName, { aiCount, isShown });
         return;
     }
     searchAiResultCounts.delete(tableName);
 }
 
+/**
+ * Withdraw the AI part together with the AI group that just left the screen,
+ * and show the counter again with the dataset's own number. The dataset's rows
+ * stay until a new listing replaces them, so their number stays with them.
+ * @returns {boolean} whether an AI part was withdrawn and the counter redrawn.
+ */
+export function withdrawSearchAiResultsCount(tableName) {
+    if (!searchAiResultCounts.delete(tableName)) return false;
+    if (shownDatasetCounts.has(tableName)) {
+        setResultsCount(tableName, shownDatasetCounts.get(tableName));
+    }
+    return true;
+}
+
 function composeResultsCount(tableName, count) {
-    const aiCount = searchAiResultCounts.get(tableName);
-    if (!Number.isFinite(aiCount) || typeof count !== "number") {
+    const part = searchAiResultCounts.get(tableName);
+    if (!part || typeof count !== "number" || (part.isShown && !part.isShown())) {
         return count;
     }
 
-    return { mode: SEARCH_BREAKDOWN_MODE, textCount: count, aiCount };
+    return { mode: SEARCH_BREAKDOWN_MODE, textCount: count, aiCount: part.aiCount };
 }
 
 function isSearchBreakdownCount(count) {
@@ -138,6 +159,7 @@ function renderResultsCountIntoElement(el, count) {
 }
 
 export function setResultsCount(tableName, count) {
+    shownDatasetCounts.set(tableName, count);
     const composedCount = composeResultsCount(tableName, count);
     const primaryEl = document.getElementById(`${tableName}_results_count`);
     renderResultsCountIntoElement(primaryEl, composedCount);

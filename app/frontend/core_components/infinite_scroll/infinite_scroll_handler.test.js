@@ -485,6 +485,55 @@ describe("initializeInfiniteScroll", () => {
         scroll.disconnectInfiniteScroll("async_cards");
     });
 
+    // #1039: the counter changes in the same step as the rows it describes.
+    test("a reload shows its count only once its cards have replaced the previous ones", async () => {
+        const { cardContainer } = createCardView("swap_cards");
+        cardContainer.innerHTML = '<div class="card" data-id="341">Tokyo</div>';
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 226 }], row_count: 1, types: {} });
+        let finishBuild;
+        appendDataToCardViewMock.mockImplementationOnce((host, _columns, rows) => new Promise(resolve => {
+            finishBuild = () => {
+                rows.forEach(row => {
+                    const card = document.createElement("div");
+                    card.className = "card";
+                    card.dataset.id = String(row.id);
+                    host.appendChild(card);
+                });
+                resolve();
+            };
+        }));
+        const counted = [];
+        setResultsCountMock.mockImplementation((_name, count) => {
+            counted.push([count, [...document.querySelectorAll("#swap_cards_card_view_container .card")].map(card => card.dataset.id)]);
+        });
+        const scroll = await import("./infinite_scroll_handler.js");
+        const reload = scroll.reloadDatasetRowsFromListing("swap_cards");
+        await vi.waitFor(() => expect(finishBuild).toBeTypeOf("function"));
+
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+        finishBuild();
+        await reload;
+        expect(counted).toEqual([[1, ["226"]]]);
+        scroll.disconnectInfiniteScroll("swap_cards");
+        setResultsCountMock.mockReset();
+    });
+
+    test("a reload abandoned during its card build never writes its count", async () => {
+        createCardView("abandoned_cards");
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 226 }], row_count: 1, types: {} });
+        let finishBuild;
+        appendDataToCardViewMock.mockImplementationOnce(() => new Promise(resolve => { finishBuild = resolve; }));
+        const scroll = await import("./infinite_scroll_handler.js");
+        const reload = scroll.reloadDatasetRowsFromListing("abandoned_cards");
+        await vi.waitFor(() => expect(finishBuild).toBeTypeOf("function"));
+
+        // A newer listing takes over the list while the old cards are built.
+        scroll.disconnectInfiniteScroll("abandoned_cards");
+        finishBuild();
+        expect(await reload).toBeNull();
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+    });
+
     test("keeps paging a dataset that is showing a search", async () => {
         // A committed search used to switch endless scrolling off, which left
         // every match after the first batch unreachable.
@@ -512,7 +561,8 @@ describe("initializeInfiniteScroll", () => {
             offset: 20,
             filters: { status: "open", search: "api" },
         }));
-        expect(setResultsCountMock).toHaveBeenCalledWith("searched_orders", 251);
+        // The count follows the committed page (#1039).
+        await vi.waitFor(() => expect(setResultsCountMock).toHaveBeenCalledWith("searched_orders", 251));
 
         disconnectInfiniteScroll("searched_orders");
     });
@@ -602,6 +652,9 @@ describe("initializeInfiniteScroll", () => {
         // The rows that were on screen are gone, so they are no longer remembered.
         expect(loaded.filterLoadedDatasetDuplicates(container, "empty_orders", [{ id: 9 }])).toEqual([{ id: 9 }]);
         expect(setResultsCountMock).toHaveBeenCalledWith("empty_orders", 0);
+        // Zero is shown with the emptied list, never over the old rows (#1039).
+        expect(setResultsCountMock.mock.invocationCallOrder[0])
+            .toBeGreaterThan(appendDataToTableMock.mock.invocationCallOrder.at(-1) ?? 0);
         expect(getUnifiedTableStateMock().offset).toBe(0);
 
         disconnectInfiniteScroll("empty_orders");

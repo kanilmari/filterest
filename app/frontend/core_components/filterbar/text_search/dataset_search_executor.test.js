@@ -17,6 +17,7 @@ import {
     reloadDatasetRowsFromListingMock,
     setResultsCountMock,
     resetDatasetSearchTest,
+    withdrawSearchAiResultsCountMock,
 } from "./dataset_search_executor_test_setup.js";
 
 describe("do_intelligent_search browses the dataset", () => {
@@ -78,17 +79,77 @@ describe("do_intelligent_search browses the dataset", () => {
         expect(setResultsCountMock).not.toHaveBeenCalledWith("dev_agent_tasks", 10);
     });
 
-    test("withdraws the old dataset total before other-dataset searches can appear", async () => {
-        document.getElementById("dev_agent_tasks_results_count").textContent = "3 results";
-        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
-            data: [{ id: 14 }], row_count: 1, columns: ["id"],
-        }));
+    // #1039: the counter and the rows change together. While the searched
+    // listing has not replaced the rows on screen, the counter keeps their
+    // number; 0 appears only when a search has answered with no matches.
+    function deferListing() {
+        const releases = [];
+        reloadDatasetRowsFromListingMock.mockImplementation(() => new Promise(resolve => { releases.push(resolve); }));
+        return releases;
+    }
 
+    test("keeps the shown count until the searched listing has replaced the rows", async () => {
+        const releases = deferListing();
         const { do_intelligent_search } = await import("./dataset_search_executor.js");
-        await do_intelligent_search("dev_agent_tasks", "claude");
+        const search = do_intelligent_search("dev_agent_tasks", "nikko");
+        await vi.waitFor(() => expect(releases).toHaveLength(1));
 
-        expect(setResultsCountMock.mock.calls[0]).toEqual(["dev_agent_tasks", 0]);
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+        // Only the previous AI group's part leaves, together with that group.
+        expect(withdrawSearchAiResultsCountMock).toHaveBeenCalledWith("dev_agent_tasks");
+
+        releases[0](listingAnswer({ data: [{ id: 226 }], row_count: 1, columns: ["id"] }));
+        await search;
+        expect(setResultsCountMock).not.toHaveBeenCalledWith("dev_agent_tasks", 0);
         expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
+    });
+
+    test("repeating the same search never shows zero over its own rows", async () => {
+        reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({ data: [{ id: 226 }], row_count: 1, columns: ["id"] }));
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        await do_intelligent_search("dev_agent_tasks", "nikko");
+        setResultsCountMock.mockClear();
+
+        const releases = deferListing();
+        const repeated = do_intelligent_search("dev_agent_tasks", "nikko");
+        await vi.waitFor(() => expect(releases).toHaveLength(1));
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+
+        releases[0](listingAnswer({ data: [{ id: 226 }], row_count: 1, columns: ["id"] }));
+        await repeated;
+        expect(setResultsCountMock).toHaveBeenCalled();
+        expect(setResultsCountMock.mock.calls.every(([name, count]) => name === "dev_agent_tasks" && count === 1)).toBe(true);
+    });
+
+    test("in rapid successive searches only the latest answer writes the count", async () => {
+        const releases = deferListing();
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        const first = do_intelligent_search("dev_agent_tasks", "tokyo");
+        await vi.waitFor(() => expect(releases).toHaveLength(1));
+        const second = do_intelligent_search("dev_agent_tasks", "nikko");
+        await vi.waitFor(() => expect(releases).toHaveLength(2));
+
+        // The replaced search answers late; its number never reaches the counter.
+        releases[0](listingAnswer({ data: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }], row_count: 5, columns: ["id"] }));
+        await first;
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+
+        releases[1](listingAnswer({ data: [{ id: 226 }], row_count: 1, columns: ["id"] }));
+        await second;
+        expect(setResultsCountMock).toHaveBeenCalled();
+        expect(setResultsCountMock.mock.calls.every(([name, count]) => name === "dev_agent_tasks" && count === 1)).toBe(true);
+    });
+
+    test("shows zero only once a search has answered with no matches", async () => {
+        const releases = deferListing();
+        const { do_intelligent_search } = await import("./dataset_search_executor.js");
+        const search = do_intelligent_search("dev_agent_tasks", "nonsense");
+        await vi.waitFor(() => expect(releases).toHaveLength(1));
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+
+        releases[0](listingAnswer({ row_count: 0 }));
+        await search;
+        expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 0);
     });
 
     test("coalesces identical URL searches from synchronized panel instances", async () => {

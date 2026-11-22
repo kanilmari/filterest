@@ -45,7 +45,7 @@ vi.mock("../text_search/dataset_search_response_reader.js", () => ({ readDataset
 vi.mock("../text_search/supplemental_dataset_search.js", () => ({ createSupplementalDatasetSearch: supplemental }));
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: (_key, { fallback }) => fallback }));
 vi.mock("../../../reusable_components/results_count/results_count_printer.js", () => ({
-    setResultsCount: vi.fn(), setSearchAiResultsCount: vi.fn(),
+    setResultsCount: vi.fn(), setSearchAiResultsCount: vi.fn(), withdrawSearchAiResultsCount: vi.fn(() => false),
 }));
 
 const columns = ["id", "owner_id", "owner_name (ln)", "title"];

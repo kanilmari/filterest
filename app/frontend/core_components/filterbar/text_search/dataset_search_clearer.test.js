@@ -125,6 +125,33 @@ describe("clearCommittedDatasetSearch", () => {
         });
     });
 
+    test("clearing a search with an AI group leaves the counter with the dataset's own number", async () => {
+        // #1039: the AI group leaves at once while the searched rows stay until
+        // the refreshed listing replaces them, so the counter keeps their number.
+        getParamsMock.mockReturnValue({ search: "urgent", view: "card" });
+        ongoingSearchResultsMock.tasks = { data: [{ id: 473 }] };
+        document.body.innerHTML = `
+            <div id="tasks_results_count"></div>
+            <div data-results-count-for="tasks"></div>
+            <div id="tasks_card_view_container"><div id="tasks_search_ai_cards"></div></div>
+        `;
+        const { setResultsCount, setSearchAiResultsCount } = await import(
+            "../../../reusable_components/results_count/results_count_printer.js"
+        );
+        const aiHost = document.getElementById("tasks_search_ai_cards");
+        setSearchAiResultsCount("tasks", 3, { isShown: () => aiHost.isConnected });
+        setResultsCount("tasks", 12);
+        const primary = document.getElementById("tasks_results_count");
+        expect(primary.classList.contains("results-count--search-breakdown")).toBe(true);
+        const { clearCommittedDatasetSearch } = await import("./dataset_search_clearer.js");
+
+        expect(clearCommittedDatasetSearch("tasks")).toBe(true);
+
+        expect(document.querySelector("#tasks_search_ai_cards")).toBeNull();
+        expect(primary.textContent).toBe("12 results");
+        expect(document.querySelector('[data-results-count-for="tasks"]').textContent).toBe("12 results");
+    });
+
     test("does nothing when there is no committed text search", async () => {
         getParamsMock.mockReturnValue({ status: "open", view: "card" });
         const { clearCommittedDatasetSearch } = await import(

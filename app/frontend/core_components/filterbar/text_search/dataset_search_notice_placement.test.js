@@ -59,6 +59,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
 vi.mock("../../../reusable_components/results_count/results_count_printer.js", () => ({
     setResultsCount: setResultsCountMock,
     setSearchAiResultsCount: setSearchAiResultsCountMock,
+    withdrawSearchAiResultsCount: vi.fn(() => false),
 }));
 
 vi.mock("./dataset_search_state_reader.js", () => ({

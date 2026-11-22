@@ -326,11 +326,15 @@ function createSecondSearchResultsHost(tableName) {
 /** Remove the search's own AI group and stage notices from the view now shown. */
 function removeSearchGroups(tableName, currentView = getCurrentSearchView(tableName)) {
     const stageContainer = getSearchStageContainer(tableName, currentView);
-    if (!stageContainer) return;
-    const aiHost = stageContainer.querySelector(`#${getSearchAiHostId(tableName, currentView)}`);
-    disposeCardResources(aiHost);
-    aiHost?.remove();
-    stageContainer.querySelectorAll(".search-stage-notice").forEach((el) => el.remove());
+    if (stageContainer) {
+        const aiHost = stageContainer.querySelector(`#${getSearchAiHostId(tableName, currentView)}`);
+        disposeCardResources(aiHost);
+        aiHost?.remove();
+        stageContainer.querySelectorAll(".search-stage-notice").forEach((el) => el.remove());
+    }
+    // The AI group's part of the counter leaves with the group; the dataset's
+    // own number stays with its rows until a listing replaces them (#1039).
+    clearSearchResultsCount(tableName);
 }
 
 /**
@@ -576,12 +580,11 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, ren
         searchOptions: opts, serverFiltersApplied: false, executionSignature, callerIsCurrent,
     });
     _ongoingSearchResults[tableName] = cache;
-    // The previous search's AI number describes rows that are already gone.
-    clearSearchResultsCount(tableName);
-    // Withdraw the unfiltered listing's old number immediately. Until the
-    // searched listing replies, zero current-dataset matches are known; other
-    // datasets load independently and never get a chance to fill this count.
-    syncSearchResultsCount(tableName, cache);
+    // The counter keeps the number of the rows still on screen; removing the
+    // previous AI group above already withdrew that group's part. The listing
+    // writes the new number in the same step as it replaces those rows, so a
+    // count never describes another search's rows, and 0 appears only when a
+    // search has answered with no matches (#1039).
     if (isNewQuestion) awaitFirstSearchResultInArticleView(tableName);
     const isCurrent = () => (!callerIsCurrent || callerIsCurrent()) && isCurrentSearchCache(tableName, cache)
         && cache.filterSignature === getSearchFilterContext(tableName).signature;

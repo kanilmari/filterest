@@ -22,6 +22,7 @@ const {
     setResultsCountMock,
     setSearchAiResultsCountMock,
     setUnifiedTableStateMock,
+    withdrawSearchAiResultsCountMock,
 } = vi.hoisted(() => ({
     appendDataToCardViewMock: vi.fn(),
     appendDataToTableMock: vi.fn(),
@@ -39,6 +40,7 @@ const {
     setResultsCountMock: vi.fn(),
     setSearchAiResultsCountMock: vi.fn(),
     setUnifiedTableStateMock: vi.fn(),
+    withdrawSearchAiResultsCountMock: vi.fn(() => false),
 }));
 
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: vi.fn((_key, { fallback }) => fallback) }));
@@ -64,6 +66,7 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
 vi.mock("../../../reusable_components/results_count/results_count_printer.js", () => ({
     setResultsCount: setResultsCountMock,
     setSearchAiResultsCount: setSearchAiResultsCountMock,
+    withdrawSearchAiResultsCount: withdrawSearchAiResultsCountMock,
 }));
 
 vi.mock("./dataset_search_state_reader.js", () => ({
@@ -101,6 +104,7 @@ export {
     setResultsCountMock,
     setSearchAiResultsCountMock,
     setUnifiedTableStateMock,
+    withdrawSearchAiResultsCountMock,
 };
 
 export function createNdjsonStreamResponse(rows) {

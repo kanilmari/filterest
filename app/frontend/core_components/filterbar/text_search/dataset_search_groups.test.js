@@ -111,7 +111,12 @@ describe("dataset search groups", () => {
         const { do_intelligent_search } = await import("./dataset_search_executor.js");
         await do_intelligent_search("dev_agent_tasks", "cloud");
 
-        expect(setSearchAiResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 2);
+        // The AI part is registered with the group that shows it (#1039).
+        expect(setSearchAiResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 2,
+            { isShown: expect.any(Function) });
+        expect(setSearchAiResultsCountMock.mock.lastCall[2].isShown()).toBe(true);
+        document.getElementById("dev_agent_tasks_search_ai_table").remove();
+        expect(setSearchAiResultsCountMock.mock.lastCall[2].isShown()).toBe(false);
         expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 251);
     });
 
@@ -300,7 +305,9 @@ describe("dataset search groups", () => {
         expect(seeAlso?.nextElementSibling).toBe(aiHost);
         // The other datasets stay last in the same scroll flow.
         expect(resultsFlow.lastElementChild?.classList.contains("supplemental-dataset-results")).toBe(true);
-        expect(setSearchAiResultsCountMock).toHaveBeenLastCalledWith(tableName, 1);
+        expect(setSearchAiResultsCountMock).toHaveBeenLastCalledWith(tableName, 1,
+            { isShown: expect.any(Function) });
+        expect(setSearchAiResultsCountMock.mock.lastCall[2].isShown()).toBe(true);
         // Nothing is asked again: the listing pages the dataset's rows and the
         // AI answer is the one the search already received.
         expect(reloadDatasetRowsFromListingMock).not.toHaveBeenCalled();

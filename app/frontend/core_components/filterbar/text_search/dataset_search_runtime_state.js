@@ -8,7 +8,7 @@ import { datasetAppearanceState } from '../../table_views/dataset_appearance_sta
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
-import { setResultsCount, setSearchAiResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
+import { setResultsCount, setSearchAiResultsCount, withdrawSearchAiResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
 import { hasDatasetAiSearchPermission } from "./dataset_search_permission_reader.js";
 import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_group_filter_contract.js";
 import { getActiveFiltersSnapshot, RESERVED_PARAM_KEYS } from "./dataset_search_state_reader.js";
@@ -126,6 +126,20 @@ export function getSearchAiHostId(
         : `${tableName}_search_ai_cards`;
 }
 
+/**
+ * The AI group the active view shows for this dataset, or null. Card and
+ * article views give their groups the same id, and the card list kept for an
+ * article's return stays in the page while hidden, so only a group inside the
+ * active view's own container is the one the reader sees.
+ */
+export function getShownSearchAiHost(
+    tableName,
+    currentView = getCurrentSearchView(tableName)
+) {
+    return getSearchViewContainer(tableName, currentView)
+        ?.querySelector(`#${getSearchAiHostId(tableName, currentView)}`) || null;
+}
+
 export function removeSearchNotice(tableName, langKey) {
     const currentView = getCurrentSearchView(tableName);
     const stageContainer = getSearchStageContainer(tableName, currentView);
@@ -188,13 +202,23 @@ export function syncSearchResultsCount(
     cache = ongoingSearchResultsStore[tableName]
 ) {
     const { textCount, aiCount } = getVisibleSearchCounts(tableName, cache);
-    setSearchAiResultsCount(tableName, aiCount);
+    // The AI part is tied to the group the active view shows, so a counter
+    // written after that group has left, or while another view is showing,
+    // never counts its rows (#1039).
+    const aiHost = aiCount > 0 ? getShownSearchAiHost(tableName) : null;
+    setSearchAiResultsCount(tableName, aiHost ? aiCount : 0, {
+        isShown: () => getShownSearchAiHost(tableName) === aiHost,
+    });
     setResultsCount(tableName, textCount);
 }
 
-/** Withdraw the search's own part of the counter when the search ends. */
+/**
+ * Withdraw the search's own part of the counter when its AI group leaves the
+ * screen or the search ends. The counter is redrawn at once with the dataset's
+ * own number, which still describes the rows on screen.
+ */
 export function clearSearchResultsCount(tableName) {
-    setSearchAiResultsCount(tableName, null);
+    return withdrawSearchAiResultsCount(tableName);
 }
 
 /**
