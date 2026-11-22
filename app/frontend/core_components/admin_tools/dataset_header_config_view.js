@@ -318,15 +318,6 @@ function syncDatasetPresentationMedia(datasetName, coverImagePath, backgroundIma
         ...specs,
         [datasetName]: nextDatasetSpec,
     });
-    const tabButton = Array.from(document.querySelectorAll('.navtablinks'))
-        .find((button) => button.dataset.id === datasetName);
-    if (tabButton instanceof HTMLElement) {
-        tabButton.dataset.hasPresentationMedia = String(
-            Boolean(resolveVisibleDatasetMediaPath(coverImagePath, coverImageHidden)
-                || resolveVisibleDatasetMediaPath(backgroundImagePath, backgroundImageHidden))
-        );
-    }
-
     for (const hero of document.querySelectorAll('.filterbar-inline-hero')) {
         if (hero.dataset.filterbarInlineHeroFor !== datasetName) continue;
         applyPresentationImage(

@@ -14,16 +14,6 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
 
-func TestGroupedTableJSONExposesPresentationMediaAsTypedBoolean(t *testing.T) {
-	payload, err := json.Marshal(dtt_models.Table{HasPresentationMedia: true})
-	if err != nil {
-		t.Fatalf("marshal grouped table metadata: %v", err)
-	}
-	if !strings.Contains(string(payload), `"has_presentation_media":true`) {
-		t.Fatalf("grouped table JSON missing typed media flag: %s", payload)
-	}
-}
-
 func TestGroupedTableJSONKeepsRegistryIDSeparateFromDatasetUIDAndNames(t *testing.T) {
 	pool := dtt_models.Table{ID: 900, TableUID: 11, TableName: "app_orders", CanReadRows: true,
 		Names: []string{"app_orders", "shop-orders"}, PreferredName: "shop-orders"}
@@ -69,11 +59,6 @@ func TestBuildGroupedTablesQueryUsesRecursiveCurrentProjectFolders(t *testing.T)
 		"COALESCE(cpf.id IS NOT NULL, false) AS is_in_current_project",
 		"LEFT JOIN current_project_roots cpr ON t.folder_id = cpr.id",
 		"COALESCE(cpr.id IS NOT NULL, false) AS is_top_level_in_current_project",
-		"FROM public.system_dataset_media media",
-		"media.table_uid = t.table_uid",
-		"media.media_role IN ('cover', 'background')",
-		"AND NOT media.hidden",
-		") AS has_presentation_media",
 	}
 
 	for _, fragment := range requiredFragments {

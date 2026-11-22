@@ -3,7 +3,7 @@
 // GET-only fixtures shape Home media and the two existing datasets' tab metadata.
 // Default signed-in storageState; only read-only permission POSTs pass the write guard.
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { installMediaTabFixture, openMediaTabView, MEDIA_DATASET, PLAIN_DATASET } from '../helpers/media-tab-fixture';
+import { installMediaTabFixture, openMediaTabView, useDatasetPicture, MEDIA_DATASET, PLAIN_DATASET } from '../helpers/media-tab-fixture';
 import { ensureNavbarVisible } from '../helpers/navbar';
 
 async function labelContrast(button: Locator) {
@@ -188,3 +188,33 @@ test('docked Home keeps rectangular side-menu buttons while dataset connectors f
   await openMediaTabView(page, 'dataset_plain');
   await expectMenuShapes(page, 'dataset', false, 1920);
 });
+
+// Owner rule (2026-11-21): a uniform background gives the side menu rounded tabs and a shown picture
+// box-like buttons. A picture that is set but hidden, by the media switch or by both theme switches
+// of a cover (opacity 0, as on fintravel.fi in 9.6.14), leaves a uniform background.
+for (const picture of ['background_hidden', 'cover_theme_hidden', 'cover', 'background'] as const) {
+  test(`docked side menu over a ${picture.replace('_', ' ')} picture follows what the view draws`, async ({ page, context }, info) => {
+    test.setTimeout(90_000);
+    const policy = await installMediaTabFixture(page, context, 1920, 'dark');
+    await useDatasetPicture(page, policy, picture);
+    await openMediaTabView(page, 'dataset_picture');
+    const parts = page.locator(`#${MEDIA_DATASET}_tab_parts_container`);
+    const content = parts.locator('.tab-content-area');
+    const hero = parts.locator('.filterbar-inline-hero');
+    if (picture === 'background') await expect(content).toHaveClass(/tab-content-area--has-dataset-background/);
+    else await expect(content).not.toHaveClass(/tab-content-area--has-dataset-background/);
+    if (picture.startsWith('cover')) {
+      await expect(hero).toHaveClass(/filterbar-inline-hero--has-cover/);
+      await expect.poll(() => hero.evaluate(element => getComputedStyle(element, '::before').opacity))
+        .toBe(picture === 'cover' ? '1' : '0');
+    }
+    await ensureNavbarVisible(page);
+    // Saved before the shape checks, so a failing run still shows the menu it drew.
+    const shot = info.outputPath(`side-menu-${picture}.png`);
+    await page.screenshot({ path: shot });
+    await info.attach(`side-menu-${picture}`, { path: shot, contentType: 'image/png' });
+    const shown = picture === 'cover' || picture === 'background';
+    await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', String(shown));
+    await expectMenuShapes(page, 'dataset', shown, 1920);
+  });
+}

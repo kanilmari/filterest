@@ -210,7 +210,6 @@ describe('dataset_header_config_view', () => {
         const tabButton = document.createElement('button');
         tabButton.className = 'navtablinks';
         tabButton.dataset.id = 'orders';
-        tabButton.dataset.hasPresentationMedia = 'false';
         document.body.append(hero, tabParts, tabButton);
 
         await generate_dataset_header_config_view(container);
@@ -247,7 +246,8 @@ describe('dataset_header_config_view', () => {
         expect(hero.style.getPropertyValue('--dataset-cover-image')).toContain('/cover/1000/new-cover.webp');
         expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
         expect(contentArea.style.getPropertyValue('--dataset-background-image')).toContain('/background/2160/new-background.webp');
-        expect(tabButton.dataset.hasPresentationMedia).toBe('true');
+        // The side menu reads the drawn picture above (view_presentation_media_resolver.js), not a tab copy.
+        expect(tabButton.dataset.hasPresentationMedia).toBeUndefined();
         expect(document.querySelector('meta[name="project-logo-path"]')).toBeNull();
     });
 
@@ -438,8 +438,8 @@ describe('dataset_header_config_view', () => {
         }
     });
 
-    test.each([[true, true, 'false'], [true, false, 'true'], [false, true, 'true'], [false, false, 'true']])(
-        'saved visibility (%s, %s) updates displayed images and preserves cached paths', async (coverHidden, backgroundHidden, hasMedia) => {
+    test.each([[true, true], [true, false], [false, true], [false, false]])(
+        'saved visibility (%s, %s) updates displayed images and preserves cached paths', async (coverHidden, backgroundHidden) => {
             endpointRouterMock.mockResolvedValue(['orders']);
             fetchDatasetHeaderConfigMock.mockResolvedValue(buildConfig());
             saveDatasetHeaderConfigMock.mockResolvedValue({ config: buildConfig({
@@ -476,7 +476,6 @@ describe('dataset_header_config_view', () => {
             expect(Boolean(hero.style.getPropertyValue('--dataset-cover-image'))).toBe(!coverHidden);
             expect(content.classList.contains('tab-content-area--has-dataset-background')).toBe(!backgroundHidden);
             expect(Boolean(content.style.getPropertyValue('--dataset-background-image'))).toBe(!backgroundHidden);
-            expect(tab.dataset.hasPresentationMedia).toBe(hasMedia);
             expect(JSON.parse(localStorage.getItem('table_specs')).orders).toMatchObject({
                 dataset_cover_image_path: buildConfig().cover_image_path,
                 dataset_background_image_path: buildConfig().background_image_path,

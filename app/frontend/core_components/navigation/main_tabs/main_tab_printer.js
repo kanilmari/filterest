@@ -209,9 +209,6 @@ export async function initTabs({ dataAlreadyLoaded = false, preloadedContentTabl
         tabButton.classList.add("navtablinks");
         tabButton.setAttribute("data-id", tabData.id);
         tabButton.dataset.testid = `tab-${tabData.id}`;
-        tabButton.dataset.hasPresentationMedia = String(
-            tabData.hasPresentationMedia === true
-        );
         if (tabData.langKey) {
             tabButton.dataset.langKey = tabData.langKey;
         }

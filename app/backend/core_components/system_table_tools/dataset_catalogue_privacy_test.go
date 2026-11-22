@@ -31,8 +31,8 @@ func TestDatasetCatalogueFiltersSavedTabOrderAndRenumbers(t *testing.T) {
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"table_uid", "name", "schema"}, rows: [][]driver.Value{{int64(11), "app_orders", "public"}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid", "alias", "primary"}, rows: [][]driver.Value{{int64(11), "shop-orders", true}, {int64(11), "old-orders", false}}})
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"exists"}, rows: [][]driver.Value{{false}}})
-	pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "uid", "name", "default", "filterbar", "main", "about", "folder", "project", "top", "icon", "media"},
-		rows: [][]driver.Value{{int64(900), int64(11), "app_orders", false, false, false, false, nil, false, false, nil, false}}})
+	pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "uid", "name", "default", "filterbar", "main", "about", "folder", "project", "top", "icon"},
+		rows: [][]driver.Value{{int64(900), int64(11), "app_orders", false, false, false, false, nil, false, false, nil}}})
 	// The merged handler proves ordinary read/visibility and loads optional kind
 	// evidence before reading saved order. These replies keep the order aligned.
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}})

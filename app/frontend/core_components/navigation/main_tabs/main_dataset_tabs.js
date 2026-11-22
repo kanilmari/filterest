@@ -103,7 +103,6 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
 
         // Helper: build tab object from dataset
         const buildTabObj = (table) => {
-            const hasPresentationMedia = table.has_presentation_media === true;
             // system_users gets special treatment (langKey, userContent flag)
             if (table.dataset_name === 'system_users') {
                 return {
@@ -112,7 +111,6 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
                     text: 'Users',
                     langKey: getMainTabLangKey('system_users'),
                     iconKey: table.icon_key || 'group_center_filled',
-                    hasPresentationMedia,
                 };
             }
             if (table.dataset_name === "system_about") {
@@ -124,7 +122,6 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
                     isProjectTable: false,
                     dataset: "system_about",
                     route: "/api/get-results",
-                    hasPresentationMedia,
                 };
             }
             return {
@@ -136,7 +133,6 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
                 isProjectTable: true,
                 dataset: table.dataset_name,
                 route: '/api/get-results',
-                hasPresentationMedia,
             };
         };
 

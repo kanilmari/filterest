@@ -32,6 +32,8 @@ export function resetMainTabPrinterTestState() {
             <div id="tabs_container"></div>
             <div id="navmenu" class="navtabs"></div>
         `;
+    // Each test starts without an earlier view's picture decision on the page (view_presentation_media_resolver.js).
+    document.body.removeAttribute("data-view-has-presentation-media");
     vi.mocked(getButtonState).mockReturnValue("logout");
     vi.mocked(endpoint_router).mockClear();
     vi.mocked(requestLoginRedirect).mockClear();

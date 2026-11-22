@@ -68,8 +68,8 @@ func (c *kindNavigationConn) QueryContext(_ context.Context, q string, args []dr
 		}
 		return rows([]string{"snapshot"}, []driver.Value{[]byte(raw)}), nil
 	case strings.Contains(q, "WITH RECURSIVE current_project_roots"):
-		return rows([]string{"id", "uid", "name", "default", "filterbar", "main", "about", "folder", "project", "top", "icon", "media"},
-			[]driver.Value{int64(1), int64(22), "fixture", false, false, false, false, int64(1), true, true, nil, false}), nil
+		return rows([]string{"id", "uid", "name", "default", "filterbar", "main", "about", "folder", "project", "top", "icon"},
+			[]driver.Value{int64(1), int64(22), "fixture", false, false, false, false, int64(1), true, true, nil}), nil
 	case strings.Contains(q, "SELECT DISTINCT dataset.table_uid"):
 		userID := int64(42)
 		if c.mode == "guest" {

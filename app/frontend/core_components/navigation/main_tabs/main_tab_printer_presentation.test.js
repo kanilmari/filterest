@@ -196,32 +196,28 @@ describe("initTabs", () => {
         expect(outlinePath?.getAttribute("stroke-width")).toBe("2");
     });
 
-    test("uses rectangular tabs for every dataset when the active dataset has cover or background media", async () => {
+    test("uses rectangular tabs for every dataset when the active dataset's view draws a cover or background", async () => {
         setViewportWidth(1920);
         setChosenDatasetView("media_dataset", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
         await initTabs({
             preloadedContentTablesResponse: {
                 datasets: [
-                    {
-                        dataset_name: "media_dataset",
-                        is_top_level_in_current_project: true,
-                        has_presentation_media: true,
-                    },
-                    {
-                        dataset_name: "plain_dataset",
-                        is_top_level_in_current_project: true,
-                        has_presentation_media: false,
-                    },
+                    { dataset_name: "media_dataset", is_top_level_in_current_project: true },
+                    { dataset_name: "plain_dataset", is_top_level_in_current_project: true },
                 ],
                 tab_order: null,
             },
         });
+        // The mocked navigation draws nothing; this is the media dataset's view with its shown background.
+        document.body.insertAdjacentHTML("beforeend", '<div class="content_div">'
+            + '<div id="media_dataset_tab_parts_container">'
+            + '<div class="tab-content-area tab-content-area--has-dataset-background"></div></div></div>');
         await openNavTab("media_dataset");
 
         const tabs = Array.from(document.querySelectorAll(".navtablinks"));
         expect(tabs).toHaveLength(2);
-        expect(tabs[0].dataset.hasPresentationMedia).toBe("true");
+        expect(tabs[0].dataset.hasPresentationMedia).toBeUndefined();
         expect(tabs[0].dataset.tabPresentation).toBe("button-active");
         expect(tabs[1].dataset.tabPresentation).toBe("button-inactive");
         tabs.forEach((tab) => {

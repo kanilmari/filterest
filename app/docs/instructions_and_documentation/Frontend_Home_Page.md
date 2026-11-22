@@ -243,9 +243,9 @@ remembers this choice separately from the docked menu. Using Back/Forward, chang
 language, expanding a group and opening a link in a new tab all preserve the open menu.
 
 Home always shows full-width rectangular navigation buttons in its vertical side menu, including when it has no background media.
-Dataset pages use rectangles for the overlay menu and for datasets with presentation media. A docked dataset without media keeps its curved connectors.
-`navigation/main_tabs/view_presentation_media_resolver.js` resolves the active dataset's `has_presentation_media` or Home's mounted image/video; hidden layers, zero media opacity and a full wash do not count.
-`syncViewPresentationMediaFlag()` alone writes `body[data-view-has-presentation-media]`; active-view updates and its Home/theme observer refresh it after rendering, preview changes and hiding.
+Dataset pages use rectangles for the overlay menu and while the view shows a picture. A docked dataset with a uniform background keeps its curved connectors (owner 2026-11-21).
+`navigation/main_tabs/view_presentation_media_resolver.js` alone decides whether the displayed view shows a picture: `showsPicture()` is the rule, read from what the view draws, the active dataset's background and search-hero cover (also for a dataset without a menu tab) or Home's mounted image/video. A picture that is set but hidden counts as a uniform background, whichever way it is hidden: the media switch, a hidden element, a theme's visibility switch (opacity 0), an oval mask whose zones all keep nothing, or a full wash. An oval whose kept zone lies outside the cover is not detected. The dataset catalogue carries no picture flag of its own.
+`syncViewPresentationMediaFlag()` alone writes `body[data-view-has-presentation-media]`; active-view updates and its observer refresh it after rendering, appearance paints, preview changes, theme switches and hiding. Between two dataset views the flag stands until the next view is drawn.
 `main_tab_active_state.js` selects the vertical menu shape independently of the horizontal tab buttons.
 At every width, the top-bar and hero tab buttons, including Home in the compact phone bar, keep the same rounded corners as a dataset page without media. Opaque surfaces, selected/hover colours and keyboard focus outlines remain.
 

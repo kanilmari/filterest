@@ -45,7 +45,6 @@ export interface DatasetCatalogueEntry {
     is_in_current_project: boolean;
     is_top_level_in_current_project: boolean;
     icon_key?: string;
-    has_presentation_media: boolean;
 }
 
 export interface ApplicationUpdateTarget {
@@ -299,7 +298,6 @@ export interface DatasetTable {
     is_in_current_project: boolean;
     is_top_level_in_current_project: boolean;
     icon_key?: string;
-    has_presentation_media: boolean;
 }
 
 export interface RelatedTableResult {

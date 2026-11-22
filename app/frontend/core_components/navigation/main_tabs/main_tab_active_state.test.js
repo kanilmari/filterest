@@ -158,10 +158,13 @@ describe("applyMainTabActiveState", () => {
         expect(path.getAttribute("d").match(/A 7 7/g)).toHaveLength(4);
     });
 
-    test("forces a rectangular card tab when authoritative dataset metadata reports media", async () => {
+    test("forces a rectangular card tab when the dataset view draws a picture", async () => {
         setChosenDatasetView("app_service_catalog", "card");
         const tabButton = document.querySelector(".navtablinks");
-        tabButton.dataset.hasPresentationMedia = "true";
+        // The result builder adds the class only for a set background whose media switch is on.
+        document.body.insertAdjacentHTML("beforeend", '<div class="content_div">'
+            + '<div id="app_service_catalog_tab_parts_container">'
+            + '<div class="tab-content-area tab-content-area--has-dataset-background"></div></div></div>');
         const { applyMainTabActiveState } = await import("./main_tab_active_state.js");
 
         applyMainTabActiveState("app_service_catalog", {

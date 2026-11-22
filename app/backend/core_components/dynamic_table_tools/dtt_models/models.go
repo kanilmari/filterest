@@ -26,7 +26,6 @@ type Table struct {
 	IsInCurrentProject         bool                        `json:"is_in_current_project"`
 	IsTopLevelInCurrentProject bool                        `json:"is_top_level_in_current_project"`
 	IconKey                    *string                     `json:"icon_key,omitempty"`
-	HasPresentationMedia       bool                        `json:"has_presentation_media"`
 }
 
 type GroupedTables struct {

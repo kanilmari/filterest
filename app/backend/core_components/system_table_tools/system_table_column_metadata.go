@@ -51,14 +51,7 @@ func buildGroupedTablesQuery(iconKeyExpr string) string {
 			t.folder_id,
 			COALESCE(cpf.id IS NOT NULL, false) AS is_in_current_project,
 			COALESCE(cpr.id IS NOT NULL, false) AS is_top_level_in_current_project,
-			%s,
-			EXISTS (
-				SELECT 1
-				FROM public.system_dataset_media media
-				WHERE media.table_uid = t.table_uid
-				  AND media.media_role IN ('cover', 'background')
-				  AND NOT media.hidden
-			) AS has_presentation_media
+			%s
 		FROM system_db_tables t
 		LEFT JOIN current_project_folders cpf ON t.folder_id = cpf.id
 		LEFT JOIN current_project_roots cpr ON t.folder_id = cpr.id
@@ -129,7 +122,6 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 			&single_table.IsInCurrentProject,
 			&single_table.IsTopLevelInCurrentProject,
 			&single_table.IconKey,
-			&single_table.HasPresentationMedia,
 		)
 		if scan_error != nil {
 			log.Printf("\033[31merror: processing table rows: %v\033[0m", scan_error)

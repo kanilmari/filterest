@@ -9,7 +9,11 @@ import { closeActiveFilterbarIfOpen } from './filterbar';
 
 export const MEDIA_DATASET = 'app_service_catalog';
 export const PLAIN_DATASET = 'system_about';
-export type MediaTabPolicy = { home: 'video' | 'image' | 'none' | 'hidden'; blocked: string[] };
+/** The media dataset's picture: shown or hidden background, or a cover shown or hidden by its theme switches. */
+export type DatasetPicture = 'background' | 'background_hidden' | 'cover' | 'cover_theme_hidden';
+export type MediaTabPolicy = { home: 'video' | 'image' | 'none' | 'hidden'; dataset: DatasetPicture; blocked: string[] };
+const MEDIA_PATH = '/storage/104/dataset_media/background/original/d572.png';
+const COVER_PATH = '/storage/104/dataset_media/cover/original/d572.png';
 
 /** Generate tiny valid local media in memory; no uploaded file or installation media is needed. */
 async function buildMedia(page: Page) {
@@ -43,7 +47,7 @@ async function buildMedia(page: Page) {
 /** Routes disappear at teardown. Permission queries are the only necessary non-GETs. */
 export async function installMediaTabFixture(page: Page, context: BrowserContext, width: number, theme: 'light' | 'dark') {
   const media = await buildMedia(page);
-  const policy: MediaTabPolicy = { home: 'video', blocked: [] };
+  const policy: MediaTabPolicy = { home: 'video', dataset: 'background', blocked: [] };
   await page.setViewportSize({ width, height: width <= 700 ? 844 : 1000 });
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'reduce' });
   await page.addInitScript(theme => {
@@ -94,25 +98,71 @@ export async function installMediaTabFixture(page: Page, context: BrowserContext
       expect(datasets.map((entry: { dataset_name: string }) => entry.dataset_name).sort()).toEqual([MEDIA_DATASET, PLAIN_DATASET].sort());
       await route.fulfill({ response, json: { ...data, tab_order: null, datasets: datasets.map((entry: { dataset_name: string }) => ({
         ...entry, is_in_current_project: true, is_top_level_in_current_project: true,
-        has_presentation_media: entry.dataset_name === MEDIA_DATASET,
       })) } }); return;
+    }
+    if (url.pathname === '/api/tree_data') {
+      const response = await route.fetch();
+      const data = await response.json();
+      setTreeCover(data, policy.dataset.startsWith('cover'));
+      await route.fulfill({ response, json: data }); return;
     }
     if (url.pathname === '/api/get-results' && [MEDIA_DATASET, PLAIN_DATASET].includes(url.searchParams.get('dataset') || '')) {
       const response = await route.fetch();
       const data = await response.json();
-      await route.fulfill({ response, json: { ...data, dataset_presentation: { ...data.dataset_presentation,
-        cover_image_path: '', cover_image_hidden: true, background_image_hidden: false,
-        background_image_path: url.searchParams.get('dataset') === MEDIA_DATASET
-          ? '/storage/104/dataset_media/background/original/d572.png' : '',
-      } } }); return;
+      const media = url.searchParams.get('dataset') === MEDIA_DATASET;
+      const cover = media && policy.dataset.startsWith('cover');
+      const background = media && policy.dataset.startsWith('background');
+      // A cover hidden by both theme switches is drawn at opacity 0 (fintravel.fi, 9.6.14).
+      const coverOpacity = policy.dataset === 'cover_theme_hidden' ? 0 : 1;
+      const appearance = data.dataset_appearance;
+      const effective = appearance?.effective;
+      await route.fulfill({ response, json: { ...data,
+        dataset_presentation: { ...data.dataset_presentation,
+          cover_image_path: cover ? COVER_PATH : '', cover_image_hidden: !cover,
+          background_image_path: background ? MEDIA_PATH : '',
+          background_image_hidden: policy.dataset === 'background_hidden' && media,
+        },
+        ...(cover && effective ? { dataset_appearance: { ...appearance,
+          tab_values: { ...appearance.tab_values, 'light.image_opacity': coverOpacity, 'dark.image_opacity': coverOpacity },
+          effective: { ...effective, light: { ...effective.light, image_opacity: coverOpacity },
+            dark: { ...effective.dark, image_opacity: coverOpacity } },
+        } } : {}),
+      } }); return;
     }
     await route.continue();
   });
   return policy;
 }
 
+/** An administrator's cover path comes from the catalogue tree: only the media dataset gets one, and only for a cover. */
+function setTreeCover(data: { nodes?: Record<string, unknown>[] }, cover: boolean) {
+  for (const node of data.nodes || []) {
+    if (node.name !== MEDIA_DATASET || !node.table_uid) continue;
+    delete node.dataset_cover_image_path; delete node.dataset_cover_image_hidden;
+    if (cover) Object.assign(node, { dataset_cover_image_path: COVER_PATH, dataset_cover_image_hidden: false });
+  }
+}
+
+/** Chooses the media dataset's picture. The signed-in state carries a fresh cached tree and the dataset specs
+ * built from it, which the app reads instead of fetching, so both cached copies get the same cover as a fetched
+ * tree (setTreeCover). */
+export async function useDatasetPicture(page: Page, policy: MediaTabPolicy, picture: DatasetPicture) {
+  policy.dataset = picture;
+  await page.addInitScript(({ dataset, coverPath, cover }) => {
+    const setCover = (entry: Record<string, unknown>) => {
+      delete entry.dataset_cover_image_path; delete entry.dataset_cover_image_hidden;
+      if (cover) Object.assign(entry, { dataset_cover_image_path: coverPath, dataset_cover_image_hidden: false });
+    };
+    const tree = JSON.parse(localStorage.getItem('full_tree_data') || 'null');
+    for (const node of tree?.nodes || []) if (node.name === dataset && node.table_uid) setCover(node);
+    if (tree) localStorage.setItem('full_tree_data', JSON.stringify(tree));
+    const specs = JSON.parse(localStorage.getItem('table_specs') || 'null');
+    if (specs?.[dataset]) { setCover(specs[dataset]); localStorage.setItem('table_specs', JSON.stringify(specs)); }
+  }, { dataset: MEDIA_DATASET, coverPath: COVER_PATH, cover: picture.startsWith('cover') });
+}
+
 /** Work on main and the batch: these waits depend on the established view lifecycle, not the new flag. */
-export async function openMediaTabView(page: Page, view: 'home_video' | 'dataset_media' | 'dataset_plain' | 'home') {
+export async function openMediaTabView(page: Page, view: 'home_video' | 'dataset_media' | 'dataset_picture' | 'dataset_plain' | 'home') {
   const home = view === 'home_video' || view === 'home';
   const dataset = view === 'dataset_plain' ? PLAIN_DATASET : MEDIA_DATASET;
   await page.goto(home ? '/' : `/${dataset}?view=card`, { waitUntil: 'domcontentloaded' });
@@ -127,6 +177,7 @@ export async function openMediaTabView(page: Page, view: 'home_video' | 'dataset
     await expect(parts).toBeVisible();
     await closeActiveFilterbarIfOpen(page);
     const content = parts.locator('.tab-content-area');
+    if (view === 'dataset_picture') return;
     if (view === 'dataset_media') {
       await expect(content).toHaveClass(/tab-content-area--has-dataset-background/);
       expect(await content.evaluate(element => element.style.getPropertyValue('--dataset-background-image'))).toContain('d572.png');
