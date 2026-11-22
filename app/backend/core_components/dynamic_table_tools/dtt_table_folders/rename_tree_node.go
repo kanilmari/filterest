@@ -1,7 +1,8 @@
 // rename_tree_node.go
-// HTTP handler for renaming a node (table or folder) in the table tree. Updates the display
-// name in the tree structure stored in the database.
-// Exists to coordinate technical names, translations, aliases, and folder metadata.
+// HTTP handler for renaming a node (table or folder) in the table tree.
+// Between the rename dialog and the registry, it renames the item and has the language component
+// move the item's label in the same transaction. Exists to coordinate technical names, labels,
+// aliases and folder metadata without rewriting a language key other items share.
 package dtt_system_table_folders
 
 import (
@@ -13,6 +14,7 @@ import (
 	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,12 +23,16 @@ import (
 	"github.com/lib/pq"
 )
 
-// RenameTreeNodeRequest on POST /api/rename-tree-node -pyynnön body
+// RenameTreeNodeRequest is the body of POST /api/rename-tree-node.
+// Translations and ShownTranslations accept fi, en and ch only; see lang.ItemLabelRename.
 type RenameTreeNodeRequest struct {
 	ItemID       int               `json:"item_id"`
-	ItemType     string            `json:"item_type"`    // "folder" tai "table"
-	NewName      string            `json:"new_name"`     // Uusi tekninen nimi (= uusi lang_key)
-	Translations map[string]string `json:"translations"` // Käännökset: {"fi": "...", "en": "...", "ch": "..."}
+	ItemType     string            `json:"item_type"`    // "folder" or "table"
+	NewName      string            `json:"new_name"`     // new technical name, which is also the label's language key
+	Translations map[string]string `json:"translations"` // typed label text; blank leaves a language as it is
+	// ShownTranslations is the text the dialog displayed when it opened. A language left as shown
+	// is not written, and a key whose text changed meanwhile is refused instead of overwritten.
+	ShownTranslations map[string]string `json:"shown_translations,omitempty"`
 }
 
 // HandleRenameTreeNode käsittelee POST /api/rename-tree-node
@@ -67,10 +73,14 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var label lang.ItemLabelOutcome
 	switch strings.ToLower(req.ItemType) {
 	case "folder":
-		if err := renameFolder(tx, req); err != nil {
+		if label, err = renameFolder(tx, req); err != nil {
 			log.Printf("\033[31m[HandleRenameTreeNode] folder error: %v\033[0m\n", err)
+			if respondLabelRefusal(w, err) {
+				return
+			}
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error renaming folder: %v", err))
 			return
 		}
@@ -79,9 +89,9 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 			runtime_grant_mutations.RespondError(w, err)
 			return
 		}
-		if err := renameTable(tx, req); err != nil {
+		if label, err = renameTable(tx, req); err != nil {
 			log.Printf("\033[31m[HandleRenameTreeNode] table error: %v\033[0m\n", err)
-			if dataset_routes.RespondNamespaceRefusal(w, err) {
+			if dataset_routes.RespondNamespaceRefusal(w, err) || respondLabelRefusal(w, err) {
 				return
 			}
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error renaming table: %v", err))
@@ -97,173 +107,129 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := map[string]interface{}{"message": "Renamed successfully."}
+	if len(label.KeptLanguages) > 0 {
+		// The new name's key already existed and is shared: the dialog's text for these
+		// languages was not saved, and the dialog tells the person so.
+		response["label_kept"] = map[string]interface{}{"lang_key": label.LangKey, "languages": label.KeptLanguages}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "Renamed successfully.",
-	})
+	_ = json.NewEncoder(w).Encode(response)
 }
 
-// renameFolder päivittää kansion nimen: system_table_folders + system_lang_keys
-func renameFolder(tx *sql.Tx, req RenameTreeNodeRequest) error {
-	// 1. Haetaan vanha nimi (= vanha lang_key)
+// respondLabelRefusal answers a label request the language component refused before writing:
+// 400 for an unsupported language, 409 for text that would replace a text the dialog did not show.
+// The non-2xx status rolls the whole rename back, the physical table rename included.
+func respondLabelRefusal(w http.ResponseWriter, err error) bool {
+	switch {
+	case errors.Is(err, lang.ErrInvalidItemLabelRename):
+		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, lang.ErrItemLabelConflict):
+		httpresponse.RespondWithError(w, http.StatusConflict, err.Error())
+	default:
+		return false
+	}
+	return true
+}
+
+// itemLabelRename builds the language component's request for one renamed item.
+func itemLabelRename(req RenameTreeNodeRequest, sourceType, oldName, newName string) lang.ItemLabelRename {
+	return lang.ItemLabelRename{
+		SourceType:   sourceType,
+		OldKey:       oldName,
+		NewKey:       newName,
+		Translations: req.Translations,
+		Shown:        req.ShownTranslations,
+	}
+}
+
+// renameFolder renames a folder and moves its label to the key of the new name.
+// Folder names may repeat, so a name another folder still has keeps its key association.
+func renameFolder(tx *sql.Tx, req RenameTreeNodeRequest) (lang.ItemLabelOutcome, error) {
 	var oldName string
 	if err := tx.QueryRow("SELECT folder_name FROM system_table_folders WHERE id = $1", req.ItemID).Scan(&oldName); err != nil {
-		return fmt.Errorf("folder not found (id=%d): %w", req.ItemID, err)
+		return lang.ItemLabelOutcome{}, fmt.Errorf("folder not found (id=%d): %w", req.ItemID, err)
 	}
 
-	// 2. Päivitetään system_table_folders.folder_name
 	if _, err := tx.Exec("UPDATE system_table_folders SET folder_name = $1, updated = NOW() WHERE id = $2",
 		req.NewName, req.ItemID); err != nil {
-		return fmt.Errorf("update folder_name: %w", err)
+		return lang.ItemLabelOutcome{}, fmt.Errorf("update folder_name: %w", err)
 	}
 
-	// 3. Päivitetään system_lang_keys: vanha lang_key → uusi lang_key + käännökset
-	if err := upsertLangKey(tx, oldName, req.NewName, "folder", req.Translations); err != nil {
-		return fmt.Errorf("upsert lang_key: %w", err)
-	}
-
-	// 4. Päivitetään kansion lang key sources ja descriptions
+	var oldNameStillUsed bool
 	if oldName != req.NewName {
-		if cleanErr := lang.UpdateLangKeySourcesForFolderRename(tx, oldName, req.NewName); cleanErr != nil {
-			return fmt.Errorf("update folder label associations: %w", cleanErr)
+		if err := tx.QueryRow("SELECT EXISTS (SELECT 1 FROM system_table_folders WHERE folder_name = $1 AND id <> $2)",
+			oldName, req.ItemID).Scan(&oldNameStillUsed); err != nil {
+			return lang.ItemLabelOutcome{}, fmt.Errorf("check other folders named %q: %w", oldName, err)
 		}
 	}
 
-	return nil
-}
-
-// renameTable päivittää taulun nimen: ALTER TABLE RENAME + system_db_tables + system_lang_keys
-func renameTable(tx *sql.Tx, req RenameTreeNodeRequest) error {
-	// Sanitoidaan uusi nimi SQL-injektioiden ehkäisemiseksi
-	sanitizedName, err := security.SanitizeIdentifier(req.NewName)
+	rename := itemLabelRename(req, "folder", oldName, req.NewName)
+	rename.KeepOldSource = oldNameStillUsed
+	label, err := lang.MoveRenamedItemLabel(tx, rename)
 	if err != nil {
-		return fmt.Errorf("invalid table name: %w", err)
+		return lang.ItemLabelOutcome{}, fmt.Errorf("move folder label: %w", err)
 	}
 
-	// 1. Haetaan vanha nimi
+	// The source rewrite renames every folder source of the old name, so it runs only when
+	// no other folder keeps that name.
+	if oldName != req.NewName && !oldNameStillUsed {
+		if cleanErr := lang.UpdateLangKeySourcesForFolderRename(tx, oldName, req.NewName); cleanErr != nil {
+			return lang.ItemLabelOutcome{}, fmt.Errorf("update folder label associations: %w", cleanErr)
+		}
+	}
+
+	return label, nil
+}
+
+// renameTable renames the PostgreSQL table, its registry row and automation endpoints, then
+// moves the dataset's label to the key of the new name and rewrites the dataset's other sources.
+func renameTable(tx *sql.Tx, req RenameTreeNodeRequest) (lang.ItemLabelOutcome, error) {
+	sanitizedName, err := security.SanitizeIdentifier(req.NewName)
+	if err != nil {
+		return lang.ItemLabelOutcome{}, fmt.Errorf("invalid table name: %w", err)
+	}
+
 	var oldName string
 	if err := tx.QueryRow("SELECT table_name FROM system_db_tables WHERE id = $1", req.ItemID).Scan(&oldName); err != nil {
-		return fmt.Errorf("table not found (id=%d): %w", req.ItemID, err)
+		return lang.ItemLabelOutcome{}, fmt.Errorf("table not found (id=%d): %w", req.ItemID, err)
 	}
 
 	if err := dataset_routes.ValidateDatasetRouteAvailability(tx, sanitizedName, req.ItemID); err != nil {
-		return err
+		return lang.ItemLabelOutcome{}, err
 	}
 
-	// 2. ALTER TABLE RENAME (varsinainen PostgreSQL-taulu)
 	if oldName != sanitizedName {
 		renameSQL := fmt.Sprintf("ALTER TABLE %s RENAME TO %s",
 			pq.QuoteIdentifier(oldName),
 			pq.QuoteIdentifier(sanitizedName),
 		)
 		if _, err := tx.Exec(renameSQL); err != nil {
-			return fmt.Errorf("ALTER TABLE RENAME %s → %s: %w", oldName, sanitizedName, err)
+			return lang.ItemLabelOutcome{}, fmt.Errorf("ALTER TABLE RENAME %s → %s: %w", oldName, sanitizedName, err)
 		}
 		log.Printf("[HandleRenameTreeNode] ALTER TABLE %s RENAME TO %s", oldName, sanitizedName)
 	}
 	if err := automation_metadata.RenameDataset(tx, oldName, sanitizedName); err != nil {
-		return err
+		return lang.ItemLabelOutcome{}, err
 	}
 
-	// 3. Päivitetään system_db_tables.table_name
 	if _, err := tx.Exec("UPDATE system_db_tables SET table_name = $1, updated = NOW() WHERE id = $2",
 		sanitizedName, req.ItemID); err != nil {
-		return fmt.Errorf("update table_name: %w", err)
+		return lang.ItemLabelOutcome{}, fmt.Errorf("update table_name: %w", err)
 	}
 
-	// 4. Päivitetään system_lang_keys: vanha lang_key → uusi lang_key + käännökset
-	if err := upsertLangKey(tx, oldName, sanitizedName, "table", req.Translations); err != nil {
-		return fmt.Errorf("upsert lang_key: %w", err)
+	// The label moves first, while its source still names the old table; the rewrite below
+	// then renames the dataset's column, header and value sources, which stay on their own keys.
+	label, err := lang.MoveRenamedItemLabel(tx, itemLabelRename(req, "table", oldName, sanitizedName))
+	if err != nil {
+		return lang.ItemLabelOutcome{}, fmt.Errorf("move dataset label: %w", err)
 	}
-
-	// 5. Päivitetään kaikki lang key sources ja descriptions jotka viittaavat vanhaan
-	//    taulun nimeen (sekä table- että column-tyyppiset lähderivit ja kuvaukset).
 	if oldName != sanitizedName {
 		if cleanErr := lang.UpdateLangKeySourcesForTableRename(tx, oldName, sanitizedName); cleanErr != nil {
-			return fmt.Errorf("update dataset label associations: %w", cleanErr)
+			return lang.ItemLabelOutcome{}, fmt.Errorf("update dataset label associations: %w", cleanErr)
 		}
 	}
 
-	return nil
-}
-
-// upsertLangKey päivittää tai luo system_lang_keys -rivin.
-// Jos vanha lang_key löytyy → päivitetään lang_key + käännökset.
-// Jos ei löydy → luodaan uusi rivi.
-// Päivittää myös system_lang_key_sources-taulun lähdetiedot.
-func upsertLangKey(tx *sql.Tx, oldKey, newKey string, itemType string, translations map[string]string) error {
-
-	// Tarkistetaan, löytyykö vanha lang_key
-	var existingID int64
-	err := tx.QueryRow("SELECT id FROM system_lang_keys WHERE lang_key = $1", oldKey).Scan(&existingID)
-
-	fi := translations["fi"]
-	en := translations["en"]
-	ch := translations["ch"]
-
-	if err == nil {
-		// Vanha löytyi → päivitetään
-		_, execErr := tx.Exec(`
-			UPDATE system_lang_keys 
-			SET lang_key = $1, fi = $2, en = $3, ch = $4, updated = NOW()
-			WHERE id = $5`,
-			newKey, fi, en, ch, existingID)
-		if execErr != nil {
-			return fmt.Errorf("update lang_key: %w", execErr)
-		}
-
-		// Päivitetään source_high vanhan nimen tilalle uusi nimi
-		// Note: For tables, this is also done by UpdateLangKeySourcesForTableRename()
-		// which additionally handles column-type sources. The overlap is harmless
-		// (idempotent UPDATE). This line must stay for folder renames which don't
-		// go through UpdateLangKeySourcesForTableRename().
-		if oldKey != newKey {
-			_, sourceErr := tx.Exec(`
-				UPDATE system_lang_key_sources
-				SET source_high = $1, source_low = $1, last_seen = CURRENT_DATE
-				WHERE lang_key_id = $2 AND source_type = $3`,
-				newKey, existingID, itemType)
-			if sourceErr != nil {
-				return fmt.Errorf("rename label association: %w", sourceErr)
-			}
-		}
-
-		// Varmistetaan että lähderivi on olemassa
-		return upsertLangKeySource(tx, existingID, itemType, newKey)
-	} else if err == sql.ErrNoRows {
-		// Ei löytynyt → luodaan uusi
-		var newID int64
-		insertErr := tx.QueryRow(`
-			INSERT INTO system_lang_keys (lang_key, fi, en, ch, created, updated)
-			VALUES ($1, $2, $3, $4, NOW(), NOW())
-			RETURNING id`,
-			newKey, fi, en, ch).Scan(&newID)
-		if insertErr != nil {
-			return fmt.Errorf("insert lang_key: %w", insertErr)
-		}
-
-		// Luodaan lähderivi uudelle avaimelle
-		return upsertLangKeySource(tx, newID, itemType, newKey)
-	}
-	return fmt.Errorf("read existing language key: %w", err)
-}
-
-// upsertLangKeySource tekee UPSERT:n system_lang_key_sources-tauluun
-// transaktiopohjaisesti. Varmistaa että lang_key:llä on lähdemerkintä.
-func upsertLangKeySource(tx *sql.Tx, langKeyID int64, sourceType, sourceHigh string) error {
-	if langKeyID == 0 {
-		return fmt.Errorf("missing language key identity")
-	}
-	_, err := tx.Exec(`
-		INSERT INTO system_lang_key_sources (lang_key_id, source_type, source_high, source_low, last_seen)
-		VALUES ($1, $2, $3, $3, CURRENT_DATE)
-		ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
-		  SET source_low = EXCLUDED.source_low,
-		      last_seen = CURRENT_DATE`,
-		langKeyID, sourceType, sourceHigh)
-	if err != nil {
-		return fmt.Errorf("associate language key with %s: %w", sourceType, err)
-	}
-	return nil
+	return label, nil
 }

@@ -18,6 +18,7 @@ import { MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS } from '../admin_tools/missin
 import { DATASET_REDIRECT_NOTICE_TRANSLATION_FALLBACKS } from '../navigation/dataset_redirect_notice_copy.js';
 import { MAINTENANCE_ACTION_TRANSLATION_FALLBACKS } from '../admin_tools/maintenance_action_copy.js';
 import { HOME_SEARCH_TRANSLATION_FALLBACKS } from '../front_page/front_page_search_copy.js';
+import { TREE_NODE_RENAME_TRANSLATION_FALLBACKS } from '../vanilla_tree/van_tr_components/tree_node_rename_copy.js';
 
 import { VERIFICATION_SETUP_TRANSLATION_FALLBACKS } from '../auth/verification_setup_translation_fallbacks.js';
 import { SECOND_STEP_TRANSLATION_FALLBACKS } from '../auth/second_step_translation_fallbacks.js';
@@ -29,6 +30,7 @@ export const LOCAL_TRANSLATION_FALLBACKS = {
         en: 'The content starts with the row title, which is already shown.',
     },
     ...HOME_SEARCH_TRANSLATION_FALLBACKS,
+    ...TREE_NODE_RENAME_TRANSLATION_FALLBACKS,
     delete_confirm_title: {
         fi: "Vahvista poisto",
         en: "Confirm deletion",

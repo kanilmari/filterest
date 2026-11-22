@@ -333,6 +333,19 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 						return
 					}
 
+					// The dataset's label moves to the key of its new name, as in the tree
+					// rename: the old key and every language stay, and only the dataset's own
+					// source moves (#937). It must run before the source rewrite below, while
+					// that source still names the old table, and it fails closed.
+					// No text is typed in a cell edit, so there is nothing kept to report.
+					if _, err := lang.MoveRenamedItemLabel(tx, lang.ItemLabelRename{
+						SourceType: "table", OldKey: oldName, NewKey: sanitized,
+					}); err != nil {
+						log.Printf("\033[31merror: moving the label of %s to %s: %v\033[0m", oldName, sanitized, err)
+						httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error moving the dataset label")
+						return
+					}
+
 					// Update lang key sources and descriptions to reflect the new table name.
 					if cleanErr := lang.UpdateLangKeySourcesForTableRename(tx, oldName, sanitized); cleanErr != nil {
 						log.Printf("[UpdateRow] warning: lang key source update for table rename %s→%s: %v",

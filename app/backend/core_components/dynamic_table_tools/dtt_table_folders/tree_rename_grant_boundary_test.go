@@ -57,14 +57,13 @@ func TestTreeRenameCompletesGrantBoundary(t *testing.T) {
 		t.Run(fmt.Sprintf("postcheck failure=%t", fail), func(t *testing.T) {
 			granttest.ConfigureRoles(t)
 			state := &renameBoundaryState{t: t, fail: fail, folder: &folderMockState{
-				queries: []folderQueryResponse{
+				queries: append(labelMockQueries("rename_before", "rename_after"), []folderQueryResponse{
 					{match: "SELECT to_regclass('public.system_triggers')", cols: []string{"present"}, rows: [][]driver.Value{{true}}},
 					{match: "FROM system_db_table_aliases", cols: []string{"table_name", "alias_slug"}},
 					{match: "SELECT table_uid, table_name", cols: []string{"table_uid", "table_name"}},
 					{match: "SELECT id, table_name", cols: []string{"id", "table_name"}},
 					{match: "SELECT table_name FROM system_db_tables", cols: []string{"table_name"}, rows: [][]driver.Value{{"rename_before"}}},
-					{match: "SELECT id FROM system_lang_keys", cols: []string{"id"}, rows: [][]driver.Value{{int64(11)}}},
-				},
+				}...),
 				execs: []folderExecResponse{
 					{match: "UPDATE public.system_triggers", rowsAffected: 1},
 					{match: "ALTER TABLE", rowsAffected: 1}, {match: "UPDATE system_db_tables", rowsAffected: 1},

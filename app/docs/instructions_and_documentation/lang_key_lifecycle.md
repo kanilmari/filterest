@@ -106,16 +106,37 @@ When the supported dataset-creation or column-addition workflow creates schema o
 
 Migration `20260920000002_create_dataset_interface_labels.sql` applies the same schema-derived fallback to already registered datasets. The deterministic labels remain editable through the language-key API when a site wants more natural or fully translated copy.
 
-### 2.4 Tree Node Rename (`upsertLangKey`)
+### 2.4 Item Rename (`lang.MoveRenamedItemLabel`)
 
-When renaming tables/folders via the tree view, `upsertLangKey()` either updates an existing key or creates a new one:
+A folder's or dataset's label is the key named like the item, so a rename gives the item
+the key of its new name. The language component owns the write; the tree dialog
+(`rename_tree_node.go`, both routes) and the registry cell edit (`update_row.go`,
+`system_db_tables.table_name`) call it inside their own transaction (K357, #937):
 
-```go
-// If old key exists → UPDATE lang_key, fi, en, ch
-// If not found      → INSERT new row with translations
-```
+- **The old key never changes.** Its text in both stores and its other sources stay, because
+  a column, code or another item may still use it. Only the item's own `table`/`folder`
+  source moves to the new key, with its usage explanation. A folder name another folder
+  still has keeps its association. A key nothing uses any more gets the normal orphan marker.
+- **A new key is a full copy** of the old one: the four columns, every
+  `system_lang_key_translations` row with its `source_kind` and `review_status`,
+  `lang_key_type`, and `creation_spec` (which keeps a dataset-derived label private).
+- **An existing key of the new name is shared and is never written by the dialog**
+  (owner, 22.11.2026: "Älä muuta jaettua avainta"). It keeps everything it shows and only
+  receives languages it shows in neither store (a column and its mirrored rows, see
+  `legacyLanguageMirrors`) from the old key, plus rows of languages it lacks. The rename
+  still succeeds; when typed text differs from what the key now shows, the answer carries
+  `label_kept` (key and languages) and the dialog shows a notice
+  (`rename_tree_node_kept_existing_translations`, copy in `tree_node_rename_copy.js`). The
+  text is changed in language-key maintenance.
+- **Typed text** (fi, en, ch only) for the item's own key — a same-name rename, or a key
+  created now as a copy — goes through the language-maintenance writer. Blank means "leave
+  as is". With `shown_translations` from the dialog, a field left as shown is not written,
+  a field the dialog never displayed and nobody typed in is not sent, and a key whose text
+  no longer matches what the dialog showed (in either store) is refused with 409. Other
+  languages are refused with 400, because one Cantonese value fans out to three locales
+  in language-key maintenance.
 
-After the key exists, `upsertLangKeySource()` ensures a source record via `ON CONFLICT DO UPDATE`.
+A refusal or a failure rolls the whole rename back, the physical table rename included.
 
 ### 2.5 AI-Generated Keys
 
@@ -369,13 +390,14 @@ When database objects are renamed, lang key sources and descriptions must be upd
 
 ### Table Rename
 
-**Triggered by:** `rename_tree_node.go` → `renameTable()` or `update_row.go` (system_db_tables.table_name update)
+**Triggered by:** `rename_tree_node.go` → `renameTable()` or `update_row.go` (system_db_tables.table_name update),
+after `MoveRenamedItemLabel` has moved the dataset's own label source (§2.4)
 
 **`UpdateLangKeySourcesForTableRename(q, oldName, newName)`** does:
 
 1. `UPDATE source_high` for all exact-match dataset-owned sources (`table`, `column`, canonical `dataset_header`) where `source_high = oldName` → `newName`
 2. `UPDATE source_low` for `source_type = 'table'` where `source_low = oldName` → `newName`
-3. `UPDATE source_high` for legacy/prefix dataset-owned sources (`dataset_header` legacy `<dataset>:<field>`, `column_value` `<dataset>.<column>`) so they follow the renamed dataset too
+3. `UPDATE source_high` for legacy/prefix dataset-owned sources (`dataset_header` legacy `<dataset>:<field>`, `column_value` `<dataset>.<column>`) so they follow the renamed dataset too. The prefix is compared exactly, not with `LIKE`, so `_` in `a_b` cannot match `axb`
 3. Update descriptions: `"Table 'old'"` → `"Table 'new'"` and `"in table 'old'"` → `"in table 'new'"`
 
 ### Column Rename
@@ -390,16 +412,19 @@ When database objects are renamed, lang key sources and descriptions must be upd
 
 ### Folder Rename
 
-**Triggered by:** `rename_tree_node.go` → `renameFolder()`
+**Triggered by:** `rename_tree_node.go` → `renameFolder()`, after `MoveRenamedItemLabel`, and only
+when no other folder still has the old name (it renames every folder source of that name)
 
 **`UpdateLangKeySourcesForFolderRename(q, oldName, newName)`** does:
 
 1. `UPDATE source_high` for `source_type = 'folder'` where `source_high = oldName` → `newName`
 2. Update descriptions: `"Folder 'old'"` → `"Folder 'new'"`
 
-### Idempotent Overlap Note
+### Order
 
-`upsertLangKey()` in `rename_tree_node.go` also updates `source_high` and `source_low` for the renamed item's own lang key. This overlaps with `UpdateLangKeySourcesForTableRename()` for tables, but the overlap is harmless (idempotent `UPDATE`). The `upsertLangKey()` line must stay because folder renames use it too, and they don't go through `UpdateLangKeySourcesForTableRename()` for their own key's source.
+The item's own label source moves first (§2.4), while it still names the old item; the
+helpers above then rewrite the dataset's column, header and value sources, which stay on
+their own keys.
 
 ---
 
@@ -637,6 +662,8 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 | File | Purpose |
 |------|---------|
 | `app/backend/core_components/lang/cleanup_lang_key_sources.go` | DROP and RENAME cleanup for sources + descriptions |
+| `app/backend/core_components/lang/item_label_rename.go` | Moves a renamed folder's or dataset's label to the key of its new name |
+| `app/backend/core_components/lang/admin_lang_key.go` | Language-maintenance API and the shared writer of authored text in both stores |
 | `app/backend/core_components/lang/lang.go` | Translation serving endpoints |
 | `app/backend/core_components/lang/get_ai_translations.go` | AI translation generation handler |
 | `app/backend/core_components/lang/ensure_lang_key_source_for_crud_mutation.go` | Manual CRUD source tracking |
@@ -659,10 +686,10 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 
 | File | What triggers |
 |------|---------------|
-| `app/backend/.../dtt_table_folders/rename_tree_node.go` | Table rename → `UpdateLangKeySourcesForTableRename()`, Folder rename → `UpdateLangKeySourcesForFolderRename()` |
+| `app/backend/.../dtt_table_folders/rename_tree_node.go` | Table and folder rename → `lang.MoveRenamedItemLabel()`, then `UpdateLangKeySourcesForTableRename()` / `UpdateLangKeySourcesForFolderRename()` |
 | `app/backend/.../dtt_table_folders/delete_table_folder.go` | Folder delete → `CleanupLangKeySourcesForFolder()` |
 | `app/backend/.../dtt_2_column_update/column_update.go` | Column rename → `UpdateLangKeySourcesForColumnRename()` |
-| `app/backend/.../dtt_1_row_update/update_row.go` | Table rename via cell edit → `UpdateLangKeySourcesForTableRename()` |
+| `app/backend/.../dtt_1_row_update/update_row.go` | Table rename via cell edit → `lang.MoveRenamedItemLabel()`, then `UpdateLangKeySourcesForTableRename()` |
 | `app/backend/.../table_metadata_cleanup.go` | Table drop → `CleanupLangKeySourcesForTable()` (pre-existing) |
 | `app/backend/.../column_delete.go` | Column drop → `CleanupLangKeySourcesForColumn()` (pre-existing) |
 
@@ -673,7 +700,7 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 1. **One key, many sources.** A lang key like `updated` can be a column in 10 tables and appear in 5 code files. Each usage is tracked independently. Counting sources protect a key; losing all sources leads to marking, with
    automatic deletion paused.
 
-2. **Non-fatal metadata operations.** Lang key cleanup never aborts the parent operation (table drop, column rename, etc.). Failures are logged, not propagated.
+2. **Non-fatal source cleanup, fail-closed labels.** Source cleanup on drop and the source rewrites on rename log their failures instead of aborting the parent operation. Moving a renamed item's label (§2.4) is different: it fails closed, and the rename rolls back.
 
 3. **UPSERT everywhere.** All source creation uses `ON CONFLICT DO UPDATE` — safe to call multiple times, idempotent.
 

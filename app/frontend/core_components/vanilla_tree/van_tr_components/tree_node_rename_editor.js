@@ -7,6 +7,12 @@ import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { getTranslationForKey, getTranslationsForKey } from '../../lang/translation_handler.js';
 import { getDatasetRouteUniquenessHint } from '../../navigation/nav_engine/dataset_aliases.js';
 import { showWarningToast } from '../../../reusable_components/notifications/toast_notification_printer.js';
+import { treeNodeRenameFallback } from './tree_node_rename_copy.js';
+import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
+
+const KEPT_TRANSLATIONS_NOTICE_KEY = 'rename_tree_node_kept_existing_translations';
+const KEPT_TRANSLATIONS_NOTICE_MS = 12000;
+const LANGUAGE_NAME_KEYS = { fi: 'finnish', en: 'english' };
 
 /**
  * Avaa uudelleennimeämisdialogin ja palauttaa Promisen joka resolvataan
@@ -50,12 +56,8 @@ export async function openRenameDialog({ itemId, itemType, currentName }) {
  * Rakentaa ja näyttää uudelleennimeämisdialogin.
  * Erotettu omaksi funktiokseen, jotta async-haku voidaan tehdä ensin.
  */
-function hydratePrefill(input, value) {
+export function hydratePrefill(input, value) {
         if (!(input instanceof HTMLInputElement)) {
-            return;
-        }
-
-        if (!value) {
             return;
         }
 
@@ -66,8 +68,60 @@ function hydratePrefill(input, value) {
             return;
         }
 
-        input.value = value;
-        input.dataset.initialValue = value;
+        // Show the key's stored text, even when it is empty: the interface-language fallback the
+        // dialog opened with must not be saved as this language's text. shownValue tells the
+        // server what was displayed, so an untouched field is not written and a key changed
+        // meanwhile is refused instead of overwritten.
+        const shownValue = typeof value === 'string' ? value : '';
+        input.value = shownValue;
+        input.dataset.initialValue = shownValue;
+        input.dataset.shownValue = shownValue;
+}
+
+/**
+ * Tells the person when the new name already had translations and their typed text was not saved
+ * for some languages (owner, 22.11.2026: a shared key is not changed from the rename dialog).
+ * @returns {string} the notice shown, or '' when the answer reports nothing kept
+ */
+export function showKeptTranslationsNotice(response) {
+        const kept = response?.label_kept;
+        if (!kept || !Array.isArray(kept.languages) || kept.languages.length === 0) {
+            return '';
+        }
+        const languages = kept.languages
+            .map((code) => (LANGUAGE_NAME_KEYS[code] && getTranslationForKey(LANGUAGE_NAME_KEYS[code], { countUsage: false })) || code.toUpperCase())
+            .join(', ');
+        // Site-authored copy wins; until a site has it, the bootstrap copy in its own language.
+        const template = getTranslationForKey(KEPT_TRANSLATIONS_NOTICE_KEY, { countUsage: false })
+            || treeNodeRenameFallback(KEPT_TRANSLATIONS_NOTICE_KEY, getLanguageWithBrowserFallback());
+        const notice = template.replace('$key', String(kept.lang_key || '')).replace('$languages', languages);
+        showWarningToast(notice, KEPT_TRANSLATIONS_NOTICE_MS);
+        return notice;
+}
+
+/**
+ * Builds the rename request body. A language is sent only when the dialog showed its stored text
+ * or the user typed in it: a field still holding the interface-language fallback, saved before
+ * the stored texts arrived, is left out so it cannot overwrite a translation. shown_translations
+ * lists the stored texts the dialog displayed.
+ */
+export function buildRenameRequestBody({ itemId, itemType, newName, fiInput, enInput }) {
+        const translations = {};
+        const shown = {};
+        for (const [code, input] of [['fi', fiInput], ['en', enInput]]) {
+            const wasShown = input.dataset.shownValue !== undefined;
+            if (wasShown) {
+                shown[code] = input.dataset.shownValue;
+            }
+            if (wasShown || input.dataset.userEdited === 'true') {
+                translations[code] = input.value.trim();
+            }
+        }
+        const body = { item_id: itemId, item_type: itemType, new_name: newName, translations };
+        if (Object.keys(shown).length > 0) {
+            body.shown_translations = shown;
+        }
+        return body;
 }
 
 function buildDialog(resolve, { itemId, itemType, currentName, prefillFi, prefillEn }) {
@@ -195,9 +249,7 @@ function buildDialog(resolve, { itemId, itemType, currentName, prefillFi, prefil
         overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
 
         saveBtn.addEventListener('click', async () => {
-            const newName = document.getElementById('rename-lang-key').value.trim();
-            const fi = document.getElementById('rename-fi').value.trim();
-            const en = document.getElementById('rename-en').value.trim();
+            const newName = nameField.input.value.trim();
 
             if (!newName) {
                 showWarningToast(getTranslationForKey('name_required', { countUsage: false }) || 'Name is required');
@@ -208,16 +260,14 @@ function buildDialog(resolve, { itemId, itemType, currentName, prefillFi, prefil
             saveBtn.textContent = '...';
 
             try {
-                await endpoint_router('renameTreeNode', {
+                const response = await endpoint_router('renameTreeNode', {
                     method: 'POST',
-                    body_data: {
-                        item_id: itemId,
-                        item_type: itemType,
-                        new_name: newName,
-                        translations: { fi, en },
-                    },
+                    body_data: buildRenameRequestBody({
+                        itemId, itemType, newName, fiInput: fiField.input, enInput: enField.input,
+                    }),
                 });
                 overlay.remove();
+                showKeptTranslationsNotice(response);
                 resolve(true);
             } catch (_err) {
                 saveBtn.disabled = false;

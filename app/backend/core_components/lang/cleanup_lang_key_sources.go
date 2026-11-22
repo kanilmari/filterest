@@ -246,12 +246,13 @@ func UpdateLangKeySourcesForTableRename(q dbutils.Querier, oldName, newName stri
 	}
 
 	// 3. Update legacy dataset_header rows that still store "dataset:field" in source_high.
+	//    An exact prefix comparison, not LIKE: "_" in a dataset name must not match another name.
 	if _, err := q.Exec(`
 		UPDATE system_lang_key_sources
 		SET source_high = $2 || SUBSTRING(source_high FROM CHAR_LENGTH($1) + 1),
 		    last_seen = CURRENT_DATE
 		WHERE source_type = 'dataset_header'
-		  AND source_high LIKE $1 || ':%'
+		  AND LEFT(source_high, CHAR_LENGTH($1) + 1) = $1 || ':'
 	`, oldName, newName); err != nil {
 		log.Printf("[UpdateLangKeySourcesForTableRename] warning: dataset_header legacy source_high update: %v", err)
 	}
@@ -262,19 +263,23 @@ func UpdateLangKeySourcesForTableRename(q dbutils.Querier, oldName, newName stri
 		SET source_high = $2 || SUBSTRING(source_high FROM CHAR_LENGTH($1) + 1),
 		    last_seen = CURRENT_DATE
 		WHERE source_type = 'column_value'
-		  AND source_high LIKE $1 || '.%'
+		  AND LEFT(source_high, CHAR_LENGTH($1) + 1) = $1 || '.'
 	`, oldName, newName); err != nil {
 		log.Printf("[UpdateLangKeySourcesForTableRename] warning: column_value source_high update: %v", err)
 	}
 
-	// 5. Update usage_explanation on source records that reference the old table name.
+	// 5. Update usage_explanation only on the dataset's own sources, which steps 1-4 already
+	//    moved to the new name. A code or maintenance source elsewhere keeps its text even when
+	//    it happens to read "Table 'old'".
 	oldTableExpl := fmt.Sprintf("Table '%s'", oldName)
 	newTableExpl := fmt.Sprintf("Table '%s'", newName)
 	if _, err := q.Exec(`
 		UPDATE system_lang_key_sources
 		SET usage_explanation = $2
 		WHERE usage_explanation = $1
-	`, oldTableExpl, newTableExpl); err != nil {
+		  AND source_type = 'table'
+		  AND source_high = $3
+	`, oldTableExpl, newTableExpl, newName); err != nil {
 		log.Printf("[UpdateLangKeySourcesForTableRename] warning: usage_explanation update (table): %v", err)
 	}
 
@@ -282,9 +287,11 @@ func UpdateLangKeySourcesForTableRename(q dbutils.Querier, oldName, newName stri
 	newSuffix := fmt.Sprintf("in table '%s'", newName)
 	if _, err := q.Exec(`
 		UPDATE system_lang_key_sources
-		SET usage_explanation = REPLACE(usage_explanation, $1, $2)
-		WHERE usage_explanation LIKE '%' || $1
-	`, oldSuffix, newSuffix); err != nil {
+		SET usage_explanation = LEFT(usage_explanation, CHAR_LENGTH(usage_explanation) - CHAR_LENGTH($1)) || $2
+		WHERE RIGHT(usage_explanation, CHAR_LENGTH($1)) = $1
+		  AND source_type = 'column'
+		  AND source_high = $3
+	`, oldSuffix, newSuffix, newName); err != nil {
 		log.Printf("[UpdateLangKeySourcesForTableRename] warning: usage_explanation update (column-in-table): %v", err)
 	}
 
@@ -293,8 +300,10 @@ func UpdateLangKeySourcesForTableRename(q dbutils.Querier, oldName, newName stri
 	if _, err := q.Exec(`
 		UPDATE system_lang_key_sources
 		SET usage_explanation = REPLACE(usage_explanation, $1, $2)
-		WHERE usage_explanation LIKE '%' || $1 || '%'
-	`, oldColumnPrefix, newColumnPrefix); err != nil {
+		WHERE STRPOS(usage_explanation, $1) > 0
+		  AND source_type = 'column_value'
+		  AND LEFT(source_high, CHAR_LENGTH($3) + 1) = $3 || '.'
+	`, oldColumnPrefix, newColumnPrefix, newName); err != nil {
 		log.Printf("[UpdateLangKeySourcesForTableRename] warning: usage_explanation update (column_value): %v", err)
 	}
 
@@ -388,14 +397,16 @@ func UpdateLangKeySourcesForFolderRename(q dbutils.Querier, oldName, newName str
 		log.Printf("[UpdateLangKeySourcesForFolderRename] updated %d source rows: %s → %s", n, oldName, newName)
 	}
 
-	// 2. Update usage_explanation on source records that reference the old folder name.
+	// 2. Update usage_explanation only on the folder sources step 1 moved to the new name.
 	oldExpl := fmt.Sprintf("Folder '%s'", oldName)
 	newExpl := fmt.Sprintf("Folder '%s'", newName)
 	if _, err := q.Exec(`
 		UPDATE system_lang_key_sources
 		SET usage_explanation = $2
 		WHERE usage_explanation = $1
-	`, oldExpl, newExpl); err != nil {
+		  AND source_type = 'folder'
+		  AND source_high = $3
+	`, oldExpl, newExpl, newName); err != nil {
 		log.Printf("[UpdateLangKeySourcesForFolderRename] warning: usage_explanation update: %v", err)
 	}
 

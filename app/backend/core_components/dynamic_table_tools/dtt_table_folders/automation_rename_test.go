@@ -28,7 +28,7 @@ func TestRenameTableStopsOnAutomationMetadataFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	err = renameTable(tx, RenameTreeNodeRequest{ItemID: 5, NewName: "automation_after"})
+	_, err = renameTable(tx, RenameTreeNodeRequest{ItemID: 5, NewName: "automation_after"})
 	if !errors.Is(err, failure) || len(state.calls) != 2 {
 		t.Fatal("rename continued after automation failure", err, state.calls)
 	}
