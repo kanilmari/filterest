@@ -23,6 +23,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 ## [Unreleased]
 
 - Article descriptions read at a roomier 1.6 line height by default, with more space after paragraphs and lists. A line height supplied by the site's style package still applies. The image-first view now uses the same spacing as other articles.
+- In image-first articles, including the page-sized view, the Details section has square bottom corners when open or closed. The article panel keeps its rounded corners.
 
 ## [9.6.16] - 2026-11-22
 

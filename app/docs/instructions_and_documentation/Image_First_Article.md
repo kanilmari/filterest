@@ -32,9 +32,11 @@ for decoding; a newly selected scrolled photo has zero width until its ratio is
 ready. Replacement, record handoff and modal teardown remove the ratio and
 prevent late decoding from restoring it. Nested SVG/logo presentations retain
 their own sizes. Backgrounds of
-the first and last panel children, including disclosure headers at those edges,
-inherit the appropriate corners. The panel and its disclosure sections allow
-overflow, preserving focus rings and any floating controls. The media host keeps
+the first panel child, including a disclosure header at that edge, inherit the
+top corners. The last child, usually the Details section, keeps square bottom
+corners whether collapsed or open: the panel's bottom padding separates it from
+the panel's own rounded edge, which stays the only rounded bottom. The panel
+and its disclosure sections allow overflow, preserving focus rings and any floating controls. The media host keeps
 its existing image clipping, and disclosure-height animation keeps its temporary
 clipping; the modal viewport and entrance/exit clipping are unchanged.
 

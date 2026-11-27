@@ -331,11 +331,8 @@ body.dark-mode .image_first_view_modal {
     border-start-end-radius: inherit;
 }
 
-.image_first_view_article_content > :last-child,
-.image_first_view_article_content > .row_article_disclosure_section:last-child.is-collapsed > .row_article_disclosure_header {
-    border-end-start-radius: inherit;
-    border-end-end-radius: inherit;
-}
+/* The last section, usually Details, keeps square bottom corners: the panel's
+   bottom padding separates it from the rounded panel edge, which is enough. */
 
 .image_modal_top_controls > .row_article_row_navigation {
     display: flex;

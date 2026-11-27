@@ -27,7 +27,9 @@ describe("image-first article CSS contract", () => {
         expect(css).toMatch(/\.image_first_view_article_content\s*\{[^}]*overflow:\s*visible;[^}]*border-radius:\s*var\(--border_radius\);/s);
         expect(css).toMatch(/\.image_first_view_article_content > \.row_article_disclosure_section\s*\{[^}]*overflow:\s*visible;/s);
         expect(css).toMatch(/\.image_first_view_article_content > :first-child,[\s\S]*?\.row_article_disclosure_section:first-child > \.row_article_disclosure_header\s*\{[^}]*border-start-start-radius:\s*inherit;[^}]*border-start-end-radius:\s*inherit;/s);
-        expect(css).toMatch(/\.image_first_view_article_content > :last-child,[\s\S]*?\.row_article_disclosure_section:last-child\.is-collapsed > \.row_article_disclosure_header\s*\{[^}]*border-end-start-radius:\s*inherit;[^}]*border-end-end-radius:\s*inherit;/s);
+        // Only the panel itself rounds its bottom; the last section (Details) stays square, collapsed or open.
+        expect(css).not.toMatch(/\.image_first_view_article_content > :last-child/);
+        expect(css).not.toMatch(/border-end-(?:start|end)-radius:\s*inherit/);
         const panelRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
             .filter(([, selector]) => selector.includes(".image_first_view_article_content"));
         for (const [, , declarations] of panelRules) {
