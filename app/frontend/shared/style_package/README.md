@@ -51,7 +51,8 @@ control geometry are outside package ownership.
 The token table specifies every key, CSS mapping, allowed scope, type and bound:
 
 - `font.body`, `font.display`, `font.emphasis`: registered font bindings.
-- Body letter spacing and line height; Home heading size, weight, colour,
+- Body letter spacing and line height (unset, the interface reads at 1.5 and
+  article descriptions at 1.6); Home heading size, weight, colour,
   letter spacing and gap; slogan/description sizes and paragraph gap.
 - Home block spacing, padding, radius and background; named reveal preset.
 - Navigation spacing, padding, radius, text size, line height and colours.

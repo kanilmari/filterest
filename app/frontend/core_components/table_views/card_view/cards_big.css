@@ -229,6 +229,10 @@
     /* modernit selaimet */
     tab-size: 4;
     /* määrittää \t-leveyden */
+    /* Article prose reads at 1.6 unless the site's style package sets a body line height.
+       The value is set here because the image-first viewer resets its body to `normal`.
+       A blank line between plain-text paragraphs is then one 1.6 line tall. */
+    line-height: var(--body-line-height, 1.6);
 }
 
 /* fallback vanhemmille selaimille */

@@ -152,6 +152,19 @@ body.dark-mode .modal {
     --modal-shadow: var(--modal-shadow-dark);
 }
 
+.modal p, .modal ul, .modal ol {
+    /* margin-top: 10px; */
+    margin-bottom: 10px;
+    line-height: 1.4em;
+}
+
+/* Article prose keeps the description's line height and a 1.25em (20px) paragraph gap.
+   Same specificity as the dialog rule above, so it must stay after it. */
+.big_description_value :is(p, ul, ol) {
+    margin-bottom: 1.25em;
+    line-height: inherit;
+}
+
 @media (width <= 600px) {
     .modal {
         --modal-sheet-padding-inline: 16px;
@@ -513,13 +526,6 @@ body.dark-mode .modal {
     max-width: 100vw;
     max-height: 100vh;
     overflow: hidden;
-}
-
-.modal p, .modal ul, .modal ol, 
-.big_description_value p, .big_description_value ul, .big_description_value ol  {
-    /* margin-top: 10px; */
-    margin-bottom: 10px;
-    line-height: 1.4em;
 }
 
 .modal_body h1, .modal_body h2, .modal_body h3, .modal_body h4, .modal_body h5, .modal_body h6,
