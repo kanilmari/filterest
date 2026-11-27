@@ -349,7 +349,6 @@ body.light-mode #nav_tree .tree-current-project-badge {
     border-radius: var(--navbar-control-radius);
     background-color: var(--button_bg_color);
     color: var(--button_text_color);
-    box-shadow: var(--fw-shadow-raised);
     cursor: pointer;
     font: inherit;
     line-height: 1.2;

@@ -13,7 +13,7 @@ const baseline = {
     'front_page.css': 'e2c311f054ac95faac3ec70b73c264f5fde878550d1ee122f6b9ea18baba1bcb',
     'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
     '../filterbar/shared_topbar.css': '70396888dee095d3869281f5f7a8c7f6d2d8875709d748a132fbf45c87e998a4',
-    '../filterbar/morphing_filterbar_content.css': '814aa71dec06ed266c72e0b8a739a0c10bfadca4fd549e16931801785f8cc461',
+    '../filterbar/morphing_filterbar_content.css': '22f61686967ca56a017ed9d3cf7ea552828e3e33ec6af8770965f98caa9a0b1c',
 };
 const sheets = Object.fromEntries(Object.keys(baseline).map(file =>
     [file, postcss.parse(readFileSync(new URL(file, import.meta.url), 'utf8'))]));
@@ -61,6 +61,7 @@ function rulesAtWidth(file, selector, width) {
 // Home's Filter results link joins Show all's row, touch height and link ink in dataset boxes (G15).
 // WL182 re-pins only the top bar's background and blur: they read the bar-surface variables, today's values as fallbacks.
 // Home's row gap falls back to the 23px default instead of 0.6rem, which stays its floor (G15).
+// The filter bar toggle loses only its raised shadow: buttons are flat at rest (owner, 2026-11-28).
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });

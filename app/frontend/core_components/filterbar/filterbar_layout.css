@@ -123,7 +123,6 @@
   min-height: 44px;
   padding: 0;
   border-radius: 8px;
-  box-shadow: var(--fw-shadow-raised);
 }
 
 /* Wide state: full-width bar at top */

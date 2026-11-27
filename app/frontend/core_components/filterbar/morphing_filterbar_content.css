@@ -34,7 +34,6 @@
     border-color 0.3s ease,
     visibility 0s linear 180ms;
   backdrop-filter: blur(10px);
-  box-shadow: var(--fw-shadow-raised);
   appearance: none;
 }
 .filterbar-fixed-toggle--exposed {
