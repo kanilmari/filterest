@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.17] - 2026-11-28
+
 - Image-first articles and their page-sized view leave 70% of the browser's small viewport height below the article. This lets the reader scroll past browser controls that cover the bottom of the page.
 - The theme, language, account and sign-in controls, the filter buttons, and an article's Previous and Next buttons no longer cast a shadow at rest. Pressing a button still gives visual feedback.
 - Article descriptions read at a roomier 1.6 line height by default, with more space after paragraphs and lists. A line height supplied by the site's style package still applies. The image-first view now uses the same spacing as other articles.
