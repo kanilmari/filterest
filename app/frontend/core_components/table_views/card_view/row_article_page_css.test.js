@@ -53,7 +53,7 @@ test('Page alone replaces stacked margins with one description gap and a separat
     expect(shared).toMatch(/\.big_card_description_container\s*\{\s*padding: 20px 1rem;/);
     expect(shared).toMatch(/\.big_card_image img\s*\{[^}]*max-height: 80vh;[^}]*object-fit: contain;/s);
     const gallery = readFileSync(join(directory, 'big_card_image_gallery.css'), 'utf8');
-    expect(gallery).toMatch(/\.image_first_view_article_content\s*\{[^}]*width: min\(100%, 800px\);[^}]*margin-block: 40px;/s);
+    expect(gallery).toMatch(/\.image_first_view_article_content\s*\{[^}]*width: min\(100%, 800px\);[^}]*margin-block: 40px 70svh;/s);
 });
 
 test('Page phone title fills the viewport with 16px content edges', () => {

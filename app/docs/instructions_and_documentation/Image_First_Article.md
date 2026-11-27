@@ -8,9 +8,15 @@
 Image-first opens one image-led article in the shared image modal. The full-height image stage is followed by centered article content; the ordinary article underneath retains its own state.
 
 The image keeps its maximum available width and the article panel stays at up to
-800 px. The panel has 40 px of space above and below; at viewport widths up to
-600 px, both margins use the existing narrow image-first control spacing of
-20 px. Its corners use `--border_radius`, the project's large radius (10 px by
+800 px. The panel has 40 px of space above it; at viewport widths up to 600 px,
+that margin uses the existing narrow image-first control spacing of 20 px.
+Below the panel, IFAV and Page both leave a fixed 70svh of empty background at
+every width. Scrolled to the end, the article's last line therefore sits about a
+third of the way down the screen while browser bars are shown (lower once they
+retract), and a browser bar drawn over the page, such as a bottom toolbar,
+covers only empty space. The small-viewport unit keeps this room steady while
+browser bars hide and show. The view scrolls only when the article reaches lower than
+that; a click in this room closes the view like any other empty background. Its corners use `--border_radius`, the project's large radius (10 px by
 default, matching the ordinary big-card panel). The same token rounds the image
 host and its foreground image when the existing `image-modal-content-scrolled`
 state is active; at the start position both retain zero radius. The scrolled

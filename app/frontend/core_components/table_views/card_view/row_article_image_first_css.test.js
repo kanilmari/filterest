@@ -15,8 +15,11 @@ describe("image-first article CSS contract", () => {
     test("leaves space above and below the article without collapsing the bottom margin", () => {
         const css = fs.readFileSync(path.join(directory, "big_card_image_gallery.css"), "utf8");
         expect(css).toMatch(/\.image_first_view\s*\{[^}]*display:\s*flow-root;/s);
-        expect(css).toMatch(/\.image_first_view_article_content\s*\{[^}]*margin-block:\s*40px;[^}]*margin-inline:\s*auto;/s);
-        expect(css).toMatch(/@media \(width <= 600px\)\s*\{\s*\.image_first_view_article_content\s*\{[^}]*margin-block:\s*20px;/s);
+        // 70svh below lets the article's end rise to the top third of the screen.
+        expect(css).toMatch(/\.image_first_view_article_content\s*\{[^}]*margin-block:\s*40px 70svh;[^}]*margin-inline:\s*auto;/s);
+        // Phones narrow only the gap above; the room below stays.
+        expect(css).toMatch(/@media \(width <= 600px\)\s*\{\s*\.image_first_view_article_content\s*\{[^}]*margin-block-start:\s*20px;/s);
+        expect(css).not.toMatch(/@media \(width <= 600px\)\s*\{\s*\.image_first_view_article_content\s*\{[^}]*margin-block(?:-end)?:/s);
     });
 
     test("rounds panel and edge backgrounds while allowing article controls to overflow", () => {

@@ -308,7 +308,11 @@ body.dark-mode .image_first_view_modal {
     width: min(100%, 800px);
     max-width: 800px !important;
     min-height: auto;
-    margin-block: 40px;
+    /* Scrolled to the end, the article ends about a third of the way down the
+       screen, and a browser bar drawn over the page covers only empty space.
+       svh is the height with the browser bars shown, so it does not jump when
+       they hide. A short article whose end is already that high does not scroll. */
+    margin-block: 40px 70svh;
     margin-inline: auto;
     padding-block: 1rem;
     overflow: visible;
@@ -646,7 +650,7 @@ body .image_modal.image_first_view_modal :is(
 @media (width <= 600px) {
     .image_first_view_article_content {
         /* Reuse the narrow IFAV control gap rather than crowding a phone. */
-        margin-block: 20px;
+        margin-block-start: 20px;
     }
 
     .row_article_image_first_bottom_controls {
