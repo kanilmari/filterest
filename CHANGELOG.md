@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Article descriptions read at a roomier 1.6 line height by default, with more space after paragraphs and lists. A line height supplied by the site's style package still applies. The image-first view now uses the same spacing as other articles.
+
 ## [9.6.16] - 2026-11-22
 
 - A save that the database refuses at its final step now reports an error instead of success. Until now a row edit, addition or deletion could answer that it was saved although the database rejected it while committing; the answer now waits for the database to confirm the save. A save the database did confirm is no longer reported as failed because of a later cleanup error, which could have led to saving it twice. The developer CSV export reports success only once the whole file is written, and a failed export leaves the previous file in place for CSV import.
