@@ -126,16 +126,28 @@ func TestB4SchemaEvidenceRequiresColumnAndLiveProducer(t *testing.T) {
 			if live {
 				sources = append(sources, sourceEntry{schemaAlias: true, schemaBuilder: `return alias + " (ln)"`, filePath: "app/backend/alias.go"})
 				queueB4LinkedMetadata("owner_uid", false, true)
-				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+				// The code evidence, then the column binding and its explanation.
+				for range 3 {
+					pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+				}
 			}
 			registry := map[string]int64{"search_for_owner_name (ln)_asc": 1, "missing_name (ln)": 2}
 			codeKeys := map[int64]bool{}
-			_, err := immediateSourceWriter().scanSchemaLangKeySources(registry, sources, codeKeys)
+			writer := immediateSourceWriter()
+			_, err := writer.scanSchemaLangKeySources(registry, sources, codeKeys)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if codeKeys[1] != live || codeKeys[2] {
 				t.Fatal(codeKeys)
+			}
+			// The wrapped key reaches readers of the column its alias labels.
+			binding, bound := writer.index[langKeySourceIdentity{1, "column", "tasks"}]
+			if bound != live || live && binding.low != "owner_uid" {
+				t.Fatalf("column binding=%+v bound=%v", binding, bound)
+			}
+			if _, bound := writer.index[langKeySourceIdentity{2, "column", "tasks"}]; bound {
+				t.Fatal("an alias no projection emits was bound")
 			}
 			calls := strings.Join(snapshotOrphanCalls(), "\n")
 			if strings.Contains(calls, "INSERT INTO system_lang_key_sources") != live {

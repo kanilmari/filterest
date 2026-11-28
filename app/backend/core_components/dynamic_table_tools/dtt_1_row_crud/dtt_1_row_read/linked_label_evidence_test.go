@@ -44,3 +44,22 @@ func TestLinkedLabelEvidenceUsesProjectionRules(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkedLabelEvidenceNamesEachAliasSourceColumn(t *testing.T) {
+	fk := map[string]dtt_utils.ForeignKey{"owner_id": {NameColumn: "name"}}
+	actors := row_mutation_policy.RowActorColumns{"created_by": "creator"}
+	evidence := linkedLabelEvidenceFrom(linkedLabelProjections(
+		[]string{"created_by", "owner_id", "title"}, map[string]OneMRelation{}, fk, visibleLabelTargetsForTest(fk), actors))
+	for alias, want := range map[string]string{
+		"created_by_name": "created_by", // an actor column without an _id ending
+		"owner_name (ln)": "owner_id",
+		"owner_name":      "owner_id",
+	} {
+		if got := evidence.SourceColumns[alias]; len(got) != 1 || got[0] != want {
+			t.Fatalf("%s: %v want %s", alias, got, want)
+		}
+	}
+	if _, ok := evidence.SourceColumns["title_name"]; ok {
+		t.Fatal("an ordinary column produced a linked label")
+	}
+}

@@ -9,18 +9,7 @@ import "strings"
 // LinkedSchemaAlias strips only reviewed wrappers, preserving the exact alias
 // for comparison with projection output. No reverse column-name guessing.
 func LinkedSchemaAlias(key string) string {
-	name := key
-	for {
-		if base, ok := TrimDynamicPrefix(name); ok {
-			name = base
-			continue
-		}
-		if base, ok := TrimDynamicSuffix(name); ok {
-			name = base
-			continue
-		}
-		break
-	}
+	name := TrimDynamicWrappers(key)
 	if !strings.HasSuffix(name, " (ln)") || name == " (ln)" {
 		return ""
 	}

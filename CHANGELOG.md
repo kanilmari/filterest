@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Visitors see translated search prompts for linked fields they can read, including “Search for creator name” and “Search for owner name.”
+
 ## [9.6.17] - 2026-11-28
 
 - Image-first articles and their page-sized view leave 70% of the browser's small viewport height below the article. This lets the reader scroll past browser controls that cover the bottom of the page.

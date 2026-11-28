@@ -57,6 +57,23 @@ func TrimDynamicSuffix(langKey string) (string, bool) {
 	return "", false
 }
 
+// TrimDynamicWrappers removes every recognised beginning and ending, so
+// search_for_owner_name (ln)_asc reports owner_name (ln).
+func TrimDynamicWrappers(langKey string) string {
+	name := langKey
+	for {
+		if base, ok := TrimDynamicPrefix(name); ok {
+			name = base
+			continue
+		}
+		if base, ok := TrimDynamicSuffix(name); ok {
+			name = base
+			continue
+		}
+		return name
+	}
+}
+
 // SearchPlaceholderKey names a dataset's own search placeholder.
 func SearchPlaceholderKey(datasetName string) string {
 	return "search_for_" + strings.TrimSpace(datasetName)

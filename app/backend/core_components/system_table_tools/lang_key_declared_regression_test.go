@@ -190,3 +190,45 @@ func TestB4LinkedEvidenceRequiresActualRelation(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkedLabelWrappersBindTheirSourceColumn(t *testing.T) {
+	scanTrustFixture(t)
+	// One column binding and its explanation.
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+	bindings := linkedLabelBindings(map[string]map[string][]string{
+		"travel_deals": {"created_by_name": {"created_by"}},
+		// notes stores a column of that name, which keeps its ordinary binding.
+		"notes": {"created_by_name": {"created_by"}},
+		// Two columns emit the alias in tasks: either one could be hidden.
+		"tasks": {"created_by_name": {"created_by", "creator"}},
+	}, map[string][]string{"created_by_name": {"notes"}})
+	writer := immediateSourceWriter()
+	key := "search_for_created_by_name"
+	count, err := writer.saveLinkedLabelBindings(7, key, []string{key, "created_by_name"}, bindings, map[string][]string{"created_by_name": {"notes"}})
+	if err != nil || count != 1 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+	if binding := writer.index[langKeySourceIdentity{7, "column", "travel_deals"}]; binding.low != "created_by" {
+		t.Fatalf("travel_deals binding=%+v", binding)
+	}
+	for _, table := range []string{"notes", "tasks"} {
+		if _, bound := writer.index[langKeySourceIdentity{7, "column", table}]; bound {
+			t.Fatalf("%s was bound", table)
+		}
+	}
+	// The bare label keeps its public interface-word treatment.
+	if count, err := writer.saveLinkedLabelBindings(8, "created_by_name", []string{"created_by_name"}, bindings, nil); err != nil || count != 0 {
+		t.Fatalf("bare label count=%d err=%v", count, err)
+	}
+	// A dataset's own column named like the wrapped key keeps its ordinary binding.
+	sorted := "created_by_name_asc"
+	count, err = writer.saveLinkedLabelBindings(9, sorted, []string{sorted, "created_by_name"}, bindings,
+		map[string][]string{sorted: {"travel_deals"}})
+	if err != nil || count != 0 {
+		t.Fatalf("own wrapped column count=%d err=%v", count, err)
+	}
+	if _, bound := writer.index[langKeySourceIdentity{9, "column", "travel_deals"}]; bound {
+		t.Fatal("a linked alias replaced the dataset's own wrapped-name column binding")
+	}
+}

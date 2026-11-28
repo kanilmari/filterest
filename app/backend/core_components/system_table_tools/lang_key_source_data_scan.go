@@ -7,6 +7,8 @@ package system_table_tools
 import (
 	"database/sql"
 	"fmt"
+	"slices"
+	"sort"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
@@ -117,15 +119,19 @@ func (w *langKeySourceWriter) scanSchemaLangKeySources(keys map[string]int64, co
 		}
 	}
 	aliases := map[string]map[string]bool{}
+	// linkedColumns maps a dataset to each linked alias its projection emits and
+	// the stored column that alias labels.
+	linkedColumns := map[string]map[string][]string{}
 	// Linked-label metadata reads also precede every schema save, with the
 	// pending writes already flushed by the metadata gate above.
 	if len(schemaSources) > 0 {
 		for table, names := range tableColumns {
-			projections, err := dtt_1_row_read.LinkedLabelEvidenceAliases(table, names)
+			evidence, err := dtt_1_row_read.ReadLinkedLabelEvidence(table, names)
 			if err != nil {
 				return count, &sourceSubScanError{"schema_linked_labels", err}
 			}
-			for builder, labels := range projections {
+			linkedColumns[table] = evidence.SourceColumns
+			for builder, labels := range evidence.Aliases {
 				if aliases[builder] == nil {
 					aliases[builder] = map[string]bool{}
 				}
@@ -135,6 +141,7 @@ func (w *langKeySourceWriter) scanSchemaLangKeySources(keys map[string]int64, co
 			}
 		}
 	}
+	linkedBindings := linkedLabelBindings(linkedColumns, columns)
 	for key, id := range keys {
 		names := []string{key}
 		if remainder, ok := lang_key_naming.TrimDynamicPrefix(key); ok {
@@ -166,6 +173,62 @@ func (w *langKeySourceWriter) scanSchemaLangKeySources(keys map[string]int64, co
 				return count, err
 			}
 		}
+		saved, err := w.saveLinkedLabelBindings(id, key, names, linkedBindings, columns)
+		count += saved
+		if err != nil {
+			return count, err
+		}
+	}
+	return count, nil
+}
+
+// linkedLabelBinding is a dataset column whose projection emits a linked alias.
+type linkedLabelBinding struct {
+	table, column string
+}
+
+// linkedLabelBindings indexes each linked alias by the dataset columns that
+// emit it. A dataset is left out when two of its columns emit the same alias,
+// because their visibility can differ and one source row per dataset names one
+// column, and when it stores a column of that name itself.
+func linkedLabelBindings(linkedColumns map[string]map[string][]string, columns map[string][]string) map[string][]linkedLabelBinding {
+	bindings := map[string][]linkedLabelBinding{}
+	for table, aliases := range linkedColumns {
+		for alias, sourceColumns := range aliases {
+			if len(sourceColumns) != 1 || slices.Contains(columns[alias], table) {
+				continue
+			}
+			bindings[alias] = append(bindings[alias], linkedLabelBinding{table, sourceColumns[0]})
+		}
+	}
+	for _, list := range bindings {
+		sort.Slice(list, func(i, j int) bool { return list[i].table < list[j].table })
+	}
+	return bindings
+}
+
+// saveLinkedLabelBindings binds a search or sort wrapper of a linked label, such
+// as search_for_owner_name (ln), to the dataset column that emits the label. The
+// translation map then shows it to exactly the readers of that column, where it
+// was withheld from every visitor before. The bare label itself keeps its
+// public interface-word treatment. A dataset whose own column one of the key's
+// names already bound, such as a column called created_by_name_asc, keeps that
+// binding: a source row per dataset names one column.
+func (w *langKeySourceWriter) saveLinkedLabelBindings(id int64, key string, names []string, bindings map[string][]linkedLabelBinding, columns map[string][]string) (int, error) {
+	alias := lang_key_naming.TrimDynamicWrappers(key)
+	if alias == key {
+		return 0, nil
+	}
+	count := 0
+	for _, binding := range bindings[alias] {
+		if slices.ContainsFunc(names, func(name string) bool { return slices.Contains(columns[name], binding.table) }) {
+			continue
+		}
+		explanation := fmt.Sprintf("Search or sort text for linked label '%s' of column '%s' in table '%s'", alias, binding.column, binding.table)
+		if err := w.saveExplainedSource(id, "column", binding.table, binding.column, explanation); err != nil {
+			return count, err
+		}
+		count++
 	}
 	return count, nil
 }
